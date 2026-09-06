@@ -84,7 +84,7 @@ object CompuktersLLFirSessionConfigurator : LLFirSessionConfigurator {
         bundle: PlatformBundle,
         selectedModules: Set<PlatformModuleId>,
     ) {
-        val modules = PlatformModuleGraph(bundle).resolve(selectedModules).modules
+        val modules = listOf(bundle.builtins) + PlatformModuleGraph(bundle).resolve(selectedModules).modules
         project.putUserData(CONTEXT_KEY, CompuktersAnalysisPlatformContext(modules))
         val area = project.extensionArea
         if (!area.hasExtensionPoint(CONFIGURATOR_EXTENSION_POINT)) {

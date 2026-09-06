@@ -258,6 +258,42 @@ class DeclarationQueryTest {
         }
     }
 
+    @Test
+    fun `navigation maps int array factory to its platform source`() {
+        val source = "fun main() { val values = intArrayOf(7, 11) }"
+        val sourcePath = "compukters-platform/sources/builtins/kotlin/Arrays.kt"
+        val guestApi = Path.of(requireNotNull(System.getProperty("compukters.test.guestApi")))
+        val guestSource =
+            ZipFile(guestApi.toFile()).use { archive ->
+                archive.getInputStream(requireNotNull(archive.getEntry(sourcePath))).reader().readText()
+            }
+        K2QueryFixture.sourceWithGuestApi(true, "main.kt" to source).use { fixture ->
+            val result =
+                fixture.execute(
+                    AnalysisQuery.Declaration(
+                        fixture.identity,
+                        VirtualSourcePath.kotlin("main.kt"),
+                        source.indexOf("intArrayOf") + 1,
+                    ),
+                ) as AnalysisResult.Declaration
+            val declarationStart = guestSource.indexOf("intArrayOf(vararg")
+
+            assertEquals(
+                listOf(
+                    DeclarationLocation.Source(
+                        DeclarationOrigin.Platform(
+                            fixture.snapshot.moduleIdentities.values
+                                .single { it.name == "kotlin:builtins" },
+                        ),
+                        VirtualSourcePath.kotlin(sourcePath),
+                        EditorRange(declarationStart, declarationStart + "intArrayOf".length),
+                    ),
+                ),
+                result.locations,
+            )
+        }
+    }
+
     private fun sourceLocation(
         path: String,
         start: Int,

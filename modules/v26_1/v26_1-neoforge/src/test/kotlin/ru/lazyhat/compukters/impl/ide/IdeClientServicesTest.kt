@@ -26,6 +26,7 @@ import ru.lazyhat.compukters.ide.analysis.protocol.AnalysisLimits
 import ru.lazyhat.compukters.ide.client.analysis.IdeVisibleLatencyKind
 import ru.lazyhat.compukters.ide.client.analysis.IdeVisibleLatencyTrace
 import ru.lazyhat.compukters.ide.client.controller.IdeClientTooling
+import ru.lazyhat.compukters.platform.bundle.PlatformBundleCodec
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import java.util.zip.ZipEntry
@@ -124,6 +125,18 @@ class IdeClientServicesTest {
             assertEquals(
                 compiler.manifest.identity.platformAbi,
                 Hash256.of(platform.identity.contentHash.toByteArray()),
+            )
+            val builtinsIdentity =
+                AnalysisModuleIdentity(
+                    platform.builtins.id.toString(),
+                    Hash256.of(PlatformBundleCodec.moduleContentHash(platform.builtins).toByteArray()),
+                )
+            assertTrue(
+                prepared.attachedSources
+                    .text(
+                        builtinsIdentity,
+                        VirtualSourcePath.kotlin("compukters-platform/sources/builtins/kotlin/Arrays.kt"),
+                    )?.contains("intArrayOf(vararg elements: Int)") == true,
             )
 
             val modulesById = platform.modules.associateBy { it.id.toString() }

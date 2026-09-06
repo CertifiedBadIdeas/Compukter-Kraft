@@ -22,6 +22,7 @@ import com.intellij.openapi.vfs.StandardFileSystems
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiManager
 import org.jetbrains.kotlin.psi.KtFile
+import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.compiler.worker.protocol.VirtualSourcePath
 import ru.lazyhat.compukters.ide.analysis.AnalysisModuleIdentity
 import ru.lazyhat.compukters.ide.analysis.AnalysisSnapshotIdentity
@@ -88,6 +89,14 @@ internal class SnapshotAdmission(
         require(resolvedModules.mapTo(mutableSetOf()) { it.id } == selectedModules) {
             "analysis platform module selection is not dependency-closed"
         }
+        val moduleIdentities =
+            mapOf(
+                platformBundle.builtins.id to
+                    AnalysisModuleIdentity(
+                        platformBundle.builtins.id.toString(),
+                        Hash256.of(PlatformBundleCodec.moduleContentHash(platformBundle.builtins).toByteArray()),
+                    ),
+            ) + requestedModules
         val attachedSourceRoot =
             request.profile.platform.sourceRoot
                 ?.let { validatedRegularFile(it, "platform source root") }
@@ -108,7 +117,7 @@ internal class SnapshotAdmission(
             environment = K2ProjectEnvironment.create(sourceRoot, platformBundle, selectedModules)
             val platform =
                 CompuktersAnalysisPlatformContext(
-                    resolvedModules,
+                    listOf(platformBundle.builtins) + resolvedModules,
                 )
             val files =
                 environment.session.modulesWithFiles.values
@@ -130,7 +139,7 @@ internal class SnapshotAdmission(
                 files.toMap(),
                 request.sources,
                 sourceLengths.toMap(),
-                requestedModules,
+                moduleIdentities,
                 platformSourceFiles,
                 platform,
                 sourceUpdater,

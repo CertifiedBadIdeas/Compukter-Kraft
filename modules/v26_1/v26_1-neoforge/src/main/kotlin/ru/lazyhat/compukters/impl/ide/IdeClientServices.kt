@@ -274,7 +274,7 @@ internal object ProductionIdeApplicationFactory {
             }
         val attachedSources =
             loadAttachedSources(
-                platform.modules.associate { module ->
+                (listOf(platform.builtins) + platform.modules).associate { module ->
                     analysisModule(module).identity to module.sources.mapTo(mutableSetOf()) { it.path }
                 },
                 guestApi,

@@ -92,7 +92,7 @@ internal class GlobalCompletionIndex private constructor(
 
         fun platform(bundle: PlatformBundle): GlobalCompletionIndex {
             val declarations =
-                bundle.modules.flatMap { module ->
+                (listOf(bundle.builtins) + bundle.modules).flatMap { module ->
                     val identity =
                         AnalysisModuleIdentity(
                             module.id.toString(),
