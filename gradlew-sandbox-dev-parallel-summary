@@ -1,0 +1,37 @@
+#!/bin/sh
+
+set -u
+
+APP_HOME=$(CDPATH= cd -P "$(dirname "$0")" >/dev/null && pwd) || exit 1
+LOG_DIRECTORY="$APP_HOME/build/agent-logs"
+LOG_STAMP=$(date -u '+%Y%m%dT%H%M%SZ')
+LOG_FILE="$LOG_DIRECTORY/gradle-$LOG_STAMP-$$.log"
+
+mkdir -p "$LOG_DIRECTORY" || exit 1
+
+printf 'Gradle output is captured in %s\n' "$LOG_FILE"
+
+if "$APP_HOME/gradlew-sandbox-dev-parallel" --console=plain "$@" >"$LOG_FILE" 2>&1; then
+    STATUS=0
+else
+    STATUS=$?
+fi
+
+if [ "$STATUS" -eq 0 ]; then
+    grep -E '^(BUILD SUCCESSFUL|[0-9]+ actionable tasks:)' "$LOG_FILE" | tail -n 2
+    exit 0
+fi
+
+printf 'Gradle failed with exit code %s. Full log: %s\n' "$STATUS" "$LOG_FILE" >&2
+FAILED_TASKS=$(grep -E '^> Task .* FAILED$' "$LOG_FILE" | tail -n 40)
+if [ -n "$FAILED_TASKS" ]; then
+    printf '\nFailed tasks:\n%s\n' "$FAILED_TASKS" >&2
+fi
+if grep -q '^FAILURE:' "$LOG_FILE"; then
+    printf '\nGradle failure report (last 120 lines):\n' >&2
+    sed -n '/^FAILURE:/,$p' "$LOG_FILE" | tail -n 120 >&2
+else
+    printf '\nLast 120 log lines:\n' >&2
+    tail -n 120 "$LOG_FILE" >&2
+fi
+exit "$STATUS"

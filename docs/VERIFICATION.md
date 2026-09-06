@@ -3,6 +3,10 @@
 Compukters uses different verification gates for fast feedback, a complete local checkout, and a distributable
 multi-platform release. Choose evidence from the changed boundary first, then run the final gate required by the stage.
 
+For long runs where console volume is undesirable, use `./gradlew-sandbox-dev-parallel-summary <tasks>`. It preserves
+the complete combined log under `build/agent-logs/`, prints only the final Gradle summary on success, and emits a
+bounded diagnostic summary and log tail on failure without changing the command's exit code.
+
 ## Evidence contract
 
 A successful command proves only the checks that actually belong to its task graph and executed with their required
