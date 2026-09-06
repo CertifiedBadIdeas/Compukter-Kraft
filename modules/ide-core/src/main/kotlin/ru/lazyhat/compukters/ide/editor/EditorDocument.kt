@@ -43,6 +43,9 @@ class EditorDocument(
     val selectionRange: EditorRange?
         get() = selection.range.takeUnless { it.length == 0 }
 
+    internal val selectionState: EditorSelection
+        get() = selection
+
     val caretVisualColumn: Int
         get() = lines.visualColumn(caretOffset)
 
@@ -366,10 +369,15 @@ class EditorDocument(
 
     internal fun lineVisualWidth(line: Int): Int = lines.visualWidth(line)
 
-    private fun replaceSelection(
+    internal fun replaceSelection(
         text: String,
         kind: EditorHistoryKind,
-    ): EditorEditResult = replace(selection.range, text, kind, EditorChangeOrigin.User)
+        afterSelection: EditorSelection =
+            EditorSelection(
+                selection.range.startUtf16 + text.length,
+                selection.range.startUtf16 + text.length,
+            ),
+    ): EditorEditResult = replace(selection.range, text, kind, EditorChangeOrigin.User, afterSelection)
 
     private fun replace(
         range: EditorRange,
