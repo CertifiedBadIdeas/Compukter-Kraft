@@ -370,7 +370,7 @@ val generatePlatformScalarConformanceArtifact = tasks.register<Test>("generatePl
     useJUnitPlatform()
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
-    filter.includeTestsMatching("*platform scalar constructor preserves its bounded Int precondition*")
+    filter.includeTestsMatching("*redstone side set preserves its bounded Int precondition*")
     inputs.file(workerJar)
     outputs.file(platformScalarConformanceArtifact)
     doFirst {
