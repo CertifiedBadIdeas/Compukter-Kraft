@@ -536,6 +536,7 @@ val nonWorkerIsolationChecks =
                     ":compiler-client",
                     ":compiler-k2-engine",
                     ":ide-analysis-k2",
+                    ":ide-kotlin-formatter",
                     ":platform-k2",
                 )
         }
