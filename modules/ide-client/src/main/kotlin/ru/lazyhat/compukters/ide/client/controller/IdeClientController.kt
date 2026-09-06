@@ -1468,10 +1468,14 @@ class IdeClientController(
                     formatFailed("analysis worker returned an unexpected result")
                     return
                 }
-                when (active.document.replaceAll(formatted.source, formatted.caretOffsetUtf16)) {
-                    is EditorEditResult.Applied,
-                    EditorEditResult.NoChange,
-                    -> {
+                when (val edit = active.document.replaceAll(formatted.source, formatted.caretOffsetUtf16)) {
+                    is EditorEditResult.Applied -> {
+                        active.lastEditMillis = clock.nowMillis()
+                        visibleLatency.editApplied(active.document.revision)
+                        updateAnalysis(active, null, edit.change)
+                    }
+
+                    EditorEditResult.NoChange -> {
                         Unit
                     }
 

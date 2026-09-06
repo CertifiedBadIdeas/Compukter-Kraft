@@ -87,6 +87,7 @@ class IdeAnalysisFlowTest {
         assertTrue(IdeBusyOperation.Format in fixture.controller.viewState().busy)
         assertEquals(source, requests.formatRequests.single().source)
         assertEquals(source.indexOf("println"), requests.formatRequests.single().caretOffsetUtf16)
+        fixture.clock.now = 1_000
         requests.completeFormat(formatted, formatted.indexOf("println"))
         fixture.controller.tick()
 
