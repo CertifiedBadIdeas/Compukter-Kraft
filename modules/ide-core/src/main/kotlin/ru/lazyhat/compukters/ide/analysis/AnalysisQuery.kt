@@ -82,6 +82,20 @@ sealed interface AnalysisQuery {
             validateCursor(path, offsetUtf16)
         }
     }
+
+    data class Format(
+        override val identity: AnalysisSnapshotIdentity,
+        val path: VirtualSourcePath,
+        val source: String,
+        val caretOffsetUtf16: Int,
+    ) : AnalysisQuery {
+        init {
+            validateCursor(path, caretOffsetUtf16)
+            require(caretOffsetUtf16 <= source.length) { "format caret offset exceeds its source" }
+            requireUtf16Boundary(source, caretOffsetUtf16, "format caret offset")
+            strictUtf8Size(source)
+        }
+    }
 }
 
 private fun validateCursor(
@@ -90,4 +104,17 @@ private fun validateCursor(
 ) {
     VirtualSourcePath.kotlin(path.value)
     require(offsetUtf16 >= 0) { "analysis cursor offset must be non-negative" }
+}
+
+internal fun requireUtf16Boundary(
+    text: String,
+    offsetUtf16: Int,
+    label: String,
+) {
+    require(
+        offsetUtf16 <= 0 ||
+            offsetUtf16 >= text.length ||
+            !Character.isHighSurrogate(text[offsetUtf16 - 1]) ||
+            !Character.isLowSurrogate(text[offsetUtf16]),
+    ) { "$label splits a surrogate pair" }
 }

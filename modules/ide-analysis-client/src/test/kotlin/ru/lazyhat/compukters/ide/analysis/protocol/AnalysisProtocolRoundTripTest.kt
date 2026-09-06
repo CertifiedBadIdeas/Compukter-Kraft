@@ -97,6 +97,7 @@ class AnalysisProtocolRoundTripTest {
                 AnalysisQueryRequest(requestId, AnalysisQuery.ExpressionInfo(identity, path(), 4)),
                 AnalysisQueryRequest(requestId, AnalysisQuery.Declaration(identity, path(), 5)),
                 AnalysisQueryRequest(requestId, AnalysisQuery.References(identity, path(), 6)),
+                AnalysisQueryRequest(requestId, AnalysisQuery.Format(identity, path(), "fun main(){}", 11)),
                 CancelAnalysisRequest(requestId),
                 AnalysisCancelled(requestId, identity),
                 CloseSnapshotRequest(requestId, identity),
@@ -175,6 +176,8 @@ class AnalysisProtocolRoundTripTest {
                         listOf(DeclarationLocation.Source(DeclarationOrigin.Project, path(), EditorRange(4, 10))),
                         sourceLengths(),
                     ),
+                AnalysisQuery.Format(identity, path(), "fun main(){}", 11) to
+                    AnalysisResult.Format.create(identity, "fun main() {\n}\n", 13),
             )
 
         results.forEach { (query, result) ->
@@ -273,6 +276,24 @@ class AnalysisProtocolRoundTripTest {
             roundTrip(
                 AnalysisQuerySuccess(requestId, AnalysisResult.Presentation(scopedIdentity, presentation)),
                 scopedContext.forQuery(AnalysisQuery.Presentation(scopedIdentity, path())),
+            )
+        }
+    }
+
+    @Test
+    fun `format query and result stay inside the negotiated source-file limit`() {
+        val limited = AnalysisProtocolContext.of(snapshot, AnalysisLimits(sourceFileBytes = 3))
+        val query = AnalysisQuery.Format(identity, path(), "1234", 0)
+
+        assertFailsWith<IllegalArgumentException> {
+            limited.forQuery(query)
+        }
+
+        val acceptedQuery = AnalysisQuery.Format(identity, path(), "123", 0)
+        assertFailsWith<IllegalArgumentException> {
+            roundTrip(
+                AnalysisQuerySuccess(requestId, AnalysisResult.Format.create(identity, "1234", 0)),
+                limited.forQuery(acceptedQuery),
             )
         }
     }

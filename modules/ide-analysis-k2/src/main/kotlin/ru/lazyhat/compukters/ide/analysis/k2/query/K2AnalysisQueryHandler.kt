@@ -19,6 +19,8 @@
 package ru.lazyhat.compukters.ide.analysis.k2.query
 
 import ru.lazyhat.compukters.ide.analysis.AnalysisQuery
+import ru.lazyhat.compukters.ide.analysis.k2.formatter.IsolatedKotlinFormatter
+import ru.lazyhat.compukters.ide.analysis.k2.formatter.KotlinSourceFormatter
 import ru.lazyhat.compukters.ide.analysis.k2.server.AnalysisQueryHandler
 import ru.lazyhat.compukters.ide.analysis.protocol.AnalysisFailure
 import ru.lazyhat.compukters.ide.analysis.protocol.AnalysisFailureKind
@@ -27,7 +29,11 @@ import ru.lazyhat.compukters.ide.analysis.protocol.AnalysisQuerySuccess
 
 internal class K2AnalysisQueryHandler(
     private val limits: AnalysisLimits,
-) : AnalysisQueryHandler {
+    private val createFormatter: () -> KotlinSourceFormatter = { IsolatedKotlinFormatter.packaged() },
+) : AnalysisQueryHandler,
+    AutoCloseable {
+    private var formatter: KotlinSourceFormatter? = null
+
     override fun execute(
         request: ru.lazyhat.compukters.ide.analysis.protocol.AnalysisQueryRequest,
         snapshot: ru.lazyhat.compukters.ide.analysis.k2.standalone.AdmittedK2Snapshot,
@@ -50,5 +56,26 @@ internal class K2AnalysisQueryHandler(
                 )
             }
         }
+
+        is AnalysisQuery.Format -> {
+            val query = request.query as AnalysisQuery.Format
+            try {
+                AnalysisQuerySuccess(request.requestId, FormatQuery.execute(query, snapshot, limits, formatter()))
+            } catch (exception: AnalysisOutputLimitException) {
+                AnalysisFailure(
+                    request.requestId,
+                    query.identity,
+                    AnalysisFailureKind.OutputLimit,
+                    "analysis output exceeds negotiated limit",
+                )
+            }
+        }
+    }
+
+    @Synchronized
+    private fun formatter(): KotlinSourceFormatter = formatter ?: createFormatter().also { formatter = it }
+
+    override fun close() {
+        (formatter as? AutoCloseable)?.close()
     }
 }

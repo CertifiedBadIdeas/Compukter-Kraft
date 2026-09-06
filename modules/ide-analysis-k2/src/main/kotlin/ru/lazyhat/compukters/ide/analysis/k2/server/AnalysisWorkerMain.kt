@@ -34,15 +34,17 @@ fun main() {
         val bootstrap = AnalysisWorkerBootstrap.load()
         val limits = AnalysisLimits(sourceFiles = 512)
         val admission = SnapshotAdmission(bootstrap.temporaryRoot, bootstrap.platform)
-        AnalysisWorkerServer(
-            bootstrap.identity,
-            limits,
-            BufferedInputStream(System.`in`),
-            BufferedOutputStream(System.out),
-            admission,
-            K2AnalysisQueryHandler(limits),
-        ).use { server ->
-            if (server.run() == AnalysisServerExit.ProtocolError) exitProcess(3)
+        K2AnalysisQueryHandler(limits).use { handler ->
+            AnalysisWorkerServer(
+                bootstrap.identity,
+                limits,
+                BufferedInputStream(System.`in`),
+                BufferedOutputStream(System.out),
+                admission,
+                handler,
+            ).use { server ->
+                if (server.run() == AnalysisServerExit.ProtocolError) exitProcess(3)
+            }
         }
     } catch (exception: Exception) {
         System.err.println("analysis worker initialization failed: ${exception.message ?: exception::class.java.simpleName}")

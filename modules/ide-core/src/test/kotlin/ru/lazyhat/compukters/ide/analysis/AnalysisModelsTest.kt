@@ -41,6 +41,30 @@ class AnalysisModelsTest {
         assertFailsWith<IllegalArgumentException> {
             AnalysisQuery.Declaration(identity, main, -1)
         }
+        assertFailsWith<IllegalArgumentException> {
+            AnalysisQuery.Format(identity, main, "😀", 1)
+        }
+    }
+
+    @Test
+    fun `formatted sources enforce caret and UTF-8 bounds`() {
+        assertEquals(
+            3,
+            AnalysisResult.Format
+                .create(identity, "val answer = 42\n", 3)
+                .caretOffsetUtf16,
+        )
+        assertFailsWith<IllegalArgumentException> {
+            AnalysisResult.Format.create(identity, "😀", 1)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AnalysisResult.Format.create(
+                identity,
+                "😀",
+                0,
+                AnalysisResultLimits(maxSourceFileUtf8Bytes = 3),
+            )
+        }
     }
 
     @Test

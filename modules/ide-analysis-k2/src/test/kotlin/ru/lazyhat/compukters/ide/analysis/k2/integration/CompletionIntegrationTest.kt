@@ -89,6 +89,46 @@ class CompletionIntegrationTest {
         }
     }
 
+    @Test
+    fun `forked worker formats the exact submitted Kotlin source`() {
+        val snapshotSource = "fun main() = Unit"
+        val submittedSource = "fun main(){println(1)}"
+        val path = VirtualSourcePath.kotlin("main.kt")
+        val sources =
+            ProjectSnapshot.of(
+                listOf(ProjectSource(path, BinaryValue.of(snapshotSource.encodeToByteArray()))),
+                WorkerLimits(),
+            )
+        val profile = AnalysisProfileIdentity(Hash256.of(ByteArray(32) { 9 }))
+        val identity = AnalysisSnapshotIdentity(SourceSnapshotIdentity.of(sources), profile)
+        val admitted =
+            AdmittedAnalysisSnapshot(
+                identity,
+                sources,
+                AdmittedAnalysisProfile(
+                    profile,
+                    ru.lazyhat.compukters.ide.analysis.k2
+                        .testAdmittedPlatform(),
+                ),
+                AnalysisLimits(),
+            )
+
+        withController { controller ->
+            assertEquals(SnapshotOpenResult.Opened(identity), controller.open(admitted).get(90, TimeUnit.SECONDS))
+            val formatted =
+                assertIs<AnalysisClientResult.Success>(
+                    controller
+                        .query(
+                            admitted,
+                            AnalysisQuery.Format(identity, path, submittedSource, submittedSource.indexOf("println")),
+                        ).get(90, TimeUnit.SECONDS),
+                ).result as AnalysisResult.Format
+
+            assertEquals("fun main() {\n    println(1)\n}\n", formatted.source)
+            assertEquals(formatted.source.indexOf("println"), formatted.caretOffsetUtf16)
+        }
+    }
+
     private fun withController(block: (AnalysisWorkerController) -> Unit) {
         val payload = ToolingBundleLoader.load(Path.of(checkNotNull(System.getProperty("compukters.analysis.payload")))).profile("analysis")
         val temporaryRoot = createTempDirectory("compukters-analysis-completion-").toAbsolutePath().normalize()

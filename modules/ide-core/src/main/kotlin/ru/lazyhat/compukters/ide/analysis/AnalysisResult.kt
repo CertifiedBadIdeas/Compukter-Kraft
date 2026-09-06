@@ -27,12 +27,14 @@ data class AnalysisResultLimits(
     val maxDeclarationLocations: Int = 64,
     val maxReferences: Int = 4 * 1024,
     val maxDetailUtf8Bytes: Int = 64 * 1024,
+    val maxSourceFileUtf8Bytes: Int = 4 * 1024 * 1024,
 ) {
     init {
         require(maxCompletionItems >= 0) { "completion-item limit must be non-negative" }
         require(maxDeclarationLocations >= 0) { "declaration-location limit must be non-negative" }
         require(maxReferences >= 0) { "reference limit must be non-negative" }
         require(maxDetailUtf8Bytes >= 0) { "analysis detail limit must be non-negative" }
+        require(maxSourceFileUtf8Bytes >= 0) { "source-file limit must be non-negative" }
     }
 }
 
@@ -166,6 +168,29 @@ sealed interface AnalysisResult {
                 require(locations.size <= limits.maxReferences) { "reference count exceeds limit" }
                 validateLocations(locations, sourceLengthsUtf16, emptyMap(), allowUnavailable = false)
                 return References(identity, immutableCopy(locations))
+            }
+        }
+    }
+
+    @ConsistentCopyVisibility
+    data class Format private constructor(
+        override val identity: AnalysisSnapshotIdentity,
+        val source: String,
+        val caretOffsetUtf16: Int,
+    ) : AnalysisResult {
+        companion object {
+            fun create(
+                identity: AnalysisSnapshotIdentity,
+                source: String,
+                caretOffsetUtf16: Int,
+                limits: AnalysisResultLimits = AnalysisResultLimits(),
+            ): Format {
+                require(caretOffsetUtf16 in 0..source.length) { "format caret offset exceeds its source" }
+                requireUtf16Boundary(source, caretOffsetUtf16, "format caret offset")
+                require(strictUtf8Size(source) <= limits.maxSourceFileUtf8Bytes) {
+                    "formatted source exceeds limit"
+                }
+                return Format(identity, source, caretOffsetUtf16)
             }
         }
     }

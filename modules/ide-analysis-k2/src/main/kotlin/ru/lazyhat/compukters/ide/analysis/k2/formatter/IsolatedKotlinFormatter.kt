@@ -34,8 +34,10 @@ internal class IsolatedKotlinFormatter private constructor(
     private val loader: URLClassLoader,
     private val formatMethod: Method,
     private val temporaryRoot: Path?,
-) : AutoCloseable {
-    fun format(
+) : KotlinSourceFormatter,
+    AutoCloseable {
+    @Synchronized
+    override fun format(
         fileName: String,
         source: String,
     ): String =

@@ -375,11 +375,32 @@ private fun validateQuery(
     context: AnalysisProtocolContext,
 ) {
     when (query) {
-        is AnalysisQuery.Presentation -> context.validate(query.path, 0)
-        is AnalysisQuery.Completion -> context.validate(query.path, query.offsetUtf16)
-        is AnalysisQuery.ExpressionInfo -> context.validate(query.path, query.offsetUtf16)
-        is AnalysisQuery.Declaration -> context.validate(query.path, query.offsetUtf16)
-        is AnalysisQuery.References -> context.validate(query.path, query.offsetUtf16)
+        is AnalysisQuery.Presentation -> {
+            context.validate(query.path, 0)
+        }
+
+        is AnalysisQuery.Completion -> {
+            context.validate(query.path, query.offsetUtf16)
+        }
+
+        is AnalysisQuery.ExpressionInfo -> {
+            context.validate(query.path, query.offsetUtf16)
+        }
+
+        is AnalysisQuery.Declaration -> {
+            context.validate(query.path, query.offsetUtf16)
+        }
+
+        is AnalysisQuery.References -> {
+            context.validate(query.path, query.offsetUtf16)
+        }
+
+        is AnalysisQuery.Format -> {
+            context.validate(query.path, 0)
+            require(strictUtf8Size(query.source) <= context.limits.sourceFileBytes) {
+                "format source exceeds analysis limit"
+            }
+        }
     }
 }
 
@@ -444,13 +465,19 @@ private fun validateResult(
             require(query is AnalysisQuery.References) { "analysis result kind does not match its query" }
             AnalysisResult.References.create(result.identity, result.locations, sourceLengths, limits.resultLimits())
         }
+
+        is AnalysisResult.Format -> {
+            require(query is AnalysisQuery.Format) { "analysis result kind does not match its query" }
+            AnalysisResult.Format.create(result.identity, result.source, result.caretOffsetUtf16, limits.resultLimits())
+        }
     }
 }
 
 private fun AnalysisLimits.presentationLimits() =
     EditorPresentationLimits(diagnostics, diagnosticTextBytes, semanticTokens, declarationLocations)
 
-private fun AnalysisLimits.resultLimits() = AnalysisResultLimits(completionItems, declarationLocations, references, detailTextBytes)
+private fun AnalysisLimits.resultLimits() =
+    AnalysisResultLimits(completionItems, declarationLocations, references, detailTextBytes, sourceFileBytes)
 
 private class MessageSink {
     private val output = ByteArrayOutputStream()
@@ -547,6 +574,7 @@ private class MessageSink {
                 is AnalysisQuery.ExpressionInfo -> QueryKind.ExpressionInfo
                 is AnalysisQuery.Declaration -> QueryKind.Declaration
                 is AnalysisQuery.References -> QueryKind.References
+                is AnalysisQuery.Format -> QueryKind.Format
             },
         )
         identity(value.identity)
@@ -572,6 +600,12 @@ private class MessageSink {
             is AnalysisQuery.References -> {
                 cursor(value.path, value.offsetUtf16)
             }
+
+            is AnalysisQuery.Format -> {
+                string(value.path.value)
+                string(value.source)
+                u32(value.caretOffsetUtf16)
+            }
         }
     }
 
@@ -583,6 +617,7 @@ private class MessageSink {
                 is AnalysisResult.ExpressionInfo -> ResultKind.ExpressionInfo
                 is AnalysisResult.Declaration -> ResultKind.Declaration
                 is AnalysisResult.References -> ResultKind.References
+                is AnalysisResult.Format -> ResultKind.Format
             },
         )
         identity(value.identity)
@@ -607,6 +642,11 @@ private class MessageSink {
 
             is AnalysisResult.References -> {
                 locations(value.locations)
+            }
+
+            is AnalysisResult.Format -> {
+                string(value.source)
+                u32(value.caretOffsetUtf16)
             }
         }
     }
@@ -938,6 +978,10 @@ private class MessageSource(
             QueryKind.References -> {
                 cursor(identity, AnalysisQuery::References)
             }
+
+            QueryKind.Format -> {
+                AnalysisQuery.Format(identity, kotlinPath(), string(context.limits.sourceFileBytes), u32())
+            }
         }
     }
 
@@ -980,6 +1024,15 @@ private class MessageSource(
                     identity,
                     locations(context.limits.references),
                     sourceLengths,
+                    context.limits.resultLimits(),
+                )
+            }
+
+            ResultKind.Format -> {
+                AnalysisResult.Format.create(
+                    identity,
+                    string(context.limits.sourceFileBytes),
+                    u32(),
                     context.limits.resultLimits(),
                 )
             }
@@ -1127,9 +1180,9 @@ private class MessageSource(
     }
 }
 
-private enum class QueryKind { Presentation, Completion, ExpressionInfo, Declaration, References }
+private enum class QueryKind { Presentation, Completion, ExpressionInfo, Declaration, References, Format }
 
-private enum class ResultKind { Presentation, Completion, ExpressionInfo, Declaration, References }
+private enum class ResultKind { Presentation, Completion, ExpressionInfo, Declaration, References, Format }
 
 private enum class OriginKind { Project, Platform }
 
