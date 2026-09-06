@@ -150,140 +150,122 @@ val cargoBuildCompukterFfi =
         environment("CARGO_TARGET_DIR", compukterFfiTargetRoot.absolutePath)
     }
 
-val testCompilerArtifactVmConformance =
-    tasks.register<Exec>("testCompilerArtifactVmConformance") {
-        description = "Verifies Kotlin executable Artifact v1 output with the pinned Compukter VM."
+val verifyKotlinVmConformance =
+    tasks.register("verifyKotlinVmConformance") {
+        description = "Runs every registered Kotlin-to-Compukter-VM execution-conformance scenario."
         group = "verification"
-        dependsOn(":compiler-artifact:test")
-        val harness = rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
-        val artifact = project(":compiler-artifact").layout.buildDirectory.file("generated/conformance/executable-instructions.cpkt")
-        val target = rootProject.file(".toolchain/build/cargo/compiler-artifact-conformance")
-        inputs.file(harness)
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock"))
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs"))
-        inputs.file(artifact)
-        doFirst {
-            check(harness.isFile) { "compiler artifact Rust conformance harness is missing" }
+    }
+
+val compilerArtifactVmConformanceHarness =
+    rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
+val compilerArtifactVmConformanceLock =
+    rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock")
+val compilerArtifactVmConformanceSource =
+    rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs")
+
+fun registerKotlinVmConformance(
+    taskName: String,
+    taskDescription: String,
+    artifactTask: String,
+    artifact: Provider<RegularFile>,
+    cargoTargetDirectory: String,
+    artifactEnvironmentVariables: List<String>,
+) {
+    val conformanceTask =
+        tasks.register<Exec>(taskName) {
+            description = taskDescription
+            group = "verification"
+            dependsOn(artifactTask)
+            inputs.file(compilerArtifactVmConformanceHarness)
+            inputs.file(compilerArtifactVmConformanceLock)
+            inputs.file(compilerArtifactVmConformanceSource)
+            inputs.file(artifact)
+            doFirst {
+                check(compilerArtifactVmConformanceHarness.isFile) {
+                    "compiler artifact Rust conformance harness is missing"
+                }
+                check(artifact.get().asFile.isFile) {
+                    "$taskName requires generated artifact ${artifact.get().asFile}"
+                }
+            }
+            commandLine(
+                "cargo",
+                "test",
+                "--locked",
+                "--offline",
+                "--manifest-path",
+                compilerArtifactVmConformanceHarness.absolutePath,
+            )
+            environment("CARGO_TARGET_DIR", rootProject.file(cargoTargetDirectory).absolutePath)
+            artifactEnvironmentVariables.forEach { variable ->
+                environment(variable, artifact.get().asFile.absolutePath)
+            }
         }
-        commandLine("cargo", "test", "--locked", "--offline", "--manifest-path", harness.absolutePath)
-        environment("CARGO_TARGET_DIR", target.absolutePath)
-        environment("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", artifact.get().asFile.absolutePath)
+    verifyKotlinVmConformance.configure {
+        dependsOn(conformanceTask)
     }
+}
 
-val testKotlinSubsetVmConformance =
-    tasks.register<Exec>("testKotlinSubsetVmConformance") {
-        description = "Verifies K2-lowered Kotlin subset output with the pinned Compukter VM."
-        group = "verification"
-        dependsOn(":compiler-k2:generateKotlinSubsetConformanceArtifact")
-        val harness = rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
-        val artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/kotlin-subset.cpkt")
-        val target = rootProject.file(".toolchain/build/cargo/compiler-k2-conformance")
-        inputs.file(harness)
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock"))
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs"))
-        inputs.file(artifact)
-        doFirst {
-            check(harness.isFile) { "compiler artifact Rust conformance harness is missing" }
-        }
-        commandLine("cargo", "test", "--locked", "--offline", "--manifest-path", harness.absolutePath)
-        environment("CARGO_TARGET_DIR", target.absolutePath)
-        environment("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", artifact.get().asFile.absolutePath)
-        environment("COMPUKTER_KOTLIN_SUBSET_ARTIFACT", artifact.get().asFile.absolutePath)
-    }
-
-val testKotlinSuspendCallVmConformance =
-    tasks.register<Exec>("testKotlinSuspendCallVmConformance") {
-        description = "Executes a K2-produced suspend project call with the pinned Compukter VM."
-        group = "verification"
-        dependsOn(":compiler-k2:generateSuspendCallConformanceArtifact")
-        val harness = rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
-        val artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/suspend-call.cpkt")
-        val target = rootProject.file(".toolchain/build/cargo/compiler-k2-suspend-call-conformance")
-        inputs.file(harness)
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock"))
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs"))
-        inputs.file(artifact)
-        doFirst {
-            check(harness.isFile) { "compiler artifact Rust conformance harness is missing" }
-        }
-        commandLine("cargo", "test", "--locked", "--offline", "--manifest-path", harness.absolutePath)
-        environment("CARGO_TARGET_DIR", target.absolutePath)
-        environment("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", artifact.get().asFile.absolutePath)
-        environment("COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT", artifact.get().asFile.absolutePath)
-    }
-
-val testKotlinWhenVmConformance =
-    tasks.register<Exec>("testKotlinWhenVmConformance") {
-        description = "Executes bounded K2 when branches with the pinned Compukter VM."
-        group = "verification"
-        dependsOn(":compiler-k2:generateWhenConformanceArtifact")
-        val harness = rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
-        val artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/when.cpkt")
-        val target = rootProject.file(".toolchain/build/cargo/compiler-k2-when-conformance")
-        inputs.file(harness)
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock"))
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs"))
-        inputs.file(artifact)
-        doFirst {
-            check(harness.isFile) { "compiler artifact Rust conformance harness is missing" }
-        }
-        commandLine("cargo", "test", "--locked", "--offline", "--manifest-path", harness.absolutePath)
-        environment("CARGO_TARGET_DIR", target.absolutePath)
-        environment("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", artifact.get().asFile.absolutePath)
-        environment("COMPUKTER_KOTLIN_WHEN_ARTIFACT", artifact.get().asFile.absolutePath)
-    }
-
-val testKotlinArgvVmConformance =
-    tasks.register<Exec>("testKotlinArgvVmConformance") {
-        description = "Executes K2 Array<String> entry arguments with the pinned Compukter VM."
-        group = "verification"
-        dependsOn(":compiler-k2:generateArgvConformanceArtifact")
-        val harness = rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
-        val artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/argv.cpkt")
-        val target = rootProject.file(".toolchain/build/cargo/compiler-k2-argv-conformance")
-        inputs.file(harness)
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock"))
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs"))
-        inputs.file(artifact)
-        commandLine("cargo", "test", "--locked", "--offline", "--manifest-path", harness.absolutePath)
-        environment("CARGO_TARGET_DIR", target.absolutePath)
-        environment("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", artifact.get().asFile.absolutePath)
-        environment("COMPUKTER_KOTLIN_ARGV_ARTIFACT", artifact.get().asFile.absolutePath)
-    }
-
-val testKotlinPlatformScalarVmConformance =
-    tasks.register<Exec>("testKotlinPlatformScalarVmConformance") {
-        description = "Executes a bounded K2 platform-scalar precondition with the pinned Compukter VM."
-        group = "verification"
-        dependsOn(":compiler-k2:generatePlatformScalarConformanceArtifact")
-        val harness = rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
-        val artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/platform-scalar.cpkt")
-        val target = rootProject.file(".toolchain/build/cargo/compiler-k2-platform-scalar-conformance")
-        inputs.file(harness)
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock"))
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs"))
-        inputs.file(artifact)
-        commandLine("cargo", "test", "--locked", "--offline", "--manifest-path", harness.absolutePath)
-        environment("CARGO_TARGET_DIR", target.absolutePath)
-        environment("COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT", artifact.get().asFile.absolutePath)
-    }
-
-val testKotlinIntLoopsVmConformance =
-    tasks.register<Exec>("testKotlinIntLoopsVmConformance") {
-        description = "Executes allocation-free K2 Int loops with the pinned Compukter VM."
-        group = "verification"
-        dependsOn(":compiler-k2:generateIntLoopsConformanceArtifact")
-        val harness = rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
-        val artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/kotlin-int-loops.cpkt")
-        val target = rootProject.file(".toolchain/build/cargo/compiler-k2-int-loops-conformance")
-        inputs.file(harness)
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock"))
-        inputs.file(rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs"))
-        inputs.file(artifact)
-        commandLine("cargo", "test", "--locked", "--offline", "--manifest-path", harness.absolutePath)
-        environment("CARGO_TARGET_DIR", target.absolutePath)
-        environment("COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT", artifact.get().asFile.absolutePath)
-    }
+registerKotlinVmConformance(
+    taskName = "testCompilerArtifactVmConformance",
+    taskDescription = "Verifies Kotlin executable Artifact v1 output with the pinned Compukter VM.",
+    artifactTask = ":compiler-artifact:test",
+    artifact = project(":compiler-artifact").layout.buildDirectory.file("generated/conformance/executable-instructions.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-artifact-conformance",
+    artifactEnvironmentVariables = listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT"),
+)
+registerKotlinVmConformance(
+    taskName = "testKotlinSubsetVmConformance",
+    taskDescription = "Verifies K2-lowered Kotlin subset output with the pinned Compukter VM.",
+    artifactTask = ":compiler-k2:generateKotlinSubsetConformanceArtifact",
+    artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/kotlin-subset.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-conformance",
+    artifactEnvironmentVariables =
+        listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", "COMPUKTER_KOTLIN_SUBSET_ARTIFACT"),
+)
+registerKotlinVmConformance(
+    taskName = "testKotlinSuspendCallVmConformance",
+    taskDescription = "Executes a K2-produced suspend project call with the pinned Compukter VM.",
+    artifactTask = ":compiler-k2:generateSuspendCallConformanceArtifact",
+    artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/suspend-call.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-suspend-call-conformance",
+    artifactEnvironmentVariables =
+        listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", "COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT"),
+)
+registerKotlinVmConformance(
+    taskName = "testKotlinWhenVmConformance",
+    taskDescription = "Executes bounded K2 when branches with the pinned Compukter VM.",
+    artifactTask = ":compiler-k2:generateWhenConformanceArtifact",
+    artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/when.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-when-conformance",
+    artifactEnvironmentVariables =
+        listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", "COMPUKTER_KOTLIN_WHEN_ARTIFACT"),
+)
+registerKotlinVmConformance(
+    taskName = "testKotlinArgvVmConformance",
+    taskDescription = "Executes K2 Array<String> entry arguments with the pinned Compukter VM.",
+    artifactTask = ":compiler-k2:generateArgvConformanceArtifact",
+    artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/argv.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-argv-conformance",
+    artifactEnvironmentVariables =
+        listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", "COMPUKTER_KOTLIN_ARGV_ARTIFACT"),
+)
+registerKotlinVmConformance(
+    taskName = "testKotlinPlatformScalarVmConformance",
+    taskDescription = "Executes a bounded K2 platform-scalar precondition with the pinned Compukter VM.",
+    artifactTask = ":compiler-k2:generatePlatformScalarConformanceArtifact",
+    artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/platform-scalar.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-platform-scalar-conformance",
+    artifactEnvironmentVariables = listOf("COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT"),
+)
+registerKotlinVmConformance(
+    taskName = "testKotlinIntLoopsVmConformance",
+    taskDescription = "Executes allocation-free K2 Int loops with the pinned Compukter VM.",
+    artifactTask = ":compiler-k2:generateIntLoopsConformanceArtifact",
+    artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/kotlin-int-loops.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-int-loops-conformance",
+    artifactEnvironmentVariables = listOf("COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT"),
+)
 
 val buildScriptsTest = gradle.includedBuild("build-scripts").task(":test")
 
@@ -468,7 +450,7 @@ val verifyLicensePolicy =
     }
 
 tasks.register("verifyLocalFast") {
-    description = "Runs the standard local JVM and build-script verification slice."
+    description = "Runs the curated fast local JVM and build-script verification slice."
     group = "verification"
     dependsOn(buildScriptsTest)
     dependsOn(verifyActiveMinecraftBaseline)
@@ -487,22 +469,24 @@ tasks.named("check") {
     dependsOn(verifyLicensePolicy)
 }
 
+val verifyAllModuleChecks =
+    tasks.register("verifyAllModuleChecks") {
+        description = "Runs the check lifecycle of every Gradle subproject."
+        group = "verification"
+        dependsOn(subprojects.map { "${it.path}:check" })
+    }
+
 tasks.register("verifyLocalFull") {
-    description = "Runs local JVM tests and the managed Compukter VM tests."
+    description = "Fully verifies the current checkout and its locally packaged production artifact."
     group = "verification"
     dependsOn("verifyLocalFast")
+    dependsOn(verifyAllModuleChecks)
+    dependsOn(verifyKotlinVmConformance)
     dependsOn(testCompukterVmRust)
     dependsOn(testCompukterFfiRust)
     dependsOn(testCompukterFfiRustRelease)
     dependsOn(fmtCompukterFfiRust)
     dependsOn(clippyCompukterFfiRust)
     dependsOn(cargoBuildCompukterFfi)
-    dependsOn(":native-runtime:nativeIntegrationTest")
-    dependsOn(":core:programRuntimeIntegrationTest")
-    dependsOn(":playground:endToEndTest")
-    dependsOn(testCompilerArtifactVmConformance)
-    dependsOn(testKotlinSubsetVmConformance)
-    dependsOn(testKotlinIntLoopsVmConformance)
     dependsOn(":v26_1-neoforge:runGameTestServer")
-    dependsOn(":v26_1-neoforge:verifyPackagedCompukterFfi")
 }

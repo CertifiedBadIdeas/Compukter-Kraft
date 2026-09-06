@@ -43,6 +43,18 @@ installation:
 ./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildProductionUniversalJar
 ```
 
+For fast feedback, `./gradlew-sandbox-dev-parallel verifyLocalFast` runs policy,
+build-script, and a curated JVM test slice. Before treating the current checkout
+as fully verified, run `./gradlew-sandbox-dev-parallel verifyLocalFull`; it covers
+every Gradle subproject check, all registered Kotlin-to-VM conformance scenarios,
+Rust and FFM checks, runtime integrations, the real GameTest server, and the
+production artifact for the locally configured native platform.
+
+A distributable multi-platform release has a stricter, separate gate:
+`:v26_1-neoforge:buildReleaseUniversalJar` requires a clean exact-tag checkout
+and configured Linux and Windows native runtime bundles. A successful local full
+verification does not by itself establish release readiness.
+
 ## Runtime boundary
 
 `host/compukter-vm` is the pinned

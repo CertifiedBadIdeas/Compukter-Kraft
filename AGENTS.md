@@ -25,15 +25,20 @@ VM code lives in `host/compukter-vm`. Documentation is in
   `GRADLE_USER_HOME` in `.gradle-sandbox`, disables the Gradle daemon, and avoids sharing host Gradle lock files.
 - For normal source-built development runs, prefer `./gradlew-sandbox-dev-parallel <tasks>`. It delegates to
   `./gradlew-sandbox-dev --parallel <tasks> -PcompukterVmBuildJobs=$(nproc)`.
-- `./gradlew-sandbox-dev-parallel verifyLocalFast` is the default local verification entrypoint for build-script tests
-  and JVM tests across Gradle modules.
-- `./gradlew-sandbox-dev-parallel verifyLocalFull` runs `verifyLocalFast` and host Rust crate tests.
+- `./gradlew-sandbox-dev-parallel verifyLocalFast` is the default fast feedback entrypoint. It runs build-script and
+  policy checks plus a curated JVM test slice; it does not claim complete module coverage.
+- `./gradlew-sandbox-dev-parallel verifyLocalFull` verifies the complete current checkout: every Gradle subproject
+  `check`, all registered Kotlin-to-VM conformance scenarios, host Rust and FFM checks, runtime integrations, the real
+  NeoForge GameTest server, and the production artifact packaged for the locally configured native platform.
 - `./gradlew build` builds all Gradle modules and runs standard checks.
 - `./gradlew test` runs JVM unit tests across Kotlin modules.
 - `./gradlew :core:test` or `./gradlew :native-runtime:test` runs focused module tests.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runClient` launches the NeoForge dev client.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runGameTestServer` runs the real NeoForge GameTest server.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildProductionUniversalJar` builds the official-name production mod jar without a remap stage.
+- `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildReleaseUniversalJar` is the separate tagged release gate. It
+  requires a clean exact-tag checkout and configured Linux and Windows native runtime bundles; local full verification
+  does not claim this release state.
 - `cargo test --manifest-path host/compukter-vm/Cargo.toml --locked --offline` runs the managed Compukter VM tests.
 
 ## Coding Style & Naming Conventions
