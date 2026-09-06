@@ -34,6 +34,15 @@ class CanonicalPlatformSourceTest {
     private val catalog by lazy { SourceCatalog.parse(root.resolve("modules.toml").readText()) }
 
     @Test
+    fun `builtins publish specialized IntArray contract`() {
+        val arrays = root.resolve("builtins/kotlin/Arrays.kt").readText()
+
+        assertTrue("public class IntArray external constructor(size: Int)" in arrays)
+        assertTrue("public external fun intArrayOf(vararg elements: Int): IntArray" in arrays)
+        assertEquals("1.1.0", catalog.modules.single { it.id == "kotlin:builtins" }.version)
+    }
+
+    @Test
     fun `every canonical source has exactly one owner`() {
         val sources =
             Files.walk(root).use { paths ->

@@ -52,6 +52,10 @@ object CanonicalTrustedIntrinsics {
             primitive("kotlin", "builtins", "kotlin", "CharArray.get", "fun(Int):Char")
             primitive("kotlin", "builtins", "kotlin", "CharArray.set", "fun(Int,Char):Unit")
             primitive("kotlin", "builtins", "kotlin", "CharArray.size", "val():Int")
+            primitive("kotlin", "builtins", "kotlin", "IntArray.<init>", "constructor(Int)")
+            primitive("kotlin", "builtins", "kotlin", "IntArray.get", "fun(Int):Int")
+            primitive("kotlin", "builtins", "kotlin", "IntArray.set", "fun(Int,Int):Unit")
+            primitive("kotlin", "builtins", "kotlin", "IntArray.size", "val():Int")
             primitive("kotlin", "builtins", "kotlin", "CharSequence.get", "fun(Int):Char")
             primitive("kotlin", "builtins", "kotlin", "Comparable.compareTo", "fun(T):Int")
             primitive("kotlin", "builtins", "kotlin", "Enum.name", "val():String")
@@ -92,6 +96,7 @@ object CanonicalTrustedIntrinsics {
             primitive("kotlin", "builtins", "kotlin", "Unit.toString", "fun():String")
             primitive("kotlin", "builtins", "kotlin", "arrayOf", "fun(T):Array<T>")
             primitive("kotlin", "builtins", "kotlin", "arrayOfNulls", "fun(Int):Array<T?>")
+            primitive("kotlin", "builtins", "kotlin", "intArrayOf", "fun(Int):IntArray")
             primitive("kotlin", "builtins", "kotlin", "toString", "fun(T?.):String")
             primitive(
                 "kotlin",

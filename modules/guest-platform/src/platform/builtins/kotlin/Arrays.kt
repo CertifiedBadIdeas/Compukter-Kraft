@@ -28,7 +28,13 @@ internal class ByteArray private constructor()
 
 internal class ShortArray private constructor()
 
-internal class IntArray private constructor()
+public class IntArray external constructor(size: Int) {
+    public external val size: Int
+
+    public external operator fun get(index: Int): Int
+
+    public external operator fun set(index: Int, value: Int): Unit
+}
 
 internal class LongArray private constructor()
 
@@ -45,5 +51,7 @@ internal class UIntArray private constructor()
 internal class ULongArray private constructor()
 
 public external fun <T> arrayOf(vararg elements: T): Array<T>
+
+public external fun intArrayOf(vararg elements: Int): IntArray
 
 internal external fun <T> arrayOfNulls(size: Int): Array<T?>

@@ -107,6 +107,31 @@ class TrustedIntrinsicContractTest {
             listOf(
                 TrustedIntrinsicKey(
                     builtins,
+                    CallableId(FqName("kotlin"), FqName("IntArray"), Name.special("<init>")),
+                    CanonicalCallableSignature("constructor(Int)"),
+                ),
+                TrustedIntrinsicKey(
+                    builtins,
+                    CallableId(FqName("kotlin"), FqName("IntArray"), Name.identifier("get")),
+                    CanonicalCallableSignature("fun(Int):Int"),
+                ),
+                TrustedIntrinsicKey(
+                    builtins,
+                    CallableId(FqName("kotlin"), FqName("IntArray"), Name.identifier("set")),
+                    CanonicalCallableSignature("fun(Int,Int):Unit"),
+                ),
+                TrustedIntrinsicKey(
+                    builtins,
+                    CallableId(FqName("kotlin"), FqName("IntArray"), Name.identifier("size")),
+                    CanonicalCallableSignature("val():Int"),
+                ),
+                TrustedIntrinsicKey(
+                    builtins,
+                    callable("kotlin", "intArrayOf"),
+                    CanonicalCallableSignature("fun(Int):IntArray"),
+                ),
+                TrustedIntrinsicKey(
+                    builtins,
                     CallableId(FqName("kotlin"), FqName("String"), Name.identifier("substring")),
                     CanonicalCallableSignature("fun(Int,Int):String"),
                 ),
