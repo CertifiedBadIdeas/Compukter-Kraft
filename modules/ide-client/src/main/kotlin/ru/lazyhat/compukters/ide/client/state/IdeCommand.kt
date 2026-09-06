@@ -87,6 +87,8 @@ sealed interface IdeCommand {
 
     data object Save : IdeCommand
 
+    data object Format : IdeCommand
+
     /** Requests an admitted external-change poll. */
     data object Poll : IdeCommand
 

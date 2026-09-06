@@ -568,19 +568,21 @@ cannot become one merely by copying its package, name, and signature.
   plus [`IdeClientControllerTest`](../modules/ide-client/src/test/kotlin/ru/lazyhat/compukters/ide/client/controller/IdeClientControllerTest.kt),
   test `Kotlin smart typing flows through writable editor while plain text stays literal`.
 
-- [x] **Explicit-save Kotlin formatting** — Ctrl+S formats writable `.kt`
-  sources with ktlint standard rules, applies the result as one undoable edit
-  with a mapped UTF-16 caret, and then saves it. Stale results never replace
-  newer typing; formatter failures warn and save the unchanged source, while
-  autosave, implicit saves, previews, and non-Kotlin files remain unaffected.
+- [x] **On-demand Kotlin formatting** — Ctrl+Alt+L and the toolbar Format
+  action format writable `.kt` sources with ktlint standard rules, applying
+  the result as one undoable edit with a mapped UTF-16 caret and leaving it
+  dirty for a separate save. Stale results never replace newer typing;
+  formatter failures warn without saving, while Ctrl+S, autosave, implicit
+  saves, previews, and non-Kotlin files remain unaffected.
   Evidence:
   [`KotlinFormatterTest`](../modules/ide-kotlin-formatter/src/test/kotlin/ru/lazyhat/compukters/ide/formatter/KotlinFormatterTest.kt),
   [`FormatQueryTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/query/FormatQueryTest.kt),
   and
   [`IdeAnalysisFlowTest`](../modules/ide-client/src/test/kotlin/ru/lazyhat/compukters/ide/client/controller/IdeAnalysisFlowTest.kt),
-  tests `explicit save formats Kotlin atomically before persisting`,
-  `stale format result never overwrites newer typing and saves the latest text`,
-  and `format failure warns and saves the unformatted Kotlin source`.
+  tests `explicit format changes Kotlin atomically and leaves saving separate`,
+  `stale format result never overwrites or saves newer typing`,
+  `format failure warns without saving the unformatted Kotlin source`, and
+  `explicit save bypasses the asynchronous formatter`.
 
 - [x] **Semantic highlighting and inferred-type presentation** — declarations,
   extension functions, inferred expressions, and smart casts receive K2-backed

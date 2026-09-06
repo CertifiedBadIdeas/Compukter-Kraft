@@ -134,6 +134,7 @@ class IdeInputAdapter(
             if (control) {
                 when (event.key()) {
                     GLFW.GLFW_KEY_S -> IdeCommand.Save
+                    GLFW.GLFW_KEY_L -> if (alt && !shift) IdeCommand.Format else null
                     GLFW.GLFW_KEY_B -> IdeCommand.GoToDeclaration()
                     GLFW.GLFW_KEY_F9 -> IdeCommand.Build
                     GLFW.GLFW_KEY_SPACE -> IdeCommand.ManualCompletion
@@ -353,6 +354,10 @@ class IdeInputAdapter(
 
             IdeHitAction.Build -> {
                 dispatch(IdeCommand.Build)
+            }
+
+            IdeHitAction.Format -> {
+                dispatch(IdeCommand.Format)
             }
 
             IdeHitAction.Cancel -> {

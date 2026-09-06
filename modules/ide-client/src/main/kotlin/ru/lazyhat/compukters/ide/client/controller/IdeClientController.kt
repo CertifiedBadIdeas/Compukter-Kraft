@@ -164,7 +164,7 @@ class IdeClientController(
     private var openingProjectNavigation: PendingProjectNavigation? = null
     private var pendingProjectDirectory: String? = null
     private var pendingSave = false
-    private var pendingFormatSave = false
+    private var pendingFormat = false
     private var rememberedFile: ProjectPath? = null
     private var closeRequested = false
     private var closeReady = false
@@ -304,7 +304,11 @@ class IdeClientController(
             }
 
             IdeCommand.Save -> {
-                requestFormatAndSave()
+                requestSave()
+            }
+
+            IdeCommand.Format -> {
+                requestFormat()
             }
 
             IdeCommand.Poll -> {
@@ -541,7 +545,7 @@ class IdeClientController(
         cancelBuildJobs()
         pendingBuildAction = null
         pendingSave = false
-        pendingFormatSave = false
+        pendingFormat = false
         buildState = IdeBuildState.Idle
         editor?.close()
         editor = null
@@ -981,10 +985,6 @@ class IdeClientController(
             pendingSave = true
             return
         }
-        if (active.formatInFlight != null) {
-            pendingSave = true
-            return
-        }
         if (!active.dirty || active.conflict || active.saveInFlight != null) return
         val operationId = nextOperationId++
         latestSaveOperation = operationId
@@ -1010,25 +1010,24 @@ class IdeClientController(
         }
     }
 
-    private fun requestFormatAndSave() {
+    private fun requestFormat() {
         if (attachedSourcePreview != null || computerPreview != null) {
-            requestSave()
+            publishStatus("Only writable Kotlin sources can be formatted", IdeProblemSeverity.Info)
             return
         }
         val active = editor ?: return
         if (!active.path.isKotlinSource) {
-            requestSave()
+            publishStatus("Only writable Kotlin sources can be formatted", IdeProblemSeverity.Info)
             return
         }
-        if (IdeBusyOperation.Project in state.busy || active.saveInFlight != null || active.formatInFlight != null) {
-            pendingFormatSave = true
+        if (IdeBusyOperation.Project in state.busy || active.formatInFlight != null) {
+            pendingFormat = true
             return
         }
         if (active.conflict) return
         val analysis = analysisCoordinator
         if (analysis == null) {
-            publishStatus("Kotlin formatter unavailable; saved without formatting", IdeProblemSeverity.Warning)
-            requestSave()
+            publishStatus("Kotlin formatter unavailable", IdeProblemSeverity.Warning)
             return
         }
         val operationId = nextOperationId++
@@ -1038,7 +1037,7 @@ class IdeClientController(
         val path = active.path
         val requestGeneration = generation
         active.formatInFlight = submittedRevision
-        state = state.copy(busy = state.busy + IdeBusyOperation.Save)
+        state = state.copy(busy = state.busy + IdeBusyOperation.Format)
         publishWorkspace()
         analysis
             .format(
@@ -1436,7 +1435,7 @@ class IdeClientController(
         }
         publishWorkspace()
         if (active.conflict) showConflictDialog(closeRequested)
-        if (closeRequested && !active.dirty) closeReady = true
+        if (closeRequested && !active.dirty && active.formatInFlight == null) closeReady = true
         continuePendingSave()
         continuePendingNavigation()
         continuePendingBuild()
@@ -1444,21 +1443,24 @@ class IdeClientController(
 
     private fun acceptFormat(event: IdeEvent.FormatCompleted) {
         if (event.operationId != latestFormatOperation) return
-        val active = editor ?: return
-        if (active.path != event.path || active.formatInFlight != event.editorRevision) return
+        state = state.copy(busy = state.busy - IdeBusyOperation.Format)
+        val active = editor
+        if (active == null || active.path != event.path || active.formatInFlight != event.editorRevision) {
+            publishWorkspace()
+            return
+        }
         active.formatInFlight = null
-        state = state.copy(busy = state.busy - IdeBusyOperation.Save)
         if (active.document.revision != event.editorRevision) {
-            if (pendingFormatSave) {
-                pendingFormatSave = false
-                requestFormatAndSave()
+            if (pendingFormat) {
+                pendingFormat = false
+                requestFormat()
             } else {
-                pendingSave = false
-                requestSave()
+                publishWorkspace()
+                continueAfterFormat()
             }
             return
         }
-        pendingFormatSave = false
+        pendingFormat = false
         when (val result = event.result) {
             is AnalysisClientResult.Success -> {
                 val formatted = result.result as? AnalysisResult.Format
@@ -1492,22 +1494,28 @@ class IdeClientController(
                 return
             }
         }
-        pendingSave = false
-        requestSave()
-        if (closeRequested && !active.dirty && active.saveInFlight == null) closeReady = true
-        continuePendingBuild()
+        publishWorkspace()
+        continueAfterFormat()
     }
 
     private fun formatFailed(detail: String) {
         publishStatus(
-            "Kotlin formatting failed: ${detail.boundedUtf8(limits.statusUtf8Bytes)}; saved without formatting",
+            "Kotlin formatting failed: ${detail.boundedUtf8(limits.statusUtf8Bytes)}",
             IdeProblemSeverity.Warning,
         )
-        pendingSave = false
-        requestSave()
+        continueAfterFormat()
+    }
+
+    private fun continueAfterFormat() {
+        continuePendingSave()
         val active = editor
+        if (pendingBuildAction != null && active?.dirty == true && active.saveInFlight == null) {
+            requestSave()
+        } else {
+            continuePendingBuild()
+        }
+        continuePendingNavigation()
         if (closeRequested && active != null && !active.dirty && active.saveInFlight == null) closeReady = true
-        continuePendingBuild()
     }
 
     private fun acceptPoll(event: IdeEvent.PollCompleted) {
@@ -1798,10 +1806,10 @@ class IdeClientController(
     }
 
     private fun continuePendingSave() {
-        if (pendingFormatSave) {
-            pendingFormatSave = false
+        if (pendingFormat) {
+            pendingFormat = false
             pendingSave = false
-            requestFormatAndSave()
+            requestFormat()
             return
         }
         if (!pendingSave) return
@@ -2517,7 +2525,7 @@ class IdeClientController(
         cancelBuildJobs()
         pendingBuildAction = null
         pendingSave = false
-        pendingFormatSave = false
+        pendingFormat = false
         buildState = IdeBuildState.Idle
         editor?.close()
         editor = null

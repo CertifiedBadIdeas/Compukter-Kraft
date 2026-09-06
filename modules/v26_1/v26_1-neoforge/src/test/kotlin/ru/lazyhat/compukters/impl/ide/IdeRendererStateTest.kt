@@ -47,6 +47,7 @@ import ru.lazyhat.compukters.ide.client.build.IdeBuiltArtifact
 import ru.lazyhat.compukters.ide.client.files.IdeComputerChildren
 import ru.lazyhat.compukters.ide.client.files.IdeComputerNode
 import ru.lazyhat.compukters.ide.client.files.IdeComputerTreeState
+import ru.lazyhat.compukters.ide.client.state.IdeBusyOperation
 import ru.lazyhat.compukters.ide.client.state.IdeDialogState
 import ru.lazyhat.compukters.ide.client.state.IdeEditorView
 import ru.lazyhat.compukters.ide.client.state.IdePageState
@@ -412,7 +413,14 @@ class IdeRendererStateTest {
 
         val model = IdeRenderer.extract(state, geometry())
 
-        listOf(IdeHitAction.Resolve, IdeHitAction.Build, IdeHitAction.Verify, IdeHitAction.Deploy, IdeHitAction.Run).forEach { action ->
+        listOf(
+            IdeHitAction.Format,
+            IdeHitAction.Resolve,
+            IdeHitAction.Build,
+            IdeHitAction.Verify,
+            IdeHitAction.Deploy,
+            IdeHitAction.Run,
+        ).forEach { action ->
             assertFalse(model.hitTargets.single { it.action == action }.enabled)
         }
         assertTrue(
@@ -420,6 +428,31 @@ class IdeRendererStateTest {
                 .single { it.kind == IdeTextKind.Status }
                 .value
                 .contains("Kotlin tooling is starting"),
+        )
+    }
+
+    @Test
+    fun `toolbar exposes format for writable Kotlin and reports active formatting`() {
+        val editor = semanticEditor("fun main(){}") { _, _ -> IdeSemanticInteraction.None }
+        val ready = IdeRenderer.extract(workspaceState(editor, IdeBuildState.Idle), geometry())
+
+        val action = ready.hitTargets.single { it.action == IdeHitAction.Format }
+        assertTrue(action.enabled)
+        assertEquals("Reformat Code (Ctrl+Alt+L)", action.tooltip)
+
+        val formatting =
+            IdeRenderer.extract(
+                workspaceState(editor, IdeBuildState.Idle, busy = setOf(IdeBusyOperation.Format)),
+                geometry(),
+            )
+        val busyAction = formatting.hitTargets.single { it.action == IdeHitAction.Format }
+        assertFalse(busyAction.enabled)
+        assertTrue(busyAction.selected)
+        assertTrue(
+            formatting.text
+                .single { it.kind == IdeTextKind.Status }
+                .value
+                .contains("Formatting…"),
         )
     }
 
@@ -731,6 +764,7 @@ class IdeRendererStateTest {
         target: IdeTargetState = IdeTargetState.LocalOnly,
         tooling: IdeToolingState = IdeToolingState.Ready,
         computerTree: IdeComputerTreeState = IdeComputerTreeState.NoTarget,
+        busy: Set<IdeBusyOperation> = emptySet(),
     ): IdeViewState {
         val root = createTempDirectory("compukters-renderer-tree-")
         val descriptor = ProjectCatalog.open(root).create("demo")
@@ -755,7 +789,7 @@ class IdeRendererStateTest {
                         ),
                     ),
                 dialog = null,
-                busy = emptySet(),
+                busy = busy,
                 target = target,
                 tooling = tooling,
             )

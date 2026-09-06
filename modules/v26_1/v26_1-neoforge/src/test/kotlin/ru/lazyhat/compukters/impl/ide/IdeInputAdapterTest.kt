@@ -66,6 +66,7 @@ class IdeInputAdapterTest {
         val fixture = fixture()
 
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_S, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_L, GLFW.GLFW_MOD_CONTROL or GLFW.GLFW_MOD_ALT), IdeFocusState.Editor)
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_B, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_F9, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_SPACE, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
@@ -78,6 +79,7 @@ class IdeInputAdapterTest {
         assertEquals(
             listOf<IdeCommand>(
                 IdeCommand.Save,
+                IdeCommand.Format,
                 IdeCommand.GoToDeclaration(),
                 IdeCommand.Build,
                 IdeCommand.ManualCompletion,
@@ -443,7 +445,7 @@ class IdeInputAdapterTest {
     fun `target toolbar actions dispatch controller commands`() {
         val fixture = fixture()
         val geometry = IdeRenderGeometry.compute(960, 540, 180, 120, true, true, TerminalFontProfile.DINA)
-        val actions = listOf(IdeHitAction.Verify, IdeHitAction.Deploy, IdeHitAction.Run)
+        val actions = listOf(IdeHitAction.Format, IdeHitAction.Verify, IdeHitAction.Deploy, IdeHitAction.Run)
         actions.forEachIndexed { index, action ->
             val bounds = IdeRect(index * 20, 0, index * 20 + 18, 18)
             fixture.adapter.pointerClicked(
@@ -457,7 +459,7 @@ class IdeInputAdapterTest {
             )
         }
 
-        assertTrue(fixture.commands.containsAll(listOf(IdeCommand.Verify, IdeCommand.Deploy, IdeCommand.Run)))
+        assertTrue(fixture.commands.containsAll(listOf(IdeCommand.Format, IdeCommand.Verify, IdeCommand.Deploy, IdeCommand.Run)))
     }
 
     @Test

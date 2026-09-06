@@ -31,6 +31,7 @@ import ru.lazyhat.compukters.ide.client.files.IdeComputerChildren
 import ru.lazyhat.compukters.ide.client.files.IdeComputerNode
 import ru.lazyhat.compukters.ide.client.files.IdeComputerTransferState
 import ru.lazyhat.compukters.ide.client.files.IdeComputerTreeState
+import ru.lazyhat.compukters.ide.client.state.IdeBusyOperation
 import ru.lazyhat.compukters.ide.client.state.IdeDialogState
 import ru.lazyhat.compukters.ide.client.state.IdeEditorView
 import ru.lazyhat.compukters.ide.client.state.IdePageState
@@ -89,6 +90,7 @@ enum class IdeHitAction {
     Rename,
     Delete,
     Resolve,
+    Format,
     Build,
     Cancel,
     Verify,
@@ -191,7 +193,7 @@ internal object IdeRenderer {
         }
         when (val page = state.page) {
             is IdePageState.Start -> output.start(page, state.target)
-            is IdePageState.Workspace -> output.workspace(page.value, state.target, state.tooling, caretVisible)
+            is IdePageState.Workspace -> output.workspace(page.value, state.target, state.tooling, state.busy, caretVisible)
         }
         output.terminalTool(state.target)
         if (prompt != null) {
@@ -274,6 +276,7 @@ internal object IdeRenderer {
             workspace: ru.lazyhat.compukters.ide.client.state.IdeWorkspaceView,
             targetState: IdeTargetState,
             toolingState: IdeToolingState,
+            busy: Set<IdeBusyOperation>,
             caretVisible: Boolean,
         ) {
             val active = workspace.activeFile?.value ?: "No file"
@@ -283,7 +286,7 @@ internal object IdeRenderer {
                 geometry.header.left + 6,
                 geometry.header.top + 7,
             )
-            toolbar(workspace.build, targetState, toolingState, workspace.activeFile != null || selectedTreePath != null)
+            toolbar(workspace, targetState, toolingState, busy, workspace.activeFile != null || selectedTreePath != null)
             tree(workspace)
             when (val editor = workspace.editor) {
                 IdeEditorView.Empty -> {
@@ -305,13 +308,14 @@ internal object IdeRenderer {
                 }
             }
             diagnostics(workspace)
-            status(workspace, targetState, toolingState)
+            status(workspace, targetState, toolingState, busy)
         }
 
         private fun toolbar(
-            build: IdeBuildState,
+            workspace: ru.lazyhat.compukters.ide.client.state.IdeWorkspaceView,
             targetState: IdeTargetState,
             toolingState: IdeToolingState,
+            busy: Set<IdeBusyOperation>,
             hasActiveEntry: Boolean,
         ) {
             var left = geometry.toolbar.left + 6
@@ -331,6 +335,24 @@ internal object IdeRenderer {
             }
             val toolingReady = toolingState == IdeToolingState.Ready
             val toolingTooltip = if (toolingReady) null else "Kotlin tooling is not ready"
+            val build = workspace.build
+            val editor = workspace.editor as? IdeEditorView.Text
+            val formatBusy = IdeBusyOperation.Format in busy
+            val writableKotlin = editor?.readOnly == false && editor.path?.value?.endsWith(".kt") == true
+            val formatTooltip =
+                when {
+                    !toolingReady -> toolingTooltip
+                    !writableKotlin -> "Open a writable Kotlin source"
+                    formatBusy -> "Kotlin formatting is already running"
+                    else -> "Reformat Code (Ctrl+Alt+L)"
+                }
+            action(
+                "Format",
+                IdeHitAction.Format,
+                toolingReady && writableKotlin && !formatBusy,
+                formatTooltip,
+                selected = formatBusy,
+            )
             action("Resolve", IdeHitAction.Resolve, toolingReady, toolingTooltip)
             if (build is IdeBuildState.Compiling || build is IdeBuildState.Saving) {
                 action("Cancel", IdeHitAction.Cancel)
@@ -866,6 +888,7 @@ internal object IdeRenderer {
             workspace: ru.lazyhat.compukters.ide.client.state.IdeWorkspaceView,
             targetState: IdeTargetState,
             toolingState: IdeToolingState,
+            busy: Set<IdeBusyOperation>,
         ) {
             val parts = linkedSetOf<String>()
             (workspace.editor as? IdeEditorView.Text)?.let { editor ->
@@ -891,6 +914,7 @@ internal object IdeRenderer {
                 is IdeBuildState.Saving -> parts += "Saving…"
                 else -> Unit
             }
+            if (IdeBusyOperation.Format in busy) parts += "Formatting…"
             targetStatus(targetState)?.let(parts::add)
             when (toolingState) {
                 IdeToolingState.Preparing -> parts += "Kotlin tooling is starting…"

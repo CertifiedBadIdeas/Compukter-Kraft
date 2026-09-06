@@ -118,6 +118,7 @@ enum class IdeBusyOperation {
     Catalog,
     Project,
     Save,
+    Format,
     Resolve,
     Build,
     Analysis,
