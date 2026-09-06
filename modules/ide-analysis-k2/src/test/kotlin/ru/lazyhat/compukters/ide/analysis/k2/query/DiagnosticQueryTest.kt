@@ -42,7 +42,7 @@ class DiagnosticQueryTest {
 
     @Test
     fun `optional platform module is unresolved until selected`() {
-        val source = "import compukter.redstone.Redstone\nval outputs = Redstone.outputs()"
+        val source = "import compukter.redstone.Redstone\nval level = Redstone.left.get()"
         K2QueryFixture.source("main.kt" to source).use { fixture ->
             val result = fixture.execute(fixture.presentation()) as AnalysisResult.Presentation
             val active = result.value.accept(fixture.identity) as SnapshotPresentationAcceptance.Active
@@ -58,7 +58,11 @@ class DiagnosticQueryTest {
             import compukter.redstone.Redstone
 
             fun main() {
-                val outputs = Redstone.outputs()
+                val level = Redstone.left.get()
+                Redstone.right.set(level, false)
+                Redstone.front.await()
+                Redstone.back.await(7)
+                Redstone.top.awaitAtLeast(7)
             }
             """.trimIndent()
         K2QueryFixture.sourceWithGuestApi(false, "main.kt" to source).use { fixture ->
@@ -69,6 +73,26 @@ class DiagnosticQueryTest {
                 active.diagnostics.none { it.severity == EditorDiagnosticSeverity.Error },
                 active.diagnostics.toString(),
             )
+        }
+    }
+
+    @Test
+    fun `removed redstone v1 facade is unresolved`() {
+        val source =
+            """
+            import compukter.redstone.Redstone
+            import compukter.redstone.RedstoneSignal
+
+            fun main() {
+                Redstone.outputs()
+                RedstoneSignal(7)
+            }
+            """.trimIndent()
+        K2QueryFixture.sourceWithGuestApi(false, "main.kt" to source).use { fixture ->
+            val result = fixture.execute(fixture.presentation()) as AnalysisResult.Presentation
+            val active = result.value.accept(fixture.identity) as SnapshotPresentationAcceptance.Active
+
+            assertTrue(active.diagnostics.any { it.severity == EditorDiagnosticSeverity.Error }, active.diagnostics.toString())
         }
     }
 

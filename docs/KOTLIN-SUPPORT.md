@@ -287,7 +287,7 @@ supported.
   platform, not Guest Kotlin. Nullable, generic, reference-backed, boxed, and
   multi-property forms are rejected. Evidence:
   [`MinimalScriptLoweringTest`](../modules/compiler-k2/src/test/kotlin/ru/lazyhat/compukters/compiler/worker/k2/MinimalScriptLoweringTest.kt),
-  test `typed redstone facade lowers deterministically to scalar capability operations`,
+  test `typed redstone side API lowers deterministically to scalar capability operations`,
   and
   [`CanonicalPlatformSourceTest`](../modules/guest-platform/src/test/kotlin/ru/lazyhat/compukters/platform/source/CanonicalPlatformSourceTest.kt),
   which rejects JVM-only value-class syntax from native platform sources.
@@ -424,7 +424,7 @@ and the mandatory built-ins module; there is no ambient Kotlin/JVM classpath.
 | `std:filesystem` | The bounded filesystem facade |
 | `compukter:compiler` | Guest compilation operations |
 | `compukter:process` | Child process execution and explicit exit |
-| `compukter:redstone` | Local-side redstone input, waiting, and packed output operations |
+| `compukter:redstone` | Side-oriented redstone reads, waits, and weak/direct output writes |
 
 Ordinary functions in these modules are compiled ahead of Guest projects into
 relocatable platform fragments. Only declarations explicitly marked as native
@@ -463,9 +463,11 @@ cannot become one merely by copying its package, name, and signature.
 
 ## Compukters Guest APIs
 
-- [x] **Redstone GPIO** — immediate reads, exact/threshold/change waits, packed
-  immutable output updates, and blocking per-side/bulk writes lower through the
-  trusted scalar capability. Rust waiter tests, core batch-commit tests, and the
+- [x] **Redstone GPIO** — `Redstone.<side>` exposes immediate `get()`,
+  edge-triggered `await()`, exact `await(level)`, threshold
+  `awaitAtLeast(level)`, and blocking `set(level, direct)`. These operations
+  lower through the trusted scalar capability while packed output batching
+  remains private to the runtime. Rust waiter tests, core batch-commit tests, and the
   real NeoForge `compukters:computer_redstone` GameTest cover the complete path.
   Evidence:
   [`MinimalScriptLoweringTest`](../modules/compiler-k2/src/test/kotlin/ru/lazyhat/compukters/compiler/worker/k2/MinimalScriptLoweringTest.kt),

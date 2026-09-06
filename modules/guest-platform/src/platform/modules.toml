@@ -42,6 +42,6 @@ sources = ["libraries/compukter-process/**/*.kt"]
 
 [[module]]
 id = "compukter:redstone"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = ["stdlib:core", "stdlib:ranges"]
 sources = ["libraries/compukter-redstone/**/*.kt"]

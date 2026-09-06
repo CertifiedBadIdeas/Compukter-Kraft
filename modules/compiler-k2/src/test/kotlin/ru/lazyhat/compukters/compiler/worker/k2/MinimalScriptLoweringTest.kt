@@ -75,22 +75,16 @@ class MinimalScriptLoweringTest {
             val source =
                 """
                 import compukter.redstone.Redstone
-                import compukter.redstone.RedstoneOutput
-                import compukter.redstone.RedstoneSide
-                import compukter.redstone.RedstoneSignal
 
                 fun main() {
-                    Redstone.awaitAtLeastInput(RedstoneSide.LEFT, RedstoneSignal(7))
-                    Redstone.setOutput(RedstoneSide.RIGHT, Redstone.output(RedstoneSignal.MAX))
-                    Redstone.awaitInput(RedstoneSide.FRONT, RedstoneSignal.MAX)
-                    Redstone.setOutputs(
-                        Redstone.outputs()
-                            .with(RedstoneSide.TOP, RedstoneOutput.MAX)
-                            .with(RedstoneSide.BOTTOM, RedstoneOutput.MIN),
-                    )
+                    Redstone.left.awaitAtLeast(7)
+                    Redstone.right.set(15, false)
+                    Redstone.front.await(15)
+                    Redstone.top.set(15, true)
+                    Redstone.bottom.set(0, false)
                     var writes = 0
                     while (writes < 80) {
-                        Redstone.setOutput(RedstoneSide.RIGHT, RedstoneOutput.MAX)
+                        Redstone.right.set(15, true)
                         writes = writes + 1
                     }
                 }
@@ -137,14 +131,14 @@ class MinimalScriptLoweringTest {
         }
 
     @Test
-    fun `platform scalar constant lowers without object or static state`() =
+    fun `platform scalar side property lowers without object or static state`() =
         withAdapter { adapter ->
             val source =
                 """
-                import compukter.redstone.RedstoneSignal
+                import compukter.redstone.Redstone
 
                 fun main() {
-                    RedstoneSignal.MAX.level
+                    Redstone.left
                 }
                 """.trimIndent()
             val result = adapter.compile(request(source))
@@ -156,14 +150,14 @@ class MinimalScriptLoweringTest {
         }
 
     @Test
-    fun `platform scalar constructor preserves its bounded Int precondition`() =
+    fun `redstone side set preserves its bounded Int precondition`() =
         withAdapter { adapter ->
             val source =
                 """
-                import compukter.redstone.RedstoneSignal
+                import compukter.redstone.Redstone
 
                 fun main() {
-                    RedstoneSignal(16)
+                    Redstone.left.set(16, false)
                 }
                 """.trimIndent()
             val result = adapter.compile(request(source))
@@ -178,14 +172,14 @@ class MinimalScriptLoweringTest {
         }
 
     @Test
-    fun `platform scalar computed getter remains an ordinary library call`() =
+    fun `redstone side get remains an ordinary library call`() =
         withAdapter { adapter ->
             val source =
                 """
-                import compukter.redstone.RedstoneOutput
+                import compukter.redstone.Redstone
 
                 fun main() {
-                    RedstoneOutput.MAX.signal
+                    Redstone.left.get()
                 }
                 """.trimIndent()
             val result = adapter.compile(request(source))
@@ -521,7 +515,7 @@ class MinimalScriptLoweringTest {
                 request(
                     "project/main.kt" to
                         """
-                        import compukter.redstone.RedstoneSignal
+                        import compukter.redstone.Redstone
                         import compukter.terminal.Terminal
 
                         fun main() {
@@ -536,7 +530,7 @@ class MinimalScriptLoweringTest {
                             val number = 2
                             val enabled = true
                             val marker = 'x'
-                            Terminal.write("${'$'}number/${'$'}enabled/${'$'}marker/${'$'}{RedstoneSignal.MAX}")
+                            Terminal.write("${'$'}number/${'$'}enabled/${'$'}marker/${'$'}{Redstone.left}")
                         }
                         """.trimIndent(),
                 )
@@ -816,41 +810,47 @@ class MinimalScriptLoweringTest {
         }
 
     @Test
-    fun `typed redstone facade lowers deterministically to scalar capability operations`() =
+    fun `typed redstone side API lowers deterministically to scalar capability operations`() =
         withAdapter { adapter ->
-            val source =
-                """
-                import compukter.redstone.Redstone
-                import compukter.redstone.RedstoneOutput
-                import compukter.redstone.RedstoneSide
-                import compukter.redstone.RedstoneSignal
+            val sources =
+                listOf(
+                    """
+                    import compukter.redstone.Redstone
 
-                fun main() {
-                    val current = Redstone.input(RedstoneSide.LEFT)
-                    Redstone.awaitInputChange(RedstoneSide.LEFT)
-                    Redstone.awaitInput(RedstoneSide.LEFT, current)
-                    Redstone.awaitAtLeastInput(RedstoneSide.LEFT, RedstoneSignal(7))
-                    Redstone.awaitAtMostInput(RedstoneSide.LEFT, RedstoneSignal.MAX)
-                    val next = Redstone.outputs()
-                        .with(RedstoneSide.RIGHT, Redstone.output(RedstoneSignal.MAX))
-                        .with(RedstoneSide.TOP, RedstoneOutput.MAX)
-                    Redstone.setOutput(RedstoneSide.BOTTOM, RedstoneOutput.MIN)
-                    Redstone.setOutputs(next)
+                    fun main() {
+                        val current = Redstone.left.get()
+                        Redstone.left.await()
+                        Redstone.left.await(current)
+                        Redstone.left.awaitAtLeast(7)
+                    }
+                    """.trimIndent(),
+                    """
+                    import compukter.redstone.Redstone
+
+                    fun main() {
+                        Redstone.bottom.set(0, false)
+                        Redstone.top.set(15, true)
+                    }
+                    """.trimIndent(),
+                )
+            val artifacts =
+                sources.map { source ->
+                    val first = adapter.compile(request(source))
+                    val second = adapter.compile(request(source))
+                    val artifact = assertNotNull(first.artifact, first.diagnostics.joinToString()).toByteArray()
+
+                    assertContentEquals(
+                        artifact,
+                        assertNotNull(second.artifact, second.diagnostics.joinToString()).toByteArray(),
+                    )
+                    artifact
                 }
-                """.trimIndent()
+            val opcodes = artifacts.flatMap(::allOpcodes)
 
-            val first = adapter.compile(request(source))
-            val second = adapter.compile(request(source))
-            val artifact = assertNotNull(first.artifact, first.diagnostics.joinToString()).toByteArray()
-
-            assertContentEquals(artifact, assertNotNull(second.artifact, second.diagnostics.joinToString()).toByteArray())
-            val opcodes = allOpcodes(artifact)
-            assertEquals(2, opcodes.count { it == 0x51 }, "input and outputs must be synchronous scalar calls: $opcodes")
-            assertEquals(6, opcodes.count { it == 0xe9 }, "waits and writes must be VM-task-blocking calls: $opcodes")
+            assertEquals(1, opcodes.count { it == 0x51 }, "get must be a synchronous scalar call: $opcodes")
+            assertEquals(4, opcodes.count { it == 0xe9 }, "await overloads and set must be VM-task-blocking: $opcodes")
             assertTrue(0x35 !in opcodes, "redstone value classes must not load fields: $opcodes")
-            setOf(0x16, 0x17, 0x19).forEach { opcode ->
-                assertTrue(opcode in opcodes, "redstone packing must retain scalar bit operation 0x${opcode.toString(16)}: $opcodes")
-            }
+            assertTrue(0x17 in opcodes, "redstone output packing must retain scalar or: $opcodes")
         }
 
     @Test
@@ -902,7 +902,7 @@ class MinimalScriptLoweringTest {
                 adapter.compile(
                     request(
                         """
-                        import compukter.redstone.RedstoneSignal
+                        import compukter.redstone.Redstone
 
                         fun sideEffect(): Unit {}
 
@@ -912,7 +912,7 @@ class MinimalScriptLoweringTest {
                             val marker = 'x'
                             println("${'$'}number")
                             println("value=${'$'}number/${'$'}enabled/${'$'}marker")
-                            println("${'$'}{RedstoneSignal.MAX}")
+                            println("${'$'}{Redstone.left}")
                             println("${'$'}{sideEffect()}")
                         }
                         """.trimIndent(),

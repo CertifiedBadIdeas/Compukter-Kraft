@@ -302,6 +302,28 @@ class CompletionQueryTest {
     }
 
     @Test
+    fun `completion exposes the side-oriented redstone API`() {
+        val redstoneSource = "import compukter.redstone.Redstone\nfun main() { Redstone. }"
+        K2QueryFixture.sourceWithGuestApi(false, "main.kt" to redstoneSource).use { fixture ->
+            val items = fixture.complete("main.kt", redstoneSource.indexOf("Redstone.") + "Redstone.".length).items
+            val names = items.map { it.insertText }.toSet()
+
+            assertTrue(names.containsAll(setOf("front", "back", "left", "right", "top", "bottom")), items.toString())
+            assertTrue("outputs" !in names, items.toString())
+        }
+
+        val sideSource = "import compukter.redstone.Redstone\nfun main() { Redstone.left. }"
+        K2QueryFixture.sourceWithGuestApi(false, "main.kt" to sideSource).use { fixture ->
+            val items = fixture.complete("main.kt", sideSource.indexOf("Redstone.left.") + "Redstone.left.".length).items
+
+            assertEquals(2, items.count { it.insertText == "await" }, items.toString())
+            assertTrue(items.any { it.insertText == "get" }, items.toString())
+            assertTrue(items.any { it.insertText == "set" }, items.toString())
+            assertTrue(items.any { it.insertText == "awaitAtLeast" }, items.toString())
+        }
+    }
+
+    @Test
     fun `completion reports public classifier kinds`() {
         val source =
             """

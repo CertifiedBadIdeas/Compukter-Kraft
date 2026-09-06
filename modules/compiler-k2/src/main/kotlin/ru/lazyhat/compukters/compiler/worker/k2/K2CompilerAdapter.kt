@@ -302,16 +302,17 @@ class K2CompilerAdapter(
                                 .removePrefix("fun")
                                 .replaceFirst(":", "->")
                                 .shortTypeNames()
+                        val ownerType = declaration.symbol.substringBeforeLast('.').substringAfterLast('.')
+                        val sourceShapes = setOf(sourceShape, sourceShape.withLeadingSourceParameter(ownerType))
                         val mangled =
                             candidates.filter { export ->
                                 library.strings[export.name.value.toInt()]
                                     .toString()
                                     .substringAfter('#', "")
-                                    .shortTypeNames() ==
-                                    sourceShape
+                                    .shortTypeNames() in sourceShapes
                             }
                         val export =
-                            matching.singleOrNull() ?: mangled.singleOrNull() ?: exactName.singleOrNull() ?: candidates.singleOrNull()
+                            mangled.singleOrNull() ?: matching.singleOrNull() ?: exactName.singleOrNull() ?: candidates.singleOrNull()
                                 ?: error(
                                     "cannot uniquely match ${declaration.symbol} ${declaration.signature} to a platform export: " +
                                         candidates.joinToString { library.strings[it.name.value.toInt()].toString() },
@@ -469,3 +470,9 @@ private fun ByteArray.toHex(): String = joinToString("") { byte -> "%02x".format
 
 private fun String.shortTypeNames(): String =
     Regex("[A-Za-z_][A-Za-z0-9_.]*").replace(this) { match -> match.value.substringAfterLast('.') }
+
+private fun String.withLeadingSourceParameter(type: String): String {
+    require(startsWith("(")) { "not a source function shape: $this" }
+    val insertion = if (this[1] == ')') type else "$type,"
+    return replaceRange(1, 1, insertion)
+}
