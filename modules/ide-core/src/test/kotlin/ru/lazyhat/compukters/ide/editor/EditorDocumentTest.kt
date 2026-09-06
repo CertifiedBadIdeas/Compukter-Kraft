@@ -90,6 +90,67 @@ class EditorDocumentTest {
     }
 
     @Test
+    fun `word navigation and deletion preserve Unicode scalar boundaries`() {
+        val editor = EditorDocument("  привет😀 + next")
+
+        assertTrue(editor.moveWordRight())
+        assertEquals(2, editor.caretOffset)
+        assertTrue(editor.moveWordRight(extendSelection = true))
+        assertEquals("привет", editor.copySelection())
+        assertTrue(editor.moveWordRight())
+        assertEquals(8, editor.caretOffset)
+        assertTrue(editor.moveWordRight())
+        assertEquals(11, editor.caretOffset)
+        assertIs<EditorEditResult.Applied>(editor.deleteWordForward())
+        assertEquals("  привет😀 next", editor.materialize())
+        assertIs<EditorEditResult.Applied>(editor.deleteWordBackward())
+        assertEquals("  приветnext", editor.materialize())
+        assertIs<EditorEditResult.Applied>(editor.undo())
+        assertEquals("  привет😀 next", editor.materialize())
+        assertTrue(editor.moveWordLeft())
+        assertEquals(8, editor.caretOffset)
+    }
+
+    @Test
+    fun `block indentation preserves selected text direction and is one undo step`() {
+        val editor = EditorDocument("one\r\n  two\r\nthree")
+        assertTrue(editor.setCaret("one\r\n  two".length))
+        assertTrue(editor.setCaret(0, extendSelection = true))
+
+        assertIs<EditorEditResult.Applied>(editor.indent())
+        assertEquals("    one\r\n      two\r\nthree", editor.materialize())
+        assertTrue(editor.caretOffset < editor.selectionRange!!.endUtf16)
+        assertIs<EditorEditResult.Applied>(editor.outdent())
+        assertEquals("one\r\n  two\r\nthree", editor.materialize())
+        assertIs<EditorEditResult.Applied>(editor.undo())
+        assertEquals("    one\r\n      two\r\nthree", editor.materialize())
+    }
+
+    @Test
+    fun `block indentation excludes unselected line at terminal line start`() {
+        val editor = EditorDocument("one\ntwo\nthree")
+        assertTrue(editor.setCaret(0))
+        assertTrue(editor.setCaret("one\ntwo\n".length, extendSelection = true))
+
+        assertIs<EditorEditResult.Applied>(editor.indent())
+
+        assertEquals("    one\n    two\nthree", editor.materialize())
+    }
+
+    @Test
+    fun `token selection admits non ASCII identifiers and one punctuation scalar`() {
+        val editor = EditorDocument("val привет = 😀")
+
+        assertTrue(editor.selectToken(6))
+        assertEquals("привет", editor.copySelection())
+        assertTrue(editor.selectToken(11))
+        assertEquals("=", editor.copySelection())
+        assertTrue(editor.selectToken(13))
+        assertEquals("😀", editor.copySelection())
+        assertFalse(editor.selectToken(editor.length))
+    }
+
+    @Test
     fun `accepted mutations notify once while navigation rejection and close do not mutate`() {
         val editor = EditorDocument("abc", limits(maxCodeUnits = 4, maxUtf8Bytes = 4))
         val changes = mutableListOf<EditorChange>()

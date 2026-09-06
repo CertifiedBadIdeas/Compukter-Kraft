@@ -122,6 +122,11 @@ class EditorDocument(
         return true
     }
 
+    fun moveWordLeft(extendSelection: Boolean = false): Boolean =
+        moveWord(::previousWordBoundary, extendSelection, selectionRange?.startUtf16)
+
+    fun moveWordRight(extendSelection: Boolean = false): Boolean = moveWord(::nextWordBoundary, extendSelection, selectionRange?.endUtf16)
+
     fun moveUp(extendSelection: Boolean = false): Boolean = moveVertical(-1, extendSelection)
 
     fun moveDown(extendSelection: Boolean = false): Boolean = moveVertical(1, extendSelection)
@@ -147,6 +152,25 @@ class EditorDocument(
         history.breakGroup()
         selection = EditorSelection(0, length)
         preferredColumn = null
+    }
+
+    fun selectToken(offset: Int): Boolean {
+        if (closed || offset !in 0..<length || !isCaretBoundary(offset)) return false
+        val category = wordCategory(codePointAt(offset))
+        var start = offset
+        var end = nextCaretBoundary(offset)
+        if (category == WordCategory.Punctuation) {
+            moveCaretSelection(EditorSelection(start, end))
+            return true
+        }
+        while (start > 0) {
+            val previous = previousCaretBoundary(start)
+            if (wordCategory(codePointAt(previous)) != category) break
+            start = previous
+        }
+        while (end < length && wordCategory(codePointAt(end)) == category) end = nextCaretBoundary(end)
+        moveCaretSelection(EditorSelection(start, end))
+        return true
     }
 
     fun copySelection(): String? = selectionRange?.let(::copyRange)
@@ -251,6 +275,28 @@ class EditorDocument(
         )
     }
 
+    fun deleteWordBackward(): EditorEditResult {
+        selectionRange?.let { return replace(it, "", EditorHistoryKind.Atomic, EditorChangeOrigin.User) }
+        if (caretOffset == 0) return EditorEditResult.NoChange
+        return replace(
+            EditorRange(previousWordBoundary(caretOffset), caretOffset),
+            "",
+            EditorHistoryKind.Atomic,
+            EditorChangeOrigin.User,
+        )
+    }
+
+    fun deleteWordForward(): EditorEditResult {
+        selectionRange?.let { return replace(it, "", EditorHistoryKind.Atomic, EditorChangeOrigin.User) }
+        if (caretOffset == length) return EditorEditResult.NoChange
+        return replace(
+            EditorRange(caretOffset, nextWordBoundary(caretOffset)),
+            "",
+            EditorHistoryKind.Atomic,
+            EditorChangeOrigin.User,
+        )
+    }
+
     fun enter(): EditorEditResult {
         if (closed) return EditorEditResult.Rejected(EditorRejection.Closed)
         val line = lines.line(lines.lineOfOffset(caretOffset))
@@ -268,6 +314,13 @@ class EditorDocument(
         val spaces = limits.tabWidth - caretVisualColumn % limits.tabWidth
         return replaceSelection(" ".repeat(spaces), EditorHistoryKind.Atomic)
     }
+
+    fun indent(): EditorEditResult {
+        if (selectionRange == null) return tab()
+        return transformLinePrefixes(indent = true)
+    }
+
+    fun outdent(): EditorEditResult = transformLinePrefixes(indent = false)
 
     fun undo(): EditorEditResult {
         if (closed) return EditorEditResult.Rejected(EditorRejection.Closed)
@@ -323,6 +376,7 @@ class EditorDocument(
         text: String,
         kind: EditorHistoryKind,
         origin: EditorChangeOrigin,
+        afterSelection: EditorSelection = EditorSelection(range.startUtf16 + text.length, range.startUtf16 + text.length),
     ): EditorEditResult {
         if (closed) return EditorEditResult.Rejected(EditorRejection.Closed)
         if (!isCaretBoundary(range.startUtf16) || !isCaretBoundary(range.endUtf16)) {
@@ -331,12 +385,11 @@ class EditorDocument(
         if (range.length == 0 && text.isEmpty()) return EditorEditResult.NoChange
         val removed = buffer.copyRange(range.startUtf16, range.endUtf16).concatToString()
         val before = selection
-        val after = EditorSelection(range.startUtf16 + text.length, range.startUtf16 + text.length)
         val entry =
             EditorHistoryEntry(
                 listOf(EditorHistoryEdit(range.startUtf16, range.startUtf16, removed, text)),
                 before,
-                after,
+                afterSelection,
                 kind,
             )
         if (!history.canRecord(entry)) return EditorEditResult.Rejected(EditorRejection.UndoLimit)
@@ -346,7 +399,7 @@ class EditorDocument(
             is BufferReplaceResult.Rejected -> return EditorEditResult.Rejected(result.reason)
         }
         lines.rebuildFrom(oldLines.first)
-        selection = after
+        selection = afterSelection
         preferredColumn = null
         history.record(entry)
         return publish(
@@ -422,6 +475,122 @@ class EditorDocument(
         return true
     }
 
+    private fun moveWord(
+        boundary: (Int) -> Int,
+        extendSelection: Boolean,
+        collapsedTarget: Int?,
+    ): Boolean {
+        if (closed) return false
+        val target = if (!extendSelection && collapsedTarget != null) collapsedTarget else boundary(caretOffset)
+        if (target == caretOffset && selectionRange == null) return false
+        moveCaret(target, extendSelection, keepPreferredColumn = false)
+        return true
+    }
+
+    private fun previousWordBoundary(offset: Int): Int {
+        var cursor = offset
+        while (cursor > 0) {
+            val previous = previousCaretBoundary(cursor)
+            if (wordCategory(codePointAt(previous)) != WordCategory.Whitespace) break
+            cursor = previous
+        }
+        if (cursor == 0) return 0
+        val category = wordCategory(codePointAt(previousCaretBoundary(cursor)))
+        while (cursor > 0) {
+            val previous = previousCaretBoundary(cursor)
+            if (wordCategory(codePointAt(previous)) != category) break
+            cursor = previous
+        }
+        return cursor
+    }
+
+    private fun nextWordBoundary(offset: Int): Int {
+        if (offset == length) return length
+        var cursor = offset
+        val category = wordCategory(codePointAt(cursor))
+        while (cursor < length && wordCategory(codePointAt(cursor)) == category) cursor = nextCaretBoundary(cursor)
+        if (category != WordCategory.Whitespace) {
+            while (cursor < length && wordCategory(codePointAt(cursor)) == WordCategory.Whitespace) cursor = nextCaretBoundary(cursor)
+        }
+        return cursor
+    }
+
+    private fun transformLinePrefixes(indent: Boolean): EditorEditResult {
+        if (closed) return EditorEditResult.Rejected(EditorRejection.Closed)
+        val range = selectionRange
+        val firstLine = lines.lineOfOffset(range?.startUtf16 ?: caretOffset)
+        var lastLine = lines.lineOfOffset(range?.endUtf16 ?: caretOffset)
+        if (range != null && range.length > 0 && lastLine > firstLine && range.endUtf16 == lines.line(lastLine).startUtf16) lastLine--
+        val edits =
+            (firstLine..lastLine).mapNotNull { lineIndex ->
+                val line = lines.line(lineIndex)
+                val text = buffer.copyRange(line.startUtf16, line.contentEndUtf16).concatToString()
+                val removed =
+                    when {
+                        indent -> ""
+                        text.startsWith('\t') -> "\t"
+                        else -> " ".repeat(text.take(limits.tabWidth).takeWhile { it == ' ' }.length)
+                    }
+                if (indent) {
+                    PrefixEdit(line.startUtf16, line.startUtf16, " ".repeat(limits.tabWidth))
+                } else {
+                    if (removed.isEmpty()) return@mapNotNull null
+                    PrefixEdit(line.startUtf16, line.startUtf16 + removed.length, "")
+                }
+            }
+        if (edits.isEmpty()) return EditorEditResult.NoChange
+        val transformStart = lines.line(firstLine).startUtf16
+        val transformEnd = lines.line(lastLine).contentEndUtf16
+        val transformed = StringBuilder(buffer.copyRange(transformStart, transformEnd).concatToString())
+        edits.asReversed().forEach { edit ->
+            transformed.replace(edit.start - transformStart, edit.end - transformStart, edit.text)
+        }
+        val before = selection
+        val after = EditorSelection(mapOffset(before.anchorUtf16, edits), mapOffset(before.caretUtf16, edits))
+        return replace(
+            EditorRange(transformStart, transformEnd),
+            transformed.toString(),
+            EditorHistoryKind.Atomic,
+            EditorChangeOrigin.User,
+            after,
+        )
+    }
+
+    private fun mapOffset(
+        offset: Int,
+        edits: List<PrefixEdit>,
+    ): Int {
+        var delta = 0
+        edits.forEach { edit ->
+            if (offset < edit.start) return offset + delta
+            if (offset <= edit.end) return edit.start + delta + edit.text.length
+            delta += edit.text.length - (edit.end - edit.start)
+        }
+        return offset + delta
+    }
+
+    private fun codePointAt(offset: Int): Int {
+        val first = buffer.charAt(offset)
+        return if (Character.isHighSurrogate(first) && offset + 1 < length && Character.isLowSurrogate(buffer.charAt(offset + 1))) {
+            Character.toCodePoint(first, buffer.charAt(offset + 1))
+        } else {
+            first.code
+        }
+    }
+
+    private fun wordCategory(codePoint: Int): WordCategory =
+        when {
+            Character.isWhitespace(codePoint) -> WordCategory.Whitespace
+            Character.isUnicodeIdentifierPart(codePoint) || codePoint == '_'.code -> WordCategory.Identifier
+            else -> WordCategory.Punctuation
+        }
+
+    private fun moveCaretSelection(value: EditorSelection) {
+        history.breakGroup()
+        selection = value
+        preferredColumn = null
+    }
+
     private fun moveCaret(
         target: Int,
         extendSelection: Boolean,
@@ -457,6 +626,14 @@ class EditorDocument(
         if (buffer.charAt(offset - 1) == '\r' && buffer.charAt(offset) == '\n') return false
         return !(Character.isHighSurrogate(buffer.charAt(offset - 1)) && Character.isLowSurrogate(buffer.charAt(offset)))
     }
+
+    private data class PrefixEdit(
+        val start: Int,
+        val end: Int,
+        val text: String,
+    )
+
+    private enum class WordCategory { Whitespace, Identifier, Punctuation }
 }
 
 private fun EditorRange.conflictsWith(other: EditorRange): Boolean =
