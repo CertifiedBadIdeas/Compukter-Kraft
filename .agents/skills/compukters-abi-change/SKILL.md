@@ -1,17 +1,20 @@
 ---
 name: compukters-abi-change
-description: Use when changing the Compukter artifact format or instructions, verifier contracts, capability schemas, JDK FFM bindings, Rust C ABI, or another versioned Kotlin-to-VM boundary.
+description: Use when changing a versioned Compukters boundary such as the platform bundle, compiler or analysis worker protocol, artifact format or instructions, verifier contract, capability schema, JDK FFM binding, or Rust C ABI.
 ---
 
 # Compukters ABI Change
 
-Make every producer, consumer, verifier, version decision, and ownership rule agree across the JVM and Rust boundary.
+Make every producer, consumer, verifier, version decision, and ownership rule agree across tooling, JVM, and Rust
+boundaries.
 
 ## Identify the Boundary
 
 Read `docs/ARCHITECTURE.md`, then locate the current source of truth and every reader before editing. Classify the
 change as one or more of:
 
+- canonical platform bundle encoding, module metadata, graph, identity, or compatibility rules;
+- compiler or analysis worker framing, messages, payload manifest, identity, or limits;
 - canonical `.cpkt` encoding, manifest, type, instruction, or debug metadata;
 - artifact validation and Rust admission verification;
 - Guest capability identity, operation schema, or value representation;
@@ -30,6 +33,8 @@ boundary, use `compukters-runtime-change` instead.
 
 Update the smallest complete set of producers and consumers. Depending on the boundary, inspect:
 
+- `guest-platform`, `platform-bundle`, and `platform-k2` producers and consumers;
+- `worker-client`, `compiler-client`, `ide-analysis-client`, and `tooling-runtime` protocol and payload code;
 - `compiler-artifact` models, validators, encoders, and generated conformance artifacts;
 - K2 lowering and platform metadata that emit the affected structure;
 - `host/compukter-vm` decoding, verification, execution, FFI exports, and test encoders;
@@ -45,6 +50,8 @@ in a separate parent-repository commit without absorbing unrelated submodule wor
 ## Verify the Contract
 
 Cover valid round trips and malformed rejection at the changed boundary. Check byte order, widths, signedness,
-alignment, tags, counts, limits, ownership, and error mapping where applicable. Run focused JVM and Rust tests plus
-the relevant cross-language conformance task; use full local verification when the completed change spans both
-repositories or multiple runtime layers. Update active ABI or architecture documentation in the same stage.
+alignment, tags, counts, limits, ownership, and error mapping where applicable. Run focused producer-consumer and
+wrong-version tests for platform bundles or worker protocols. Run focused JVM and Rust tests plus the relevant
+cross-language conformance task when the boundary reaches the VM. Use full local verification when the completed
+change spans both repositories or multiple runtime layers. Update active ABI or architecture documentation in the
+same stage.

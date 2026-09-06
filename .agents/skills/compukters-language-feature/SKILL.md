@@ -28,12 +28,12 @@ unchanged boundary. This skill continues to own the end-to-end Guest Kotlin sema
 
 Follow the feature through only the layers it actually affects:
 
-1. pinned K2 integration and diagnostics in `compiler-k2`;
-2. IR interpretation and lowering in `compiler-k2-engine`;
-3. canonical types, instructions, validation, and encoding in `compiler-artifact`;
-4. verification and execution in `host/compukter-vm` when runtime behavior changes;
-5. platform declarations and bundles when the source-visible API changes;
-6. `ide-*` analysis and client behavior when tooling makes a matching claim.
+1. source-visible declarations and module metadata in `guest-platform` and `platform-bundle` when the API changes;
+2. shared K2 platform semantics, sessions, and diagnostics in `platform-k2`;
+3. compiler-worker integration in `compiler-k2` and IR interpretation and lowering in `compiler-k2-engine`;
+4. canonical types, instructions, validation, and encoding in `compiler-artifact`;
+5. verification and execution in `host/compukter-vm` when runtime behavior changes;
+6. `ide-analysis-k2` and the other `ide-*` modules when tooling makes a matching semantic claim.
 
 Define evaluation order, value representation, overflow or trap behavior, allocation cost, control flow, and
 suspension behavior wherever the construct can expose them. Reuse existing artifact instructions and runtime

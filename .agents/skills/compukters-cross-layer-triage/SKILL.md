@@ -39,11 +39,12 @@ conformance case rather than patching both sides speculatively.
 Stop cross-layer triage once evidence identifies the broken contract and its owner. Continue through the narrowest
 applicable workflow:
 
-- `compukters-language-feature` for Guest Kotlin semantics or IDE claims;
-- `compukters-abi-change` for a versioned artifact, capability, FFM, or C ABI boundary;
+- `compukters-language-feature` for Guest Kotlin semantics or corresponding IDE semantic behavior;
+- `compukters-abi-change` for a versioned platform bundle, worker protocol, artifact, capability, FFM, or C ABI boundary;
 - `compukters-runtime-change` for VM, persistence, terminal, scheduling, quota, or runtime-host internals;
 - `compukters-neoforge-integration` for loader and Minecraft lifecycle behavior;
-- `debugging-strategy` alone for an already-localized routine defect.
+- `debugging-strategy` for the causal investigation and fix, alongside the owning Compukters skill when its domain
+  invariants still apply, or alone when no specialist skill matches.
 
 The owning workflow implements and verifies the fix. Re-run the original reproduction and broaden verification
 according to the number of affected layers.
