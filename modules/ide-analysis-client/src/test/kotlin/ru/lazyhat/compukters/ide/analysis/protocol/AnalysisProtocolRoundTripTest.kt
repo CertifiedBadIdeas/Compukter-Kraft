@@ -229,7 +229,7 @@ class AnalysisProtocolRoundTripTest {
                 identity,
                 sourceLengths(),
                 diagnostics = listOf(EditorDiagnostic(EditorDiagnosticSeverity.Warning, "warning", path(), EditorRange(0, 3))),
-                semanticTokens = listOf(SemanticToken(path(), EditorRange(4, 10), SemanticCategory.Property)),
+                semanticTokens = listOf(SemanticToken(path(), EditorRange(4, 10), SemanticCategory.Property, isMutable = true)),
                 locations = listOf(SourceLocation(path(), EditorRange(4, 10))),
                 limits = EditorPresentationLimits(),
             )
@@ -245,7 +245,10 @@ class AnalysisProtocolRoundTripTest {
         val active = assertIs<SnapshotPresentationAcceptance.Active>(decodedPresentation.accept(identity))
 
         assertEquals(listOf(EditorDiagnostic(EditorDiagnosticSeverity.Warning, "warning", path(), EditorRange(0, 3))), active.diagnostics)
-        assertEquals(listOf(SemanticToken(path(), EditorRange(4, 10), SemanticCategory.Property)), active.semanticTokens)
+        assertEquals(
+            listOf(SemanticToken(path(), EditorRange(4, 10), SemanticCategory.Property, isMutable = true)),
+            active.semanticTokens,
+        )
         assertEquals(listOf(SourceLocation(path(), EditorRange(4, 10))), active.locations)
     }
 

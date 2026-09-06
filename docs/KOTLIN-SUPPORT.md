@@ -559,10 +559,14 @@ cannot become one merely by copying its package, name, and signature.
 
 - [x] **Semantic highlighting and inferred-type presentation** — declarations,
   extension functions, inferred expressions, and smart casts receive K2-backed
-  semantic tokens. Evidence:
+  semantic tokens; mutable properties, locals, and their resolved references
+  carry the Islands Dark underline effect. Evidence:
   [`SemanticTokenQueryTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/query/SemanticTokenQueryTest.kt),
-  tests `presentation classifies declarations and extension functions` and
-  `presentation marks inferred and smart cast expressions`.
+  tests `presentation classifies declarations and extension functions`,
+  `presentation marks inferred and smart cast expressions`, and
+  `presentation marks mutable declarations and references`, plus
+  [`IdeRendererStateTest`](../modules/v26_1/v26_1-neoforge/src/test/kotlin/ru/lazyhat/compukters/impl/ide/IdeRendererStateTest.kt),
+  test `expression metadata does not override lexical code colors`.
 
 - [x] **K2 diagnostics** — incomplete syntax remains analyzable, multi-file
   diagnostics retain virtual paths, and UTF-16 ranges remain exact. Evidence:

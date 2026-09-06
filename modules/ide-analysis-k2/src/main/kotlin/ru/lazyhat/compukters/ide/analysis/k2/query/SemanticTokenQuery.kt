@@ -31,6 +31,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaPropertySymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaValueParameterSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.KaVariableSymbol
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtEnumEntry
@@ -70,6 +71,7 @@ internal object SemanticTokenQuery {
                                 identifier.textRange.endOffset,
                                 category,
                                 limits,
+                                declaration.isMutableDeclaration(),
                             )
                         }
                     }
@@ -92,14 +94,15 @@ internal object SemanticTokenQuery {
                 override fun visitSimpleNameExpression(expression: KtSimpleNameExpression) {
                     if (expression is KtNameReferenceExpression) {
                         with(session) { expression.resolveSymbol() }
-                            ?.semanticCategory()
-                            ?.let { category ->
+                            ?.semanticClassification()
+                            ?.let { classification ->
                                 result.addBounded(
                                     path,
                                     expression.textRange.startOffset,
                                     expression.textRange.endOffset,
-                                    category,
+                                    classification.category,
                                     limits,
+                                    classification.isMutable,
                                 )
                             }
                         if (with(session) { expression.smartCastInfo } != null) {
@@ -122,49 +125,57 @@ internal object SemanticTokenQuery {
     }
 }
 
-private fun KaSymbol.semanticCategory(): SemanticCategory? =
-    when (this) {
-        is KaEnumEntrySymbol -> {
-            SemanticCategory.EnumEntry
-        }
+private data class SemanticClassification(
+    val category: SemanticCategory,
+    val isMutable: Boolean,
+)
 
-        is KaClassSymbol -> {
-            when (classKind) {
-                KaClassKind.INTERFACE -> SemanticCategory.Interface
+private fun KaSymbol.semanticClassification(): SemanticClassification? {
+    val category =
+        when (this) {
+            is KaEnumEntrySymbol -> {
+                SemanticCategory.EnumEntry
+            }
 
-                KaClassKind.OBJECT,
-                KaClassKind.COMPANION_OBJECT,
-                KaClassKind.ANONYMOUS_OBJECT,
-                -> SemanticCategory.Object
+            is KaClassSymbol -> {
+                when (classKind) {
+                    KaClassKind.INTERFACE -> SemanticCategory.Interface
 
-                else -> SemanticCategory.Class
+                    KaClassKind.OBJECT,
+                    KaClassKind.COMPANION_OBJECT,
+                    KaClassKind.ANONYMOUS_OBJECT,
+                    -> SemanticCategory.Object
+
+                    else -> SemanticCategory.Class
+                }
+            }
+
+            is KaNamedFunctionSymbol -> {
+                if (isExtension) SemanticCategory.ExtensionFunction else SemanticCategory.Function
+            }
+
+            is KaLocalVariableSymbol -> {
+                SemanticCategory.LocalVariable
+            }
+
+            is KaPropertySymbol -> {
+                SemanticCategory.Property
+            }
+
+            is KaValueParameterSymbol -> {
+                SemanticCategory.Parameter
+            }
+
+            is KaTypeParameterSymbol -> {
+                SemanticCategory.TypeParameter
+            }
+
+            else -> {
+                null
             }
         }
-
-        is KaNamedFunctionSymbol -> {
-            if (isExtension) SemanticCategory.ExtensionFunction else SemanticCategory.Function
-        }
-
-        is KaLocalVariableSymbol -> {
-            SemanticCategory.LocalVariable
-        }
-
-        is KaPropertySymbol -> {
-            SemanticCategory.Property
-        }
-
-        is KaValueParameterSymbol -> {
-            SemanticCategory.Parameter
-        }
-
-        is KaTypeParameterSymbol -> {
-            SemanticCategory.TypeParameter
-        }
-
-        else -> {
-            null
-        }
-    }
+    return category?.let { SemanticClassification(it, this is KaVariableSymbol && !isVal) }
+}
 
 private fun MutableList<SemanticToken>.addBounded(
     path: ru.lazyhat.compukters.compiler.worker.protocol.VirtualSourcePath,
@@ -172,9 +183,10 @@ private fun MutableList<SemanticToken>.addBounded(
     end: Int,
     category: SemanticCategory,
     limits: AnalysisLimits,
+    isMutable: Boolean = false,
 ) {
     if (size >= limits.semanticTokens) throw AnalysisOutputLimitException("semantic-token count exceeds analysis limit")
-    this += SemanticToken(path, EditorRange(start, end), category)
+    this += SemanticToken(path, EditorRange(start, end), category, isMutable)
 }
 
 private fun KtNamedDeclaration.category(): SemanticCategory? =
@@ -188,4 +200,11 @@ private fun KtNamedDeclaration.category(): SemanticCategory? =
         is KtParameter -> if (hasValOrVar()) SemanticCategory.Property else SemanticCategory.Parameter
         is KtTypeParameter -> SemanticCategory.TypeParameter
         else -> null
+    }
+
+private fun KtNamedDeclaration.isMutableDeclaration(): Boolean =
+    when (this) {
+        is KtProperty -> isVar
+        is KtParameter -> valOrVarKeyword?.text == "var"
+        else -> false
     }

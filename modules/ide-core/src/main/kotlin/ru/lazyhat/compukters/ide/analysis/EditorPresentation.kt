@@ -82,6 +82,7 @@ data class SemanticToken(
     val path: VirtualSourcePath,
     val range: EditorRange,
     val category: SemanticCategory,
+    val isMutable: Boolean = false,
 ) {
     init {
         VirtualSourcePath.kotlin(path.value)

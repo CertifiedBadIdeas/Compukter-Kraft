@@ -201,7 +201,8 @@ class IdeRendererStateTest {
 
     @Test
     fun `expression metadata does not override lexical code colors`() {
-        val source = "val values = intArrayOf(7, 11)"
+        val source = "var values = intArrayOf(7, 11)"
+        val variableStart = source.indexOf("values")
         val initializerStart = source.indexOf("intArrayOf")
         val initializerEnd = source.length
         val functionEnd = initializerStart + "intArrayOf".length
@@ -215,6 +216,12 @@ class IdeRendererStateTest {
                 diagnostics = emptyList(),
                 semanticTokens =
                     listOf(
+                        SemanticToken(
+                            virtualPath,
+                            EditorRange(variableStart, variableStart + "values".length),
+                            SemanticCategory.LocalVariable,
+                            isMutable = true,
+                        ),
                         SemanticToken(virtualPath, EditorRange(initializerStart, initializerEnd), SemanticCategory.InferredExpression),
                         SemanticToken(virtualPath, EditorRange(initializerStart, functionEnd), SemanticCategory.Function),
                     ),
@@ -244,6 +251,7 @@ class IdeRendererStateTest {
         assertEquals(IdeTextStyle.Lexical(KotlinLexicalKind.Operator), model.sourceStyle("("))
         assertEquals(IdeTextStyle.Lexical(KotlinLexicalKind.Number), model.sourceStyle("7"))
         assertEquals(IdeTextStyle.Lexical(KotlinLexicalKind.Operator), model.sourceStyle(")"))
+        assertEquals(IdeColors.MUTABLE_UNDERLINE, model.fills.single { it.kind == IdeFillKind.MutableUnderline }.color)
     }
 
     @Test

@@ -64,6 +64,40 @@ class SemanticTokenQueryTest {
     }
 
     @Test
+    fun `presentation marks mutable declarations and references`() {
+        val source =
+            """
+            var mutableProperty = 0
+            val immutableProperty = mutableProperty
+            fun update() {
+                var mutableLocal = mutableProperty
+                val immutableLocal = mutableLocal
+                mutableLocal += immutableLocal
+                mutableProperty = mutableLocal
+            }
+            """.trimIndent()
+        K2QueryFixture.source("main.kt" to source).use { fixture ->
+            val result = fixture.execute(fixture.presentation()) as AnalysisResult.Presentation
+            val active = result.value.accept(fixture.identity) as SnapshotPresentationAcceptance.Active
+
+            val variableCategories = setOf(SemanticCategory.Property, SemanticCategory.LocalVariable)
+            val mutableTokens =
+                active.semanticTokens.filter {
+                    it.category in variableCategories && source.substring(it.range.startUtf16, it.range.endUtf16).startsWith("mutable")
+                }
+            val immutableTokens =
+                active.semanticTokens.filter {
+                    it.category in variableCategories && source.substring(it.range.startUtf16, it.range.endUtf16).startsWith("immutable")
+                }
+
+            assertTrue(mutableTokens.isNotEmpty(), active.semanticTokens.toString())
+            assertTrue(mutableTokens.all { it.isMutable }, mutableTokens.toString())
+            assertTrue(immutableTokens.isNotEmpty(), active.semanticTokens.toString())
+            assertTrue(immutableTokens.none { it.isMutable }, immutableTokens.toString())
+        }
+    }
+
+    @Test
     fun `presentation returns semantic tokens only for its active file`() {
         K2QueryFixture
             .source(

@@ -49,5 +49,6 @@ internal object IdeColors {
     val FUNCTION = 0xFF56A8F5.toInt()
     val PROPERTY = 0xFFC77DBB.toInt()
     val LOCAL_VARIABLE = 0xFFBCBEC4.toInt()
+    val MUTABLE_UNDERLINE = 0xFF84868C.toInt()
     val HYPERLINK = 0xFF548AF7.toInt()
 }

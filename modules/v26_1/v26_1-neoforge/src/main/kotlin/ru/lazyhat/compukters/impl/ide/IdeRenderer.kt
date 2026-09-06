@@ -77,7 +77,7 @@ enum class IdeTextKind {
 
 enum class IdeTextRotation { None, Clockwise90 }
 
-enum class IdeFillKind { Background, Border, Selection, DropTarget, Caret, Splitter, HyperlinkUnderline, DialogScrim }
+enum class IdeFillKind { Background, Border, Selection, DropTarget, Caret, Splitter, HyperlinkUnderline, MutableUnderline, DialogScrim }
 
 enum class IdeScissorKind { Tree, Editor, Diagnostics, Completion, SemanticPopup }
 
@@ -114,6 +114,7 @@ sealed interface IdeTextStyle {
 
     data class Semantic(
         val category: SemanticCategory,
+        val isMutable: Boolean = false,
     ) : IdeTextStyle
 }
 
@@ -588,7 +589,7 @@ internal object IdeRenderer {
             boundaries.zipWithNext().forEach { (start, end) ->
                 if (end <= start) return@forEach
                 val lexicalKind = lexical?.spans?.firstOrNull { start >= it.startUtf16 && start < it.endUtf16 }?.kind
-                val semanticCategory =
+                val semanticToken =
                     semantic
                         ?.semanticTokens
                         ?.firstOrNull { token ->
@@ -596,9 +597,9 @@ internal object IdeRenderer {
                                 token.path.value == projectPath.value &&
                                 token.category.contributesTextStyle() &&
                                 lineStart + start in token.range.startUtf16 until token.range.endUtf16
-                        }?.category
+                        }
                 val resolved =
-                    semanticCategory?.let(IdeTextStyle::Semantic)
+                    semanticToken?.let { IdeTextStyle.Semantic(it.category, it.isMutable) }
                         ?: lexicalKind?.let(IdeTextStyle::Lexical)
                         ?: IdeTextStyle.Plain
                 val x = codeLeft + (visualColumns(line.substring(0, start)) - editor.firstVisibleColumn) * font.cellWidth
@@ -615,14 +616,20 @@ internal object IdeRenderer {
                     resolved,
                     absoluteRange,
                 )
-                if (linked) hyperlinkUnderline(x, line.substring(start, end), y)
+                if (linked) {
+                    underline(IdeFillKind.HyperlinkUnderline, x, line.substring(start, end), y, IdeColors.HYPERLINK)
+                } else if ((resolved as? IdeTextStyle.Semantic)?.isMutable == true) {
+                    underline(IdeFillKind.MutableUnderline, x, line.substring(start, end), y, IdeColors.MUTABLE_UNDERLINE)
+                }
             }
         }
 
-        private fun hyperlinkUnderline(
+        private fun underline(
+            kind: IdeFillKind,
             x: Int,
             value: String,
             textY: Int,
+            color: Int,
         ) {
             val left = maxOf(x, geometry.editor.left)
             val right = minOf(x + visualColumns(value) * font.cellWidth, geometry.editor.right)
@@ -630,9 +637,9 @@ internal object IdeRenderer {
             val top = (textY - font.glyphDrawOffsetY + font.cellHeight - 1).coerceIn(geometry.editor.top, geometry.editor.bottom - 1)
             fills +=
                 IdeFillDraw(
-                    IdeFillKind.HyperlinkUnderline,
+                    kind,
                     IdeRect(left, top, right, top + 1),
-                    IdeColors.HYPERLINK,
+                    color,
                     Z_TEXT,
                 )
         }

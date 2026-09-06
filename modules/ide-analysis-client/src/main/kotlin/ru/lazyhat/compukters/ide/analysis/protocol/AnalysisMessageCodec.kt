@@ -623,6 +623,7 @@ private class MessageSink {
             string(token.path.value)
             range(token.range)
             enum(token.category)
+            boolean(token.isMutable)
         }
         u32(active.locations.size)
         active.locations.forEach { location ->
@@ -738,6 +739,8 @@ private class MessageSink {
     }
 
     fun <T : Enum<T>> enum(value: T) = u16(value.ordinal)
+
+    fun boolean(value: Boolean) = u8(if (value) 1 else 0)
 
     fun snapshotResponse(
         requestId: RequestId,
@@ -990,7 +993,7 @@ private class MessageSource(
         val diagnostics = List(boundedCount(context.limits.diagnostics, "diagnostic")) { diagnostic() }
         val tokens =
             List(boundedCount(context.limits.semanticTokens, "semantic token")) {
-                SemanticToken(kotlinPath(), range(), enumValue())
+                SemanticToken(kotlinPath(), range(), enumValue(), boolean())
             }
         val locations =
             List(boundedCount(context.limits.declarationLocations, "source location")) {
@@ -1072,6 +1075,13 @@ private class MessageSource(
     fun nullableRange(): EditorRange? = optional(::range)
 
     fun nullableString(maximum: Int = ProtocolLimits.MAX_TEXT_BYTES): String? = optional { string(maximum) }
+
+    fun boolean(): Boolean =
+        when (u8()) {
+            0 -> false
+            1 -> true
+            else -> fail(AnalysisProtocolError.InvalidMessageValue, "non-canonical boolean value")
+        }
 
     fun <T> optional(reader: () -> T): T? =
         when (u8()) {

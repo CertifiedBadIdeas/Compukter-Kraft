@@ -30,6 +30,10 @@ import ru.lazyhat.compukters.ide.analysis.AnalysisQuery
 import ru.lazyhat.compukters.ide.analysis.AnalysisResult
 import ru.lazyhat.compukters.ide.analysis.AnalysisSnapshotIdentity
 import ru.lazyhat.compukters.ide.analysis.CompletionTrigger
+import ru.lazyhat.compukters.ide.analysis.EditorPresentationLimits
+import ru.lazyhat.compukters.ide.analysis.SemanticCategory
+import ru.lazyhat.compukters.ide.analysis.SemanticToken
+import ru.lazyhat.compukters.ide.analysis.SnapshotPresentation
 import ru.lazyhat.compukters.ide.analysis.SourceSnapshotId
 import ru.lazyhat.compukters.ide.analysis.SourceSnapshotIdentity
 import ru.lazyhat.compukters.ide.editor.EditorRange
@@ -101,6 +105,35 @@ class AnalysisProtocolHostileInputTest {
             )
         val wrongProtocol = handshake.copy(payload = handshake.payload.copyOf().also { it[0] = 1 })
         assertEquals(AnalysisProtocolError.WrongVersion, messageFailure(wrongProtocol).error)
+    }
+
+    @Test
+    fun `presentation decoder rejects non-canonical mutability flag`() {
+        val query = AnalysisQuery.Presentation(identity, VirtualSourcePath.kotlin("main.kt"))
+        val presentation =
+            SnapshotPresentation.create(
+                identity,
+                mapOf(VirtualSourcePath.kotlin("main.kt") to "val value = 1".length),
+                diagnostics = emptyList(),
+                semanticTokens =
+                    listOf(
+                        SemanticToken(
+                            VirtualSourcePath.kotlin("main.kt"),
+                            EditorRange(4, 9),
+                            SemanticCategory.LocalVariable,
+                        ),
+                    ),
+                locations = emptyList(),
+                limits = EditorPresentationLimits(),
+            )
+        val encoded =
+            AnalysisMessageCodec.encode(
+                AnalysisQuerySuccess(RequestId.of(1uL), AnalysisResult.Presentation(identity, presentation)),
+                context.forQuery(query),
+            )
+        val malformed = encoded.copy(payload = encoded.payload.copyOf().also { it[it.lastIndex - 4] = 2 })
+
+        assertEquals(AnalysisProtocolError.InvalidMessageValue, messageFailure(malformed, context.forQuery(query)).error)
     }
 
     @Test
