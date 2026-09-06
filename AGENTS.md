@@ -1,5 +1,15 @@
 # Repository Guidelines
 
+## Workspace & Working Checkout
+
+Treat this repository root as the Compukters workspace. Do not create Git worktrees; perform all work in the user's
+current checkout and current branch unless the user explicitly requests a worktree for a specific task.
+
+Do not spawn sub-agents or delegate work to other agents unless the user explicitly requests sub-agent or
+parallel-agent involvement for a specific task.
+
+When work touches `host/compukter-vm`, check for `host/compukter-vm/AGENTS.md` and read it completely if it exists.
+
 ## Project Structure & Module Organization
 
 Compukters is a Gradle multi-module Kotlin project with native Rust VM components. Kotlin modules live under
@@ -60,7 +70,6 @@ active machine ABI references when behavior changes.
 Use the `using-github-roadmap` skill before architecturally significant work: new subsystems, cross-module capabilities,
 material component-boundary or public API/ABI changes, or work requiring a design specification or coordinated stages.
 Localized fixes, docs, tests, mechanical refactors, routine chores, and read-only investigation do not require an issue.
-Do not create Git worktrees in this repository. Perform all work in the user's current checkout and current branch.
 Keep temporary design specs and implementation plans under `.agents/tmp/specs/` and `.agents/tmp/plans/` respectively;
 do not place them under `docs/` or commit them unless the user explicitly requests publication.
 For GitHub operations in this repository, do not use the GitHub MCP server or GitHub app connector tools. Use the
