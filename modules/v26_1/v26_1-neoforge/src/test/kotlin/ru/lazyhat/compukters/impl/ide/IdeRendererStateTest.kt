@@ -247,6 +247,25 @@ class IdeRendererStateTest {
     }
 
     @Test
+    fun `source rendering uses Islands Dark syntax colors`() {
+        val source = "val answer: Int = 7; println(\"value: \${answer}\\n\") // note"
+        val editor = semanticEditor(source) { _, _ -> IdeSemanticInteraction.None }
+
+        val model = IdeRenderer.extract(workspaceState(editor, IdeBuildState.Idle), geometry(TerminalFontProfile.COZETTE))
+
+        assertEquals(0xFF191A1C.toInt(), model.panels.single { it.kind == IdePanelKind.Editor }.color)
+        assertEquals(0xFF4B5059.toInt(), model.text.single { it.kind == IdeTextKind.LineNumber }.color)
+        assertEquals(0xFFCF8E6D.toInt(), model.sourceDraw("val").color)
+        assertEquals(0xFFBCBEC4.toInt(), model.sourceDraw("Int").color)
+        assertEquals(0xFF2AACB8.toInt(), model.sourceDraw("7").color)
+        assertEquals(0xFF6AAB73.toInt(), model.sourceDraw("\"value: ").color)
+        assertEquals(0xFFCF8E6D.toInt(), model.sourceDraw("\${").color)
+        assertEquals(0xFFCF8E6D.toInt(), model.sourceDraw("}").color)
+        assertEquals(0xFFCF8E6D.toInt(), model.sourceDraw("\\n").color)
+        assertEquals(0xFF7A7E85.toInt(), model.sourceDraw("// note").color)
+    }
+
+    @Test
     fun `confirmed declaration link has exact hyperlink draw and clipped underline`() {
         val source = "val answer = sample"
         val range = EditorRange(4, 10)
@@ -800,4 +819,6 @@ private fun IdeDrawModel.zOrdered(): Boolean {
     return values.all { it >= 0 }
 }
 
-private fun IdeDrawModel.sourceStyle(value: String): IdeTextStyle = text.single { it.kind == IdeTextKind.Source && it.value == value }.style
+private fun IdeDrawModel.sourceDraw(value: String): IdeTextDraw = text.single { it.kind == IdeTextKind.Source && it.value == value }
+
+private fun IdeDrawModel.sourceStyle(value: String): IdeTextStyle = sourceDraw(value).style

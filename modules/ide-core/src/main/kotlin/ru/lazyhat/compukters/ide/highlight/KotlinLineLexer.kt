@@ -148,14 +148,14 @@ object KotlinLineLexer {
                 add(segmentStart, offset, KotlinLexicalKind.String)
                 val opening = offset
                 offset += 2
-                add(opening, offset, KotlinLexicalKind.Operator)
+                add(opening, offset, KotlinLexicalKind.Escape)
                 scanTemplateExpression()
                 return true
             }
             val identifierStart = offset + 1
             if (identifierStart >= input.length || !isIdentifierStart(identifierStart)) return false
             add(segmentStart, offset, KotlinLexicalKind.String)
-            add(offset, identifierStart, KotlinLexicalKind.Operator)
+            add(offset, identifierStart, KotlinLexicalKind.Escape)
             offset = identifierStart
             scanIdentifier()
             return true
@@ -171,7 +171,11 @@ object KotlinLineLexer {
                     }
 
                     '}' -> {
-                        add(offset, ++offset, KotlinLexicalKind.Operator)
+                        add(
+                            offset,
+                            ++offset,
+                            if (braceDepth == 1) KotlinLexicalKind.Escape else KotlinLexicalKind.Operator,
+                        )
                         braceDepth--
                     }
 

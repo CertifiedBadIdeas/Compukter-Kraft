@@ -494,7 +494,14 @@ internal object IdeRenderer {
                 val lineStart = editor.visibleLineStartsUtf16[visibleIndex]
                 val rowTop = bounds.top + visibleIndex * font.cellHeight
                 val y = rowTop + font.glyphDrawOffsetY
-                code(IdeTextKind.LineNumber, (lineNumber + 1).toString().padStart(gutterDigits), bounds.left, y, IdeColors.MUTED, bounds)
+                code(
+                    IdeTextKind.LineNumber,
+                    (lineNumber + 1).toString().padStart(gutterDigits),
+                    bounds.left,
+                    y,
+                    IdeColors.LINE_NUMBER,
+                    bounds,
+                )
                 selection(editor, line, lineStart, codeLeft, rowTop)
                 styledLine(editor, lineNumber, line, lineStart, codeLeft, y)
                 val nextLineStart = editor.visibleLineStartsUtf16.getOrNull(visibleIndex + 1)
@@ -1164,7 +1171,8 @@ internal object IdeRenderer {
 
     private fun styleColor(style: IdeTextStyle): Int =
         when (style) {
-            IdeTextStyle.Ui, IdeTextStyle.Plain -> IdeColors.TEXT
+            IdeTextStyle.Ui -> IdeColors.TEXT
+            IdeTextStyle.Plain -> IdeColors.EDITOR_TEXT
             is IdeTextStyle.Lexical -> lexicalColor(style.kind)
             is IdeTextStyle.Semantic -> semanticColor(style.category)
         }
@@ -1174,39 +1182,43 @@ internal object IdeRenderer {
             KotlinLexicalKind.Keyword -> IdeColors.KEYWORD
 
             KotlinLexicalKind.String,
-            KotlinLexicalKind.Escape,
             KotlinLexicalKind.Character,
             KotlinLexicalKind.MultilineString,
             -> IdeColors.STRING
+
+            KotlinLexicalKind.Escape -> IdeColors.STRING_ESCAPE
 
             KotlinLexicalKind.Number -> IdeColors.NUMBER
 
             KotlinLexicalKind.LineComment, KotlinLexicalKind.BlockComment -> IdeColors.COMMENT
 
-            KotlinLexicalKind.TypeLike, KotlinLexicalKind.Annotation -> IdeColors.TYPE
+            KotlinLexicalKind.TypeLike -> IdeColors.TYPE
 
-            else -> IdeColors.TEXT
+            KotlinLexicalKind.Annotation -> IdeColors.ANNOTATION
+
+            else -> IdeColors.EDITOR_TEXT
         }
 
     private fun semanticColor(category: SemanticCategory): Int =
         when (category) {
             SemanticCategory.Class,
             SemanticCategory.Interface,
-            SemanticCategory.TypeParameter,
             SemanticCategory.Object,
-            SemanticCategory.EnumEntry,
             -> IdeColors.TYPE
+
+            SemanticCategory.TypeParameter -> IdeColors.TYPE_PARAMETER
+
+            SemanticCategory.EnumEntry -> IdeColors.PROPERTY
 
             SemanticCategory.Function, SemanticCategory.ExtensionFunction -> IdeColors.FUNCTION
 
-            SemanticCategory.Property,
-            SemanticCategory.LocalVariable,
-            SemanticCategory.Parameter,
-            -> IdeColors.PROPERTY
+            SemanticCategory.Property -> IdeColors.PROPERTY
+
+            SemanticCategory.LocalVariable, SemanticCategory.Parameter -> IdeColors.LOCAL_VARIABLE
 
             SemanticCategory.InferredExpression,
             SemanticCategory.SmartCastExpression,
-            -> IdeColors.TEXT
+            -> IdeColors.EDITOR_TEXT
         }
 
     private fun diagnosticColor(severity: EditorDiagnosticSeverity): Int =
