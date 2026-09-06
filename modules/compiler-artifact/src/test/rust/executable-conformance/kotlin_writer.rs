@@ -486,7 +486,7 @@ fn k2_string_materialization_executes_char_arrays_and_scalar_templates() {
         &mut session,
         "scalar template write",
         0,
-        Some(&utf16("2/true/x/15")),
+        Some(&utf16("2/true/x/2")),
     );
     session
         .resume(
