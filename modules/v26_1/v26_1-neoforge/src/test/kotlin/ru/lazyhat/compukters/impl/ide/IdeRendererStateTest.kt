@@ -180,7 +180,8 @@ class IdeRendererStateTest {
                 lexical = lexical,
                 analysis = IdeAnalysisState.Active(identity, virtualPath, 1, presentation, null),
             )
-        val model = IdeRenderer.extract(workspaceState(editor, IdeBuildState.Idle), geometry())
+        val geometry = geometry(TerminalFontProfile.COZETTE)
+        val model = IdeRenderer.extract(workspaceState(editor, IdeBuildState.Idle), geometry)
 
         assertEquals(listOf("2", "3"), model.text.filter { it.kind == IdeTextKind.LineNumber }.map { it.value.trim() })
         val value = model.text.single { it.sourceRange == EditorRange(valueStart, valueStart + 5) }
@@ -188,7 +189,9 @@ class IdeRendererStateTest {
         val keyword = model.text.single { it.sourceRange == EditorRange(secondStart, secondStart + 3) }
         assertEquals(IdeTextStyle.Lexical(KotlinLexicalKind.Keyword), keyword.style)
         assertTrue(model.fills.any { it.kind == IdeFillKind.Selection })
-        assertTrue(model.fills.any { it.kind == IdeFillKind.Caret })
+        val caret = model.fills.single { it.kind == IdeFillKind.Caret }
+        assertEquals(geometry.editor.top, caret.bounds.top)
+        assertEquals(geometry.editor.top + TerminalFontProfile.COZETTE.cellHeight, caret.bounds.bottom)
         assertEquals(listOf("Example warning"), model.text.filter { it.kind == IdeTextKind.Diagnostic }.map { it.value })
         assertTrue(model.scissors.any { it.kind == IdeScissorKind.Editor })
         assertTrue(model.text.filter { it.kind == IdeTextKind.TreeRow }.any { "main.kt" in it.value })

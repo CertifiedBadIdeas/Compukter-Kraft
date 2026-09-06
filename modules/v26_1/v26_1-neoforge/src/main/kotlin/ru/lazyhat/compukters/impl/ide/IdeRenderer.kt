@@ -492,7 +492,8 @@ internal object IdeRenderer {
                 val lineNumber = editor.firstVisibleLine + visibleIndex
                 val line = editor.visibleLines[visibleIndex]
                 val lineStart = editor.visibleLineStartsUtf16[visibleIndex]
-                val y = bounds.top + visibleIndex * font.cellHeight + font.glyphDrawOffsetY
+                val rowTop = bounds.top + visibleIndex * font.cellHeight
+                val y = rowTop + font.glyphDrawOffsetY
                 code(IdeTextKind.LineNumber, (lineNumber + 1).toString().padStart(gutterDigits), bounds.left, y, IdeColors.MUTED, bounds)
                 selection(editor, line, lineStart, codeLeft, y)
                 styledLine(editor, lineNumber, line, lineStart, codeLeft, y)
@@ -503,7 +504,7 @@ internal object IdeRenderer {
                 if (caretVisible && caretBelongsToLine) {
                     val local = (editor.caretUtf16 - lineStart).coerceAtMost(line.length)
                     val x = codeLeft + (visualColumns(line.substring(0, local)) - editor.firstVisibleColumn) * font.cellWidth
-                    fills += IdeFillDraw(IdeFillKind.Caret, IdeRect(x, y, x + 1, y + font.cellHeight), IdeColors.CARET, Z_CARET)
+                    fills += IdeFillDraw(IdeFillKind.Caret, IdeRect(x, rowTop, x + 1, rowTop + font.cellHeight), IdeColors.CARET, Z_CARET)
                 }
             }
             val active = editor.analysis as? IdeAnalysisState.Active
