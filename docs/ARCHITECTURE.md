@@ -43,7 +43,7 @@ Boot, shell, `kotlinc`, and `edit` are ordinary no-std Kotlin programs packaged 
 
 `/rom/edit <path>` is a nano-like 51x19 editor backed by one managed 4096-unit `CharArray` gap buffer. Cursor motion and deletion preserve UTF-16 surrogate pairs, CRLF input is normalized to LF, Tab inserts four spaces, Enter inherits leading indentation, and the viewport scrolls in both axes. Ctrl+S writes through Rust-owned `FileSystem.writeText`; Ctrl+X exits directly when clean or opens a Y/N/Escape save prompt when dirty. The buffer, source, and compiled artifact belong to the computer filesystem, while the terminal state belongs only to the current VM lifetime. The verified playable loop is `edit demo.kt` -> `kotlinc demo.kt` -> `demo`; source and artifact survive machine reload and remain isolated by `ComputerId`.
 
-Terminal, redstone, process, filesystem, and compiler declarations live in the `guest-api-core` metadata bundle so the compiler, future addon bundles, and IDE autocomplete consume the same Kotlin API surface. General stream handles, pipes, process redirection, multi-file projects, and addon API bundles remain later layers.
+Terminal, redstone, process, filesystem, and compiler declarations live in the `guest-platform` metadata bundle so the compiler, future addon bundles, and IDE autocomplete consume the same Kotlin API surface. General stream handles, pipes, process redirection, multi-file projects, and addon API bundles remain later layers.
 
 ## Module ownership
 
@@ -53,7 +53,7 @@ Terminal, redstone, process, filesystem, and compiler declarations live in the `
 | `compiler-client` | Bounded controller and protocol for the isolated compiler worker |
 | `compiler-k2` | Pinned K2/IR integration and Compukter lowering |
 | `compiler-runtime` | Server-global single-flight scheduling, persistent artifact cache, and packaged-worker lifecycle |
-| `guest-api-core` | Trusted Guest Kotlin facade declarations and compiler source metadata |
+| `guest-platform` | Trusted Guest Kotlin facade declarations and compiler source metadata |
 | `native-runtime` | Kotlin-facing JDK 25 FFM VM session, opaque world-store lifecycle, and trusted host capabilities |
 | `core` | Loader-independent server behavior and `ProgramRuntimeHost` |
 | `playground` | Standalone compile-and-run entry point with stdin/stdout |

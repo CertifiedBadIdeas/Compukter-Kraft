@@ -20,6 +20,10 @@ among these claims before changing code:
 Do not mark a language construct supported merely because K2 accepts it. Preserve the documented intentional
 non-goals unless the work has an explicit architecture decision.
 
+Use `compukters-abi-change` when the feature changes an artifact instruction, encoded representation, capability
+schema, FFM contract, or other versioned boundary. Use `compukters-runtime-change` for execution support behind an
+unchanged boundary. This skill continues to own the end-to-end Guest Kotlin semantic claim.
+
 ## Trace the Feature
 
 Follow the feature through only the layers it actually affects:

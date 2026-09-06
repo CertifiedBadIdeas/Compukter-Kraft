@@ -22,6 +22,10 @@ Decide explicitly whether the change is compatible, requires a version bump, or 
 Treat a public ABI, artifact compatibility, or component-boundary change as architecture-significant work governed by
 the repository roadmap rules.
 
+When Guest Kotlin semantics drive the change, use `compukters-language-feature` to define the source-level contract and
+this skill for its versioned representation. For VM or host-runtime implementation behind an unchanged versioned
+boundary, use `compukters-runtime-change` instead.
+
 ## Change Both Sides Coherently
 
 Update the smallest complete set of producers and consumers. Depending on the boundary, inspect:

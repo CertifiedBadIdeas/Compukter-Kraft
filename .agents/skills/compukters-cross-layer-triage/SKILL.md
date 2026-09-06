@@ -36,5 +36,14 @@ If the symptom appears in NeoForge, reproduce the underlying behavior in `core`,
 possible before attributing it to the loader. If JVM and Rust disagree, construct the smallest cross-language
 conformance case rather than patching both sides speculatively.
 
-Implement a fix only after evidence identifies the broken contract. Re-run the original reproduction and the closest
-boundary tests; broaden verification according to the number of layers affected.
+Stop cross-layer triage once evidence identifies the broken contract and its owner. Continue through the narrowest
+applicable workflow:
+
+- `compukters-language-feature` for Guest Kotlin semantics or IDE claims;
+- `compukters-abi-change` for a versioned artifact, capability, FFM, or C ABI boundary;
+- `compukters-runtime-change` for VM, persistence, terminal, scheduling, quota, or runtime-host internals;
+- `compukters-neoforge-integration` for loader and Minecraft lifecycle behavior;
+- `debugging-strategy` alone for an already-localized routine defect.
+
+The owning workflow implements and verifies the fix. Re-run the original reproduction and broaden verification
+according to the number of affected layers.

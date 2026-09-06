@@ -1,6 +1,6 @@
 ---
 name: compukters-neoforge-integration
-description: Use when changing Minecraft or NeoForge registration, lifecycle, networking, client UI or input, resources, persistence adapters, redstone behavior, or GameTests in the v26_1 modules. Do not use for changes contained entirely in loader-independent core code.
+description: Use when changing Minecraft or NeoForge registration, lifecycle, networking, client UI or input, persistence adapters, redstone behavior, GameTests, or resources tied to loader registration or the production archive. Do not use for loader-independent core code or simple standalone asset edits.
 ---
 
 # Compukters NeoForge Integration
@@ -20,6 +20,10 @@ compiler, filesystem, and other blocking work off the Minecraft tick.
 For payloads and persisted data, validate bounds and identifiers at the receiving boundary. Keep the Rust-owned
 filesystem and VM state out of block-entity NBT, and do not create a second authoritative terminal or machine model
 on the Minecraft side.
+
+If investigation localizes the owning behavior below the Minecraft adapter, continue with
+`compukters-runtime-change`, `compukters-abi-change`, or `compukters-language-feature` rather than duplicating the fix
+in the loader layer.
 
 ## Select Evidence
 
