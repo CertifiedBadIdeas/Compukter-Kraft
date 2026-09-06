@@ -75,7 +75,7 @@ class NeoForgeCompilerServicesTest {
             TargetCompileProfileIdentity.of(serverTargetProfile(identity, platform, limits)),
         )
 
-        val selection = catalog.resolve(mapOf(ModuleId.parse("compukter:redstone") to ApiMajor(1)))
+        val selection = catalog.resolve(mapOf(ModuleId.parse("compukter:redstone") to ApiMajor(2)))
         val lock = ProjectLock.of(profile.toolchain, selection.modules.map { LockedModule(it.identity, it.direct) })
         assertIs<ProfileResolution.Resolved>(CompileProfileResolver(profile.toolchain, catalog, limits).resolveTarget(lock, profile))
     }
@@ -134,7 +134,7 @@ class NeoForgeCompilerServicesTest {
     private fun platform(): PlatformBundle {
         val builtins = module("kotlin", "builtins")
         val core = module("stdlib", "core", listOf(builtins.id))
-        val redstone = module("compukter", "redstone", listOf(core.id))
+        val redstone = module("compukter", "redstone", listOf(core.id), "2.0.0")
         return PlatformBundleCodec.assemble(
             "2.4",
             PlatformBundleCodec.SUPPORTED_PLATFORM_ABI,
@@ -147,10 +147,11 @@ class NeoForgeCompilerServicesTest {
         namespace: String,
         name: String,
         dependencies: List<PlatformModuleId> = emptyList(),
+        version: String = "1.0.0",
     ): PlatformModule =
         PlatformModule(
             PlatformModuleId(namespace, name),
-            "1.0.0",
+            version,
             dependencies,
             ImmutableBytes.of("$namespace:$name".encodeToByteArray()),
             null,

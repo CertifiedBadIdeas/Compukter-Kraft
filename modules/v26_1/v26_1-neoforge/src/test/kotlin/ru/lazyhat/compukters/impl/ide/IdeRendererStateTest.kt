@@ -669,7 +669,7 @@ class IdeRendererStateTest {
                         action,
                         IdeCompletionModuleRequirement(
                             ModuleId.parse("compukter:redstone"),
-                            ApiMajor(1),
+                            ApiMajor(2),
                         ),
                     ),
                 ),

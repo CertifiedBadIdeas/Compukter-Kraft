@@ -73,7 +73,7 @@ class IdeCompletionPlannerTest {
 
     private fun catalog(): PlatformCatalog {
         val builtins = module(PlatformModuleId("kotlin", "builtins"), "1.0.0")
-        val redstone = module(PlatformModuleId("compukter", "redstone"), "1.0.0")
+        val redstone = module(PlatformModuleId("compukter", "redstone"), "2.0.0")
         return PlatformCatalog.of(
             PlatformBundleCodec.assemble("2.4", PlatformBundleCodec.SUPPORTED_PLATFORM_ABI, builtins, listOf(redstone)),
         )
