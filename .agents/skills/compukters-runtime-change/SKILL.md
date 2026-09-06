@@ -41,3 +41,4 @@ on wall-clock anecdotes.
 
 When `host/compukter-vm` changes, verify and commit that submodule repository first, then update the parent gitlink in
 a separate parent commit. Run full local verification after a completed change spans the VM and parent runtime layers.
+Use the runtime or FFM row in `docs/VERIFICATION.md` to select focused evidence and the required final gate.

@@ -55,3 +55,5 @@ wrong-version tests for platform bundles or worker protocols. Run focused JVM an
 cross-language conformance task when the boundary reaches the VM. Use full local verification when the completed
 change spans both repositories or multiple runtime layers. Update active ABI or architecture documentation in the
 same stage.
+Use the matching versioned-boundary row in `docs/VERIFICATION.md` so every claim has focused producer-consumer evidence
+and the correct final gate.

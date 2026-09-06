@@ -32,8 +32,10 @@ in the loader layer.
   persistence, networking-visible server behavior, or redstone interaction.
 - Use the development client for behavior whose correctness is inherently visual or interactive; record the manual
   observation and provide screenshots or a short recording when preparing a pull request.
-- Build the production universal JAR when metadata, resources, native packaging, access transformers, or archive
-  composition changes.
+- Build the production JAR for the configured native resources when metadata, resources, native packaging, access
+  transformers, or archive composition changes. Use `compukters-release` for a distributable artifact or universal
+  release-readiness claim; the production task's historical name alone does not prove multi-platform coverage.
 
 When an API detail depends on the pinned Minecraft or NeoForge version, verify it against sources or official
 documentation for the versions in `gradle.properties`; do not assume behavior from an older mapping or loader release.
+Use the Minecraft, client, or packaging row in `docs/VERIFICATION.md` to select focused evidence and the final gate.

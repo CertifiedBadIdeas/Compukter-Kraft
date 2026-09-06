@@ -72,6 +72,12 @@ Stage only files that belong to the current task, and never include unrelated us
 
 Respect user changes in the worktree. Prefer focused edits, run the narrowest useful verification, and update docs or
 active machine ABI references when behavior changes.
+Before changing behavior or packaging, select every applicable repository-local workflow: `compukters-language-feature`
+for Guest Kotlin semantics, `compukters-abi-change` for versioned boundaries, `compukters-runtime-change` for VM and
+runtime ownership, `compukters-neoforge-integration` for Minecraft/loader behavior, and `compukters-release` for
+distributable artifacts or release-readiness claims. Use `compukters-cross-layer-triage` only while ownership of a
+failure is unclear. Shared skills govern the development process; local skills govern Compukters invariants. Combine
+applicable local skills for cross-boundary work, but do not load unrelated workflows merely to enumerate them.
 Use the `using-github-roadmap` skill before architecturally significant work: new subsystems, cross-module capabilities,
 material component-boundary or public API/ABI changes, or work requiring a design specification or coordinated stages.
 Localized fixes, docs, tests, mechanical refactors, routine chores, and read-only investigation do not require an issue.

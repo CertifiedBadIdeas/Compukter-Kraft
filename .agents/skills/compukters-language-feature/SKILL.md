@@ -48,3 +48,4 @@ invalid artifacts or runtime faults.
 
 When Guest Kotlin support changes, update the affected `docs/KOTLIN-SUPPORT.md` entry and its exact evidence in the
 same commit. Keep checked entries tied to stable repository paths and named test behavior.
+Use the Guest Kotlin row in `docs/VERIFICATION.md` to select focused checks and the required final gate.

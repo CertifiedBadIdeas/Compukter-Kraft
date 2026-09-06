@@ -48,3 +48,5 @@ applicable workflow:
 
 The owning workflow implements and verifies the fix. Re-run the original reproduction and broaden verification
 according to the number of affected layers.
+After localization, use the owning boundary row in `docs/VERIFICATION.md`; do not substitute a broad green aggregate
+for evidence that the original failure path executed.
