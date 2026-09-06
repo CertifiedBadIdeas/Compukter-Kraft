@@ -142,6 +142,7 @@ class IdeClientServicesTest {
             val modulesById = platform.modules.associateBy { it.id.toString() }
             val admittedModules =
                 ProductionIdeApplicationFactory.admittedAnalysisModules(
+                    platform,
                     listOf(
                         modulesById.getValue("stdlib:core"),
                         modulesById.getValue("stdlib:ranges"),
@@ -150,7 +151,7 @@ class IdeClientServicesTest {
                     ),
                 )
             assertEquals(
-                listOf("compukter:redstone", "std:terminal", "stdlib:core", "stdlib:ranges"),
+                listOf("compukter:redstone", "kotlin:builtins", "std:terminal", "stdlib:core", "stdlib:ranges"),
                 admittedModules.map { it.identity.name },
             )
             AdmittedAnalysisPlatform(compiler.manifest.identity.platformAbi, admittedModules, guestApi.toString())

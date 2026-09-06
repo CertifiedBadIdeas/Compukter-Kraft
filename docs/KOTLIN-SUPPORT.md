@@ -599,7 +599,8 @@ cannot become one merely by copying its package, name, and signature.
   their attached sources without matching unrelated same-spelling symbols.
   Evidence:
   [`NavigationAndReferencesTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/integration/NavigationAndReferencesTest.kt),
-  test `forked worker navigates and finds exact project references`, paired
+  tests `forked worker navigates and finds exact project references` and
+  `forked worker navigates to attached builtin source`, paired
   with [`DeclarationQueryTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/query/DeclarationQueryTest.kt),
   test `navigation maps int array factory to its platform source`, and
   [`ReferenceQueryTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/query/ReferenceQueryTest.kt),

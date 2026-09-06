@@ -22,7 +22,6 @@ import com.intellij.openapi.vfs.StandardFileSystems
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiManager
 import org.jetbrains.kotlin.psi.KtFile
-import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.compiler.worker.protocol.VirtualSourcePath
 import ru.lazyhat.compukters.ide.analysis.AnalysisModuleIdentity
 import ru.lazyhat.compukters.ide.analysis.AnalysisSnapshotIdentity
@@ -73,7 +72,11 @@ internal class SnapshotAdmission(
             request.profile.platform.modules.associate { admitted ->
                 val id = platformModuleId(admitted.identity.name)
                 val module =
-                    platformBundle.modules.singleOrNull { it.id == id }
+                    if (id == platformBundle.builtins.id) {
+                        platformBundle.builtins
+                    } else {
+                        platformBundle.modules.singleOrNull { it.id == id }
+                    }
                         ?: error("analysis platform module is unavailable: $id")
                 require(
                     admitted.identity.hash
@@ -84,19 +87,11 @@ internal class SnapshotAdmission(
                 }
                 id to admitted.identity
             }
-        val selectedModules = requestedModules.keys
+        val selectedModules = requestedModules.keys - platformBundle.builtins.id
         val resolvedModules = PlatformModuleGraph(platformBundle).resolve(selectedModules).modules
         require(resolvedModules.mapTo(mutableSetOf()) { it.id } == selectedModules) {
             "analysis platform module selection is not dependency-closed"
         }
-        val moduleIdentities =
-            mapOf(
-                platformBundle.builtins.id to
-                    AnalysisModuleIdentity(
-                        platformBundle.builtins.id.toString(),
-                        Hash256.of(PlatformBundleCodec.moduleContentHash(platformBundle.builtins).toByteArray()),
-                    ),
-            ) + requestedModules
         val attachedSourceRoot =
             request.profile.platform.sourceRoot
                 ?.let { validatedRegularFile(it, "platform source root") }
@@ -139,7 +134,7 @@ internal class SnapshotAdmission(
                 files.toMap(),
                 request.sources,
                 sourceLengths.toMap(),
-                moduleIdentities,
+                requestedModules,
                 platformSourceFiles,
                 platform,
                 sourceUpdater,

@@ -41,7 +41,7 @@ internal fun testAdmittedPlatform(
     val platform = testPlatform()
     val modules =
         if (selectAllModules) {
-            platform.modules.map { module ->
+            (listOf(platform.builtins) + platform.modules).sortedBy { it.id }.map { module ->
                 AdmittedAnalysisModule(
                     AnalysisModuleIdentity(
                         module.id.toString(),

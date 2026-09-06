@@ -29,6 +29,7 @@ import ru.lazyhat.compukters.ide.analysis.AnalysisQuery
 import ru.lazyhat.compukters.ide.analysis.AnalysisResult
 import ru.lazyhat.compukters.ide.analysis.AnalysisSnapshotIdentity
 import ru.lazyhat.compukters.ide.analysis.DeclarationLocation
+import ru.lazyhat.compukters.ide.analysis.DeclarationOrigin
 import ru.lazyhat.compukters.ide.analysis.SourceSnapshotIdentity
 import ru.lazyhat.compukters.ide.analysis.controller.AdmittedAnalysisSnapshot
 import ru.lazyhat.compukters.ide.analysis.controller.AnalysisClientResult
@@ -49,6 +50,47 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class NavigationAndReferencesTest {
+    @Test
+    fun `forked worker navigates to attached builtin source`() {
+        val source = "fun main() { val values = intArrayOf(7, 11) }"
+        val path = VirtualSourcePath.kotlin("main.kt")
+        val sources =
+            ProjectSnapshot.of(
+                listOf(ProjectSource(path, BinaryValue.of(source.encodeToByteArray()))),
+                WorkerLimits(),
+            )
+        val profile = AnalysisProfileIdentity(Hash256.of(ByteArray(32) { 9 }))
+        val identity = AnalysisSnapshotIdentity(SourceSnapshotIdentity.of(sources), profile)
+        val admitted =
+            AdmittedAnalysisSnapshot(
+                identity,
+                sources,
+                AdmittedAnalysisProfile(
+                    profile,
+                    ru.lazyhat.compukters.ide.analysis.k2
+                        .testAdmittedPlatform(selectAllModules = true, attachedSources = true),
+                ),
+                AnalysisLimits(),
+            )
+
+        withController { controller ->
+            assertEquals(SnapshotOpenResult.Opened(identity), controller.open(admitted).get(90, TimeUnit.SECONDS))
+            val result =
+                assertIs<AnalysisClientResult.Success>(
+                    controller
+                        .query(admitted, AnalysisQuery.Declaration(identity, path, source.indexOf("intArrayOf") + 1))
+                        .get(90, TimeUnit.SECONDS),
+                ).result as AnalysisResult.Declaration
+            val location = assertIs<DeclarationLocation.Source>(result.locations.single())
+
+            assertEquals(
+                "kotlin:builtins",
+                assertIs<DeclarationOrigin.Platform>(location.origin).identity.name,
+            )
+            assertEquals("compukters-platform/sources/builtins/kotlin/Arrays.kt", location.path.value)
+        }
+    }
+
     @Test
     fun `forked worker navigates and finds exact project references`() {
         val declaration = "package demo\nfun target() = Unit"

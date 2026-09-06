@@ -80,6 +80,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmArtifactVerifier
 import ru.lazyhat.compukters.platform.bundle.PackagedPlatformBundleLoader
 import ru.lazyhat.compukters.platform.bundle.PlatformBundle
 import ru.lazyhat.compukters.platform.bundle.PlatformBundleCodec
+import ru.lazyhat.compukters.platform.bundle.PlatformModule
 import ru.lazyhat.compukters.worker.payload.PackagedToolingBundle
 import ru.lazyhat.compukters.worker.process.JdkWorkerProcessFactory
 import ru.lazyhat.compukters.worker.process.WorkerLaunch
@@ -462,7 +463,15 @@ internal object ProductionIdeApplicationFactory {
                 inputLoader = IdeAnalysisInputLoader(workspace::buildInput),
                 snapshotFactory =
                     IdeAnalysisSnapshotFactory { input, activePath, activeText ->
-                        analysisSnapshot(input, activePath, activeText, profileResolver, analysisLimits, platformSourceRoot)
+                        analysisSnapshot(
+                            input,
+                            activePath,
+                            activeText,
+                            profileResolver,
+                            analysisLimits,
+                            platform,
+                            platformSourceRoot,
+                        )
                     },
                 requestFactory =
                     IdeAnalysisRequestFactory { sink ->
@@ -536,6 +545,7 @@ internal object ProductionIdeApplicationFactory {
         activeText: String,
         resolver: CompileProfileResolver,
         limits: AnalysisLimits,
+        platform: PlatformBundle,
         platformSourceRoot: Path,
     ): AdmittedAnalysisSnapshot {
         val lockBytes = checkNotNull(input.lockBytes) { "resolve compukter.lock before analysis" }
@@ -555,7 +565,7 @@ internal object ProductionIdeApplicationFactory {
                     frameBytes = limits.frameBytes,
                 ),
             )
-        val admittedModules = admittedAnalysisModules(profile.modules.map { module -> module.descriptor })
+        val admittedModules = admittedAnalysisModules(platform, profile.modules.map { module -> module.descriptor })
         val profileIdentity = analysisProfile(profile, ProjectLockCodec.encode(lock).encodeToByteArray(), admittedModules)
         val admittedPlatform =
             AdmittedAnalysisPlatform(profile.toolchain.platformAbi, admittedModules, platformSourceRoot.toString())
@@ -579,7 +589,7 @@ internal object ProductionIdeApplicationFactory {
             AnalysisSemanticSettings(profile.toolchain.languageVersion, profile.toolchain.languageVersion, false),
         )
 
-    private fun analysisModule(module: ru.lazyhat.compukters.platform.bundle.PlatformModule): AdmittedAnalysisModule =
+    private fun analysisModule(module: PlatformModule): AdmittedAnalysisModule =
         AdmittedAnalysisModule(
             AnalysisModuleIdentity(
                 module.id.toString(),
@@ -588,8 +598,9 @@ internal object ProductionIdeApplicationFactory {
         )
 
     internal fun admittedAnalysisModules(
-        modules: List<ru.lazyhat.compukters.platform.bundle.PlatformModule>,
-    ): List<AdmittedAnalysisModule> = modules.sortedBy { it.id }.map(::analysisModule)
+        platform: PlatformBundle,
+        modules: List<PlatformModule>,
+    ): List<AdmittedAnalysisModule> = (listOf(platform.builtins) + modules).sortedBy { it.id }.map(::analysisModule)
 
     internal fun loadPackagedPlatform(
         classpath: List<Path>,
