@@ -141,6 +141,7 @@ dependencies {
     shadowBundle(project(path = projects.v261Common.path, configuration = "transformProductionNeoForge"))
     testImplementation(project(path = projects.v261Common.path))
     implementation(projects.platformBundle)
+    shadowBundle(project(path = projects.platformBundle.path)) { isTransitive = false }
 
     add(gameTest.implementationConfigurationName, sourceSets.main.get().output)
     add(gameTest.implementationConfigurationName, project(path = projects.v261Common.path))
@@ -499,6 +500,7 @@ val verifyPackagedCompukterFfi =
                 "ru/lazyhat/compukters/ide/client/target/IdeTargetPort.class",
                 "ru/lazyhat/compukters/ide/project/ProjectCatalog.class",
                 "ru/lazyhat/compukters/ide/analysis/controller/AnalysisClient.class",
+                "ru/lazyhat/compukters/platform/bundle/PackagedPlatformBundleLoader.class",
                 "ru/lazyhat/compukters/worker/payload/PackagedWorkerPayload.class",
             ).forEach { required ->
                 check(entries.count { it == required } == 1) {
