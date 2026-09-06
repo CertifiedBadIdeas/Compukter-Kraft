@@ -31,8 +31,10 @@ import ru.lazyhat.compukters.ide.client.state.IdeCommand
 import ru.lazyhat.compukters.ide.client.state.IdeDialogState
 import ru.lazyhat.compukters.ide.client.state.IdeEditorInput
 import ru.lazyhat.compukters.ide.client.state.IdeEditorView
+import ru.lazyhat.compukters.ide.client.state.IdeHorizontalDirection
 import ru.lazyhat.compukters.ide.client.state.IdeMoveDirection
 import ru.lazyhat.compukters.ide.client.state.IdeProjectSummary
+import ru.lazyhat.compukters.ide.client.state.IdeVerticalDirection
 import ru.lazyhat.compukters.ide.client.target.IdeDeploymentPath
 import ru.lazyhat.compukters.ide.client.target.IdeExecutableRevision
 import ru.lazyhat.compukters.ide.client.target.IdeTargetFileKind
@@ -90,6 +92,55 @@ class IdeInputAdapterTest {
     }
 
     @Test
+    fun `editor fundamentals map word deletion indentation and page navigation`() {
+        val fixture = fixture()
+        val focus = IdeFocusState(IdeFocusArea.Editor, editorPageRows = 17)
+
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_LEFT, GLFW.GLFW_MOD_CONTROL or GLFW.GLFW_MOD_SHIFT), focus)
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_MOD_CONTROL), focus)
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_BACKSPACE, GLFW.GLFW_MOD_CONTROL), focus)
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_DELETE, GLFW.GLFW_MOD_CONTROL), focus)
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_TAB), focus)
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT), focus)
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_PAGE_UP, GLFW.GLFW_MOD_SHIFT), focus)
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_PAGE_DOWN), focus)
+
+        assertEquals(
+            listOf<IdeCommand>(
+                IdeCommand.Edit(IdeEditorInput.MoveWord(IdeHorizontalDirection.Left, true)),
+                IdeCommand.Edit(IdeEditorInput.MoveWord(IdeHorizontalDirection.Right, false)),
+                IdeCommand.Edit(IdeEditorInput.DeleteWordBackward),
+                IdeCommand.Edit(IdeEditorInput.DeleteWordForward),
+                IdeCommand.Edit(IdeEditorInput.Tab),
+                IdeCommand.Edit(IdeEditorInput.Outdent),
+                IdeCommand.Edit(IdeEditorInput.Page(IdeVerticalDirection.Up, 17, true)),
+                IdeCommand.Edit(IdeEditorInput.Page(IdeVerticalDirection.Down, 17, false)),
+            ),
+            fixture.commands,
+        )
+    }
+
+    @Test
+    fun `copy and cut use the selected text at the UI clipboard edge`() {
+        val commands = mutableListOf<IdeCommand>()
+        val writes = mutableListOf<String>()
+        val adapter =
+            IdeInputAdapter(
+                commands::add,
+                IdeClipboard { "" },
+                IdeClientLimits(),
+                clipboardWriter = IdeClipboardWriter(writes::add),
+                selectionSource = IdeSelectionSource { "выбор😀" },
+            )
+
+        assertTrue(adapter.keyPressed(key(GLFW.GLFW_KEY_C, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor))
+        assertTrue(adapter.keyPressed(key(GLFW.GLFW_KEY_X, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor))
+
+        assertEquals(listOf("выбор😀", "выбор😀"), writes)
+        assertEquals(listOf<IdeCommand>(IdeCommand.Edit(IdeEditorInput.Cut)), commands)
+    }
+
+    @Test
     fun `Ctrl click navigates without first moving the caret`() {
         val fixture = fixture()
         val geometry = IdeRenderGeometry.compute(960, 540, 180, 120, true, true, TerminalFontProfile.DINA)
@@ -105,6 +156,24 @@ class IdeInputAdapterTest {
 
         assertEquals(IdeCommand.GoToDeclaration(1), fixture.commands.first())
         assertFalse(fixture.commands.any { it is IdeCommand.Edit })
+    }
+
+    @Test
+    fun `double click selects the token under the pointer`() {
+        val fixture = fixture()
+        val geometry = IdeRenderGeometry.compute(960, 540, 180, 120, true, true, TerminalFontProfile.DINA)
+        val editor = textEditor("answer")
+        val codeLeft = geometry.editor.left + 4 * geometry.font.cellWidth
+
+        fixture.adapter.pointerClicked(
+            codeLeft + 2.0 * geometry.font.cellWidth,
+            geometry.editor.top + 1.0,
+            0,
+            IdePointerContext(geometry, editor),
+            doubleClick = true,
+        )
+
+        assertEquals(IdeCommand.Edit(IdeEditorInput.SelectToken(2)), fixture.commands.first())
     }
 
     @Test

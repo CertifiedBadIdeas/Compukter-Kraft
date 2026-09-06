@@ -495,7 +495,7 @@ internal object IdeRenderer {
                 val rowTop = bounds.top + visibleIndex * font.cellHeight
                 val y = rowTop + font.glyphDrawOffsetY
                 code(IdeTextKind.LineNumber, (lineNumber + 1).toString().padStart(gutterDigits), bounds.left, y, IdeColors.MUTED, bounds)
-                selection(editor, line, lineStart, codeLeft, y)
+                selection(editor, line, lineStart, codeLeft, rowTop)
                 styledLine(editor, lineNumber, line, lineStart, codeLeft, y)
                 val nextLineStart = editor.visibleLineStartsUtf16.getOrNull(visibleIndex + 1)
                 val caretBelongsToLine =
@@ -527,7 +527,7 @@ internal object IdeRenderer {
             line: String,
             lineStart: Int,
             codeLeft: Int,
-            y: Int,
+            rowTop: Int,
         ) {
             val start = editor.selectionStartUtf16 ?: return
             val end = editor.selectionEndUtf16 ?: return
@@ -536,7 +536,13 @@ internal object IdeRenderer {
             if (localEnd <= localStart) return
             val left = codeLeft + (visualColumns(line.substring(0, localStart)) - editor.firstVisibleColumn) * font.cellWidth
             val right = codeLeft + (visualColumns(line.substring(0, localEnd)) - editor.firstVisibleColumn) * font.cellWidth
-            fills += IdeFillDraw(IdeFillKind.Selection, IdeRect(left, y, right, y + font.cellHeight), IdeColors.SELECTION, Z_SELECTION)
+            fills +=
+                IdeFillDraw(
+                    IdeFillKind.Selection,
+                    IdeRect(left, rowTop, right, rowTop + font.cellHeight),
+                    IdeColors.SELECTION,
+                    Z_SELECTION,
+                )
         }
 
         private fun styledLine(

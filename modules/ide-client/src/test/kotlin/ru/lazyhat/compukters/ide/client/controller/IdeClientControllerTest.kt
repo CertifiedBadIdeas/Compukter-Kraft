@@ -62,6 +62,7 @@ import ru.lazyhat.compukters.ide.client.state.IdeEvent
 import ru.lazyhat.compukters.ide.client.state.IdePageState
 import ru.lazyhat.compukters.ide.client.state.IdeProblemSeverity
 import ru.lazyhat.compukters.ide.client.state.IdeToolingState
+import ru.lazyhat.compukters.ide.client.state.IdeVerticalDirection
 import ru.lazyhat.compukters.ide.client.workspace.IdeBuildInput
 import ru.lazyhat.compukters.ide.client.workspace.IdeMutationRequest
 import ru.lazyhat.compukters.ide.client.workspace.IdeSaveRequest
@@ -181,6 +182,33 @@ class IdeClientControllerTest {
         assertEquals("one", editor.visibleLines.joinToString("\n"))
         assertTrue(editor.dirty)
         assertTrue(initial.isNotEmpty())
+    }
+
+    @Test
+    fun `editor fundamentals flow through controller state as atomic edits and navigation`() {
+        val fixture = ControllerFixture(preferences = preferences("demo", "src/main.kt"))
+        fixture.startAndTick()
+        val source = "one two\nthree four\nfive six"
+
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SelectAll))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type(source)))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SelectToken(4)))
+        assertEquals("two", fixture.controller.selectedText())
+
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Cut))
+        assertEquals("one \nthree four\nfive six", fixture.textEditor().visibleLines.joinToString("\n"))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Undo))
+
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SelectAll))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Tab))
+        assertEquals(source.prependIndent("    "), fixture.textEditor().visibleLines.joinToString("\n"))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Outdent))
+        assertEquals(source, fixture.textEditor().visibleLines.joinToString("\n"))
+
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SetCaret(0, false)))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Page(IdeVerticalDirection.Down, 2, false)))
+        assertEquals(19, fixture.textEditor().caretUtf16)
+        assertEquals(1, fixture.textEditor().firstVisibleLine)
     }
 
     @Test

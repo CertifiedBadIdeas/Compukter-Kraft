@@ -91,6 +91,8 @@ internal class IdeScreen(
             IdeClipboard { minecraft.keyboardHandler.clipboard },
             IdeClientLimits(),
             IdeUiActionSink(::activateUiAction),
+            IdeClipboardWriter { minecraft.keyboardHandler.clipboard = it },
+            IdeSelectionSource(application.controller::selectedText),
         )
     private val splitters = IdeSplitterInteraction(application.preferences.layout(), application.preferences::saveLayout)
     private val terminalOverlay = IdeTerminalOverlayController(application.targetTerminal)
@@ -116,7 +118,7 @@ internal class IdeScreen(
         val geometry = geometry()
         val state = application.controller.viewState()
         if (prompt.state != null || state.dialog != null) {
-            input.pointerClicked(uiEvent.x(), uiEvent.y(), uiEvent.modifiers(), pointerContext(geometry))
+            input.pointerClicked(uiEvent.x(), uiEvent.y(), uiEvent.modifiers(), pointerContext(geometry), doubleClick)
             clearFocus()
             return true
         }
@@ -147,7 +149,7 @@ internal class IdeScreen(
                 .asReversed()
                 .firstOrNull { it.enabled && it.bounds.contains(uiEvent.x(), uiEvent.y()) }
                 ?.action
-        if (input.pointerClicked(uiEvent.x(), uiEvent.y(), uiEvent.modifiers(), pointerContext)) {
+        if (input.pointerClicked(uiEvent.x(), uiEvent.y(), uiEvent.modifiers(), pointerContext, doubleClick)) {
             focusArea =
                 when {
                     hitAction == IdeHitAction.Terminal && terminalOverlay.visible -> IdeFocusArea.Terminal
@@ -436,7 +438,7 @@ internal class IdeScreen(
         val completion = (editor?.analysis as? IdeAnalysisState.Active)?.completion != null
         val chooser =
             ((editor?.analysis as? IdeAnalysisState.Active)?.interaction as? IdeSemanticInteraction.Chooser) != null
-        return IdeFocusState(focusArea, completion, chooser, state.dialog)
+        return IdeFocusState(focusArea, completion, chooser, state.dialog, geometry().codeRows.coerceAtLeast(1))
     }
 
     private fun pointerContext(geometry: IdeRenderGeometry): IdePointerContext {

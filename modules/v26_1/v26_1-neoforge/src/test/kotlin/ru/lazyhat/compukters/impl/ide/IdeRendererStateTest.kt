@@ -188,7 +188,9 @@ class IdeRendererStateTest {
         assertEquals(IdeTextStyle.Semantic(SemanticCategory.LocalVariable), value.style)
         val keyword = model.text.single { it.sourceRange == EditorRange(secondStart, secondStart + 3) }
         assertEquals(IdeTextStyle.Lexical(KotlinLexicalKind.Keyword), keyword.style)
-        assertTrue(model.fills.any { it.kind == IdeFillKind.Selection })
+        val selection = model.fills.single { it.kind == IdeFillKind.Selection }
+        assertEquals(geometry.editor.top, selection.bounds.top)
+        assertEquals(geometry.editor.top + TerminalFontProfile.COZETTE.cellHeight, selection.bounds.bottom)
         val caret = model.fills.single { it.kind == IdeFillKind.Caret }
         assertEquals(geometry.editor.top, caret.bounds.top)
         assertEquals(geometry.editor.top + TerminalFontProfile.COZETTE.cellHeight, caret.bounds.bottom)

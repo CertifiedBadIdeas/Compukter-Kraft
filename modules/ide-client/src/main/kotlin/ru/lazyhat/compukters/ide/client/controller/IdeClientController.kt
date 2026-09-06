@@ -52,12 +52,14 @@ import ru.lazyhat.compukters.ide.client.state.IdeEditorInput
 import ru.lazyhat.compukters.ide.client.state.IdeEditorSource
 import ru.lazyhat.compukters.ide.client.state.IdeEditorView
 import ru.lazyhat.compukters.ide.client.state.IdeEvent
+import ru.lazyhat.compukters.ide.client.state.IdeHorizontalDirection
 import ru.lazyhat.compukters.ide.client.state.IdeMoveDirection
 import ru.lazyhat.compukters.ide.client.state.IdePageState
 import ru.lazyhat.compukters.ide.client.state.IdeProblem
 import ru.lazyhat.compukters.ide.client.state.IdeProblemSeverity
 import ru.lazyhat.compukters.ide.client.state.IdeProjectSummary
 import ru.lazyhat.compukters.ide.client.state.IdeToolingState
+import ru.lazyhat.compukters.ide.client.state.IdeVerticalDirection
 import ru.lazyhat.compukters.ide.client.state.IdeViewState
 import ru.lazyhat.compukters.ide.client.state.IdeWorkspaceView
 import ru.lazyhat.compukters.ide.client.target.IdeAttachedTarget
@@ -453,6 +455,15 @@ class IdeClientController(
         return state
     }
 
+    fun selectedText(): String? {
+        checkOwner()
+        return when {
+            attachedSourcePreview != null -> attachedSourcePreview?.document?.copySelection()
+            computerPreview != null -> computerPreview?.document?.copySelection()
+            else -> editor?.document?.copySelection()
+        }
+    }
+
     fun attachTarget(claim: IdeTargetClaim) {
         checkOwner()
         check(started && !closed) { "IDE controller is not active" }
@@ -667,6 +678,25 @@ class IdeClientController(
                     null
                 }
 
+                is IdeEditorInput.MoveWord -> {
+                    when (input.direction) {
+                        IdeHorizontalDirection.Left -> active.document.moveWordLeft(input.extendSelection)
+                        IdeHorizontalDirection.Right -> active.document.moveWordRight(input.extendSelection)
+                    }
+                    null
+                }
+
+                is IdeEditorInput.Page -> {
+                    page(active.document, input)
+                    active.firstVisibleLine = pageFirstVisibleLine(active.firstVisibleLine, active.document, input)
+                    null
+                }
+
+                is IdeEditorInput.SelectToken -> {
+                    active.document.selectToken(input.offsetUtf16)
+                    null
+                }
+
                 IdeEditorInput.Backspace -> {
                     active.document.backspace()
                 }
@@ -675,12 +705,28 @@ class IdeClientController(
                     active.document.delete()
                 }
 
+                IdeEditorInput.DeleteWordBackward -> {
+                    active.document.deleteWordBackward()
+                }
+
+                IdeEditorInput.DeleteWordForward -> {
+                    active.document.deleteWordForward()
+                }
+
                 IdeEditorInput.Enter -> {
                     active.document.enter()
                 }
 
                 IdeEditorInput.Tab -> {
-                    active.document.tab()
+                    active.document.indent()
+                }
+
+                IdeEditorInput.Outdent -> {
+                    active.document.outdent()
+                }
+
+                IdeEditorInput.Cut -> {
+                    active.document.cut()
                 }
 
                 IdeEditorInput.Undo -> {
@@ -702,7 +748,10 @@ class IdeClientController(
                 visibleLatency.editApplied(active.document.revision)
             }
             updateAnalysis(active, (input as? IdeEditorInput.Type)?.text, result.change)
-        } else if (input is IdeEditorInput.SetCaret || input is IdeEditorInput.Move) {
+        } else if (
+            input is IdeEditorInput.SetCaret || input is IdeEditorInput.Move || input is IdeEditorInput.MoveWord ||
+            input is IdeEditorInput.Page || input is IdeEditorInput.SelectToken
+        ) {
             analysisCoordinator?.dismissCompletion()
             refreshAnalysisState()
         }
@@ -2146,6 +2195,19 @@ class IdeClientController(
                 }
             }
 
+            is IdeEditorInput.MoveWord -> {
+                moveWordReadOnlyCaret(preview.document, input)
+            }
+
+            is IdeEditorInput.Page -> {
+                page(preview.document, input)
+                preview.firstVisibleLine = pageFirstVisibleLine(preview.firstVisibleLine, preview.document, input)
+            }
+
+            is IdeEditorInput.SelectToken -> {
+                preview.document.selectToken(input.offsetUtf16)
+            }
+
             IdeEditorInput.SelectAll -> {
                 preview.document.selectAll()
             }
@@ -2169,6 +2231,19 @@ class IdeClientController(
 
             is IdeEditorInput.Move -> {
                 moveReadOnlyCaret(preview.document, input)
+            }
+
+            is IdeEditorInput.MoveWord -> {
+                moveWordReadOnlyCaret(preview.document, input)
+            }
+
+            is IdeEditorInput.Page -> {
+                page(preview.document, input)
+                preview.firstVisibleLine = pageFirstVisibleLine(preview.firstVisibleLine, preview.document, input)
+            }
+
+            is IdeEditorInput.SelectToken -> {
+                preview.document.selectToken(input.offsetUtf16)
             }
 
             IdeEditorInput.SelectAll -> {
@@ -2195,6 +2270,39 @@ class IdeClientController(
             IdeMoveDirection.Home -> document.moveHome(input.extendSelection)
             IdeMoveDirection.End -> document.moveEnd(input.extendSelection)
         }
+    }
+
+    private fun moveWordReadOnlyCaret(
+        document: EditorDocument,
+        input: IdeEditorInput.MoveWord,
+    ) {
+        when (input.direction) {
+            IdeHorizontalDirection.Left -> document.moveWordLeft(input.extendSelection)
+            IdeHorizontalDirection.Right -> document.moveWordRight(input.extendSelection)
+        }
+    }
+
+    private fun page(
+        document: EditorDocument,
+        input: IdeEditorInput.Page,
+    ) {
+        repeat(input.rows) {
+            val moved =
+                when (input.direction) {
+                    IdeVerticalDirection.Up -> document.moveUp(input.extendSelection)
+                    IdeVerticalDirection.Down -> document.moveDown(input.extendSelection)
+                }
+            if (!moved) return
+        }
+    }
+
+    private fun pageFirstVisibleLine(
+        current: Int,
+        document: EditorDocument,
+        input: IdeEditorInput.Page,
+    ): Int {
+        val delta = if (input.direction == IdeVerticalDirection.Up) -input.rows else input.rows
+        return (current + delta).coerceIn(0, (document.lineCount - input.rows).coerceAtLeast(0))
     }
 
     private fun scrollAttachedSourcePreview(

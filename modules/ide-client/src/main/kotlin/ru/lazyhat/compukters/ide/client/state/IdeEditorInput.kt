@@ -37,13 +37,44 @@ sealed interface IdeEditorInput {
         val extendSelection: Boolean,
     ) : IdeEditorInput
 
+    data class MoveWord(
+        val direction: IdeHorizontalDirection,
+        val extendSelection: Boolean,
+    ) : IdeEditorInput
+
+    data class Page(
+        val direction: IdeVerticalDirection,
+        val rows: Int,
+        val extendSelection: Boolean,
+    ) : IdeEditorInput {
+        init {
+            require(rows > 0) { "editor page rows must be positive" }
+        }
+    }
+
+    data class SelectToken(
+        val offsetUtf16: Int,
+    ) : IdeEditorInput {
+        init {
+            require(offsetUtf16 >= 0) { "token offset must be non-negative" }
+        }
+    }
+
     data object Backspace : IdeEditorInput
 
     data object Delete : IdeEditorInput
 
+    data object DeleteWordBackward : IdeEditorInput
+
+    data object DeleteWordForward : IdeEditorInput
+
     data object Enter : IdeEditorInput
 
     data object Tab : IdeEditorInput
+
+    data object Outdent : IdeEditorInput
+
+    data object Cut : IdeEditorInput
 
     data object Undo : IdeEditorInput
 
@@ -51,6 +82,10 @@ sealed interface IdeEditorInput {
 
     data object SelectAll : IdeEditorInput
 }
+
+enum class IdeHorizontalDirection { Left, Right }
+
+enum class IdeVerticalDirection { Up, Down }
 
 enum class IdeMoveDirection {
     Left,
