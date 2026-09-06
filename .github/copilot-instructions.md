@@ -1,8 +1,8 @@
 # Copilot / agent instructions for Compukters
 
-All non-trivial work in this repo (anything that produces a commit on `dev` or `main`) MUST be bound to a GitHub issue that lives on the **Roadmap** project board. Use the `superpowers:using-github-roadmap` skill to create/select an issue, embed `Issue: #N` in every spec and plan header, move the issue through `Inbox → Backlog → Next → Now → Done`, and close it when the work is integrated.
+Architecturally significant work in this repo MUST be bound to a GitHub issue on the **Roadmap** project board. This includes new subsystems, cross-module capabilities, material component-boundary or public API/ABI changes, and work that requires a design specification or coordinated implementation stages. Use the `using-github-roadmap` skill to select or create the issue, link architecture specs and plans, and close the issue after integration and verification.
 
-If you are an agent reading this file: invoke `superpowers:using-github-roadmap` before invoking `brainstorming`, `writing-plans`, `executing-plans`, or `finishing-a-development-branch`.
+Localized bug fixes, documentation changes, test-only changes, mechanical refactors, routine chores, and read-only investigation do not require an issue unless the user explicitly asks for one.
 
 ## GitHub tooling
 

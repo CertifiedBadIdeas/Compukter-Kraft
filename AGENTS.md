@@ -57,6 +57,9 @@ Stage only files that belong to the current task, and never include unrelated us
 
 Respect user changes in the worktree. Prefer focused edits, run the narrowest useful verification, and update docs or
 active machine ABI references when behavior changes.
+Use the `using-github-roadmap` skill before architecturally significant work: new subsystems, cross-module capabilities,
+material component-boundary or public API/ABI changes, or work requiring a design specification or coordinated stages.
+Localized fixes, docs, tests, mechanical refactors, routine chores, and read-only investigation do not require an issue.
 Do not create Git worktrees in this repository. Perform all work in the user's current checkout and current branch.
 Keep temporary design specs and implementation plans under `.agents/tmp/specs/` and `.agents/tmp/plans/` respectively;
 do not place them under `docs/` or commit them unless the user explicitly requests publication.
