@@ -200,6 +200,53 @@ class IdeRendererStateTest {
     }
 
     @Test
+    fun `expression metadata does not override lexical code colors`() {
+        val source = "val values = intArrayOf(7, 11)"
+        val initializerStart = source.indexOf("intArrayOf")
+        val initializerEnd = source.length
+        val functionEnd = initializerStart + "intArrayOf".length
+        val document = EditorDocument(source)
+        val lexical = IncrementalKotlinHighlighter(document).use { it.snapshot() }
+        val identity = AnalysisSnapshotIdentity(SourceSnapshotId(Hash256.zero()), AnalysisProfileIdentity(Hash256.zero()))
+        val path = ProjectPath.file("src/main.kt")
+        val virtualPath = VirtualSourcePath.kotlin(path.value)
+        val presentation =
+            IdeAnalysisPresentation.of(
+                diagnostics = emptyList(),
+                semanticTokens =
+                    listOf(
+                        SemanticToken(virtualPath, EditorRange(initializerStart, initializerEnd), SemanticCategory.InferredExpression),
+                        SemanticToken(virtualPath, EditorRange(initializerStart, functionEnd), SemanticCategory.Function),
+                    ),
+            )
+        val editor =
+            IdeEditorView.Text(
+                path = path,
+                visibleLines = listOf(source),
+                visibleLineStartsUtf16 = listOf(0),
+                firstVisibleLine = 0,
+                firstVisibleColumn = 0,
+                totalLines = 1,
+                caretUtf16 = 0,
+                selectionStartUtf16 = null,
+                selectionEndUtf16 = null,
+                contentRevision = 1,
+                persistedContentRevision = 1,
+                dirty = false,
+                conflict = false,
+                lexical = lexical,
+                analysis = IdeAnalysisState.Active(identity, virtualPath, 1, presentation, null),
+            )
+
+        val model = IdeRenderer.extract(workspaceState(editor, IdeBuildState.Idle), geometry(TerminalFontProfile.COZETTE))
+
+        assertEquals(IdeTextStyle.Semantic(SemanticCategory.Function), model.sourceStyle("intArrayOf"))
+        assertEquals(IdeTextStyle.Lexical(KotlinLexicalKind.Operator), model.sourceStyle("("))
+        assertEquals(IdeTextStyle.Lexical(KotlinLexicalKind.Number), model.sourceStyle("7"))
+        assertEquals(IdeTextStyle.Lexical(KotlinLexicalKind.Operator), model.sourceStyle(")"))
+    }
+
+    @Test
     fun `confirmed declaration link has exact hyperlink draw and clipped underline`() {
         val source = "val answer = sample"
         val range = EditorRange(4, 10)
@@ -752,3 +799,5 @@ private fun IdeDrawModel.zOrdered(): Boolean {
             hitTargets.map { it.zIndex }
     return values.all { it >= 0 }
 }
+
+private fun IdeDrawModel.sourceStyle(value: String): IdeTextStyle = text.single { it.kind == IdeTextKind.Source && it.value == value }.style

@@ -587,6 +587,7 @@ internal object IdeRenderer {
                         ?.firstOrNull { token ->
                             projectPath != null &&
                                 token.path.value == projectPath.value &&
+                                token.category.contributesTextStyle() &&
                                 lineStart + start in token.range.startUtf16 until token.range.endUtf16
                         }?.category
                 val resolved =
@@ -1198,7 +1199,14 @@ internal object IdeRenderer {
 
             SemanticCategory.Function, SemanticCategory.ExtensionFunction -> IdeColors.FUNCTION
 
-            else -> IdeColors.PROPERTY
+            SemanticCategory.Property,
+            SemanticCategory.LocalVariable,
+            SemanticCategory.Parameter,
+            -> IdeColors.PROPERTY
+
+            SemanticCategory.InferredExpression,
+            SemanticCategory.SmartCastExpression,
+            -> IdeColors.TEXT
         }
 
     private fun diagnosticColor(severity: EditorDiagnosticSeverity): Int =
@@ -1245,3 +1253,6 @@ internal object IdeRenderer {
     private const val Z_DIALOG_TEXT = 110
     private const val Z_DIALOG_TARGET = 120
 }
+
+private fun SemanticCategory.contributesTextStyle(): Boolean =
+    this != SemanticCategory.InferredExpression && this != SemanticCategory.SmartCastExpression
