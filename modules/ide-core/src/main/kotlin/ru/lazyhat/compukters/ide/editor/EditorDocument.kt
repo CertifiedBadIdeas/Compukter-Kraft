@@ -507,6 +507,13 @@ class EditorDocument(
     private fun previousWordDeletionBoundary(offset: Int): Int {
         val lineIndex = lines.lineOfOffset(offset)
         val line = lines.line(lineIndex)
+        if (offset > line.startUtf16 && offset <= line.contentEndUtf16) {
+            var cursor = line.startUtf16
+            while (cursor < offset && wordCategory(codePointAt(cursor)) == WordCategory.Whitespace) {
+                cursor = nextCaretBoundary(cursor)
+            }
+            if (cursor == offset) return line.startUtf16
+        }
         if (offset == line.startUtf16 && lineIndex > 0) return lines.line(lineIndex - 1).contentEndUtf16
         return previousWordBoundary(offset)
     }

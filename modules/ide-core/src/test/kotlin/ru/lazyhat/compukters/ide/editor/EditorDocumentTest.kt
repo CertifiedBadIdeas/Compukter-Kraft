@@ -126,6 +126,19 @@ class EditorDocumentTest {
     }
 
     @Test
+    fun `word deletion backward on an autoindented empty line stops at its start`() {
+        val editor = EditorDocument("alpha\r\n\r\n    ")
+        assertTrue(editor.setCaret(editor.length))
+
+        assertIs<EditorEditResult.Applied>(editor.deleteWordBackward())
+
+        assertEquals("alpha\r\n\r\n", editor.materialize())
+        assertEquals(editor.length, editor.caretOffset)
+        assertIs<EditorEditResult.Applied>(editor.deleteWordBackward())
+        assertEquals("alpha\r\n", editor.materialize())
+    }
+
+    @Test
     fun `block indentation preserves selected text direction and is one undo step`() {
         val editor = EditorDocument("one\r\n  two\r\nthree")
         assertTrue(editor.setCaret("one\r\n  two".length))
