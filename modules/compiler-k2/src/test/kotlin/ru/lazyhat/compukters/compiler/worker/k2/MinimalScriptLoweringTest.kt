@@ -552,6 +552,58 @@ class MinimalScriptLoweringTest {
         }
 
     @Test
+    fun `specialized IntArray lowers to unboxed primitive array instructions`() =
+        withAdapter { adapter ->
+            val source =
+                """
+                fun next(value: Int): Int = value + 1
+
+                fun main() {
+                    val allocated = IntArray(2)
+                    allocated[0] = next(6)
+                    val literal = intArrayOf(next(8), next(10))
+                    allocated[1] = literal[0] + literal[1] + literal.size
+                    require(allocated.size == 2)
+                    require(allocated[0] == 7)
+                    require(allocated[1] == 22)
+                    IntArray(0)
+                    intArrayOf()
+                }
+                """.trimIndent()
+            val first = adapter.compile(request(source))
+            val second = adapter.compile(request(source))
+            val artifact = assertNotNull(first.artifact, first.diagnostics.joinToString()).toByteArray()
+            val application = ArtifactReader.read(artifact).modules.single { it.kind == ModuleKind.APPLICATION }
+            val instructions = application.blocks.flatMap(Block::instructions)
+
+            assertContentEquals(artifact, assertNotNull(second.artifact).toByteArray())
+            assertTrue(first.diagnostics.none { it.severity.name == "ERROR" }, first.diagnostics.toString())
+            assertTrue(instructions.count { it is Instruction.NewArray } >= 4)
+            assertTrue(instructions.any { it is Instruction.ArrayLength })
+            assertTrue(instructions.any { it is Instruction.ArrayLoad })
+            assertTrue(instructions.any { it is Instruction.ArrayStore })
+            assertTrue(instructions.none { it is Instruction.NewObject })
+        }
+
+    @Test
+    fun `unsupported IntArray forms publish no artifact`() =
+        withAdapter { adapter ->
+            listOf(
+                "fun main() { IntArray(2) { it } }",
+                "fun main() { arrayOf(1, 2) }",
+                "fun main() { val values = intArrayOf(1); for (value in values) value + 1 }",
+                "fun main() { val values = intArrayOf(1); values.indices }",
+                "fun main() { val values = intArrayOf(1); intArrayOf(*values) }",
+                "fun main() { LongArray(1) }",
+            ).forEach { source ->
+                val result = adapter.compile(request(source))
+
+                assertNull(result.artifact, source)
+                assertTrue(result.hasErrors, source)
+            }
+        }
+
+    @Test
     fun `suspend project call lowers deterministically for vm execution`() =
         withAdapter { adapter ->
             val request =

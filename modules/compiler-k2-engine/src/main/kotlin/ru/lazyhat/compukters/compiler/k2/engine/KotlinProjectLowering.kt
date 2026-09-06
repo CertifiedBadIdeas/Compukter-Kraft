@@ -454,12 +454,14 @@ private class InlineValueClassRegistry private constructor(
 internal object KotlinProjectLowering {
     private const val CHAR_ARRAY_RUNTIME_TYPE = 0u
     private const val STRING_RUNTIME_TYPE = 1u
+    private const val INT_ARRAY_RUNTIME_TYPE = 4u
     private val runtimeTypeNames =
         listOf(
             "kotlin.CharArray",
             "kotlin.String",
             "kotlin.Throwable",
             "runtime.IllegalArgumentException",
+            "kotlin.IntArray",
         )
 
     fun lower(
@@ -637,6 +639,7 @@ internal object KotlinProjectLowering {
         val libraryHash = ArtifactWriter.moduleSemanticHash(library)
         val charArrayType = ValueType.Ref(nullable = false, type = TypeRef.Imported(ImportId.of(CHAR_ARRAY_RUNTIME_TYPE)))
         val stringType = ValueType.Ref(nullable = false, type = TypeRef.Imported(ImportId.of(STRING_RUNTIME_TYPE)))
+        val intArrayType = ValueType.Ref(nullable = false, type = TypeRef.Imported(ImportId.of(INT_ARRAY_RUNTIME_TYPE)))
         val functionIds = userFunctions.withIndex().associate { (index, function) -> function.symbol to FunctionId.of(index.toUInt()) }
         val functionTypeIds = userFunctions.withIndex().associate { (index, function) -> function.symbol to TypeId.of(index.toUInt()) }
         val constructorFunctionIds =
@@ -730,11 +733,13 @@ internal object KotlinProjectLowering {
                     blockBase = firstBlock,
                     stringType = stringType,
                     charArrayType = charArrayType,
+                    intArrayType = intArrayType,
                     stringArrayType = stringArrayType,
                     guestTypes = guestTypes,
                     unitType = pluginContext.irBuiltIns.unitType,
                     kotlinStringType = pluginContext.irBuiltIns.stringType,
                     kotlinCharArrayClass = pluginContext.irBuiltIns.charArray,
+                    kotlinIntArrayClass = pluginContext.irBuiltIns.intArray,
                     intType = pluginContext.irBuiltIns.intType,
                     booleanType = pluginContext.irBuiltIns.booleanType,
                     charType = pluginContext.irBuiltIns.charType,
@@ -1222,6 +1227,7 @@ internal object KotlinProjectLowering {
         fun isSupported(type: IrType): Boolean =
             type in supported || type.isNothing() ||
                 type.isExactClass(pluginContext.irBuiltIns.charArray) ||
+                type.isExactClass(pluginContext.irBuiltIns.intArray) ||
                 guestTypes.isStringArray(type) ||
                 (
                     !type.isNullable() &&
@@ -1276,6 +1282,8 @@ internal object KotlinProjectLowering {
                     ValueType.Unit
                 } else if (type.isExactClass(pluginContext.irBuiltIns.charArray)) {
                     charArrayType
+                } else if (type.isExactClass(pluginContext.irBuiltIns.intArray)) {
+                    ValueType.Ref(nullable = false, type = TypeRef.Imported(ImportId.of(INT_ARRAY_RUNTIME_TYPE)))
                 } else if (guestTypes.isStringArray(type)) {
                     stringArrayType
                 } else if (type is IrSimpleType && type.classifier is IrClassSymbol) {
@@ -1407,13 +1415,14 @@ internal object KotlinProjectLowering {
             name = StringId.of(0u),
             kind = ModuleKind.LIBRARY,
             strings =
-                runtimeTypeNames.map(MetadataText::of),
+                runtimeTypeNames.map(MetadataText::of).sorted(),
             types =
                 listOf(
                     NominalType.Array(name = StringId.of(0u), element = ValueType.Char),
-                    NominalType.Class(name = StringId.of(1u), final = true),
-                    NominalType.Class(name = StringId.of(2u)),
-                    NominalType.Class(name = StringId.of(3u), final = true, superType = TypeRef.Local(TypeId.of(2u))),
+                    NominalType.Class(name = StringId.of(2u), final = true),
+                    NominalType.Class(name = StringId.of(3u)),
+                    NominalType.Class(name = StringId.of(4u), final = true, superType = TypeRef.Local(TypeId.of(2u))),
+                    NominalType.Array(name = StringId.of(1u), element = ValueType.I32),
                 ),
             exports =
                 listOf(
@@ -1427,23 +1436,30 @@ internal object KotlinProjectLowering {
                     Export(
                         kind = SymbolKind.TYPE,
                         visibility = ExportVisibility.PUBLIC_LIBRARY,
-                        name = StringId.of(1u),
+                        name = StringId.of(2u),
                         localSymbol = 1u,
                         signature = TypeRef.Local(TypeId.of(1u)),
                     ),
                     Export(
                         kind = SymbolKind.TYPE,
                         visibility = ExportVisibility.PUBLIC_LIBRARY,
-                        name = StringId.of(2u),
+                        name = StringId.of(3u),
                         localSymbol = 2u,
                         signature = TypeRef.Local(TypeId.of(2u)),
                     ),
                     Export(
                         kind = SymbolKind.TYPE,
                         visibility = ExportVisibility.PUBLIC_LIBRARY,
-                        name = StringId.of(3u),
+                        name = StringId.of(4u),
                         localSymbol = 3u,
                         signature = TypeRef.Local(TypeId.of(3u)),
+                    ),
+                    Export(
+                        kind = SymbolKind.TYPE,
+                        visibility = ExportVisibility.PUBLIC_LIBRARY,
+                        name = StringId.of(1u),
+                        localSymbol = 4u,
+                        signature = TypeRef.Local(TypeId.of(4u)),
                     ),
                 ),
         )
@@ -1677,11 +1693,13 @@ private class FunctionCompiler(
     private val blockBase: Int,
     private val stringType: ValueType,
     private val charArrayType: ValueType,
+    private val intArrayType: ValueType,
     private val stringArrayType: ValueType,
     private val guestTypes: GuestTypeRegistry,
     private val unitType: IrType,
     private val kotlinStringType: IrType,
     private val kotlinCharArrayClass: IrClassSymbol,
+    private val kotlinIntArrayClass: IrClassSymbol,
     private val intType: IrType,
     private val booleanType: IrType,
     private val charType: IrType,
@@ -1918,6 +1936,17 @@ private class FunctionCompiler(
                 emit(Instruction.NewArray(destination, (charArrayType as ValueType.Ref).type, length))
             }
         }
+        if (target.parentAsClass.symbol == kotlinIntArrayClass &&
+            call.type.isExactClass(kotlinIntArrayClass) &&
+            arguments.size == 1 &&
+            arguments[0].type == intType
+        ) {
+            val length = compileExpression(arguments.single())
+            prepareAllocationBlock()
+            return allocate(intArrayType).also { destination ->
+                emit(Instruction.NewArray(destination, (intArrayType as ValueType.Ref).type, length))
+            }
+        }
         if (call.type == kotlinStringType &&
             arguments.size == 3 &&
             arguments[0].type.isExactClass(kotlinCharArrayClass) &&
@@ -2089,6 +2118,7 @@ private class FunctionCompiler(
                 emit(Instruction.FieldGet(destination, receiver, FieldRef.Imported(field.importId)))
             }
         }
+        compileIntArrayFactory(call, target)?.let { return it }
         compileStringArrayFactory(call, target)?.let { return it }
         trustedIntrinsic(target)?.let { intrinsic ->
             val arguments =
@@ -2246,6 +2276,38 @@ private class FunctionCompiler(
         return array
     }
 
+    @OptIn(UnsafeDuringIrConstructionAPI::class)
+    private fun compileIntArrayFactory(
+        call: IrCall,
+        target: IrSimpleFunction,
+    ): RegisterId? {
+        if (!call.type.isExactClass(kotlinIntArrayClass) || target.fqNameWhenAvailable?.asString() != "kotlin.intArrayOf") {
+            return null
+        }
+        val arguments = call.arguments.filterNotNull()
+        val elements =
+            if (arguments.isEmpty()) {
+                emptyList()
+            } else {
+                val vararg =
+                    arguments.singleOrNull() as? IrVararg
+                        ?: throw UnsupportedKotlinIr(call, "intArrayOf requires a direct vararg")
+                vararg.elements.map { element ->
+                    element as? IrExpression
+                        ?: throw UnsupportedKotlinIr(call, "spread intArrayOf arguments are outside the project subset")
+                }
+            }
+        val values = elements.map(::compileExpression)
+        val length = emitI32Constant(elements.size, call)
+        prepareAllocationBlock()
+        val array = allocate(intArrayType)
+        emit(Instruction.NewArray(array, (intArrayType as ValueType.Ref).type, length))
+        values.forEachIndexed { index, value ->
+            emit(Instruction.ArrayStore(array, emitI32Constant(index, call), value))
+        }
+        return array
+    }
+
     private fun emitI32Constant(
         value: Int,
         element: IrElement,
@@ -2391,6 +2453,13 @@ private class FunctionCompiler(
         ) {
             return result(ValueType.I32) { Instruction.ArrayLength(it, arguments[0]) }
         }
+        if (arguments.size == 1 &&
+            argumentExpressions[0].type.isExactClass(kotlinIntArrayClass) &&
+            name == "<get-size>" &&
+            fqName == "kotlin.IntArray.<get-size>"
+        ) {
+            return result(ValueType.I32) { Instruction.ArrayLength(it, arguments[0]) }
+        }
         if (arguments.size == 1 && guestTypes.isStringArray(argumentExpressions[0].type) && name == "<get-size>") {
             return result(ValueType.I32) { Instruction.ArrayLength(it, arguments[0]) }
         }
@@ -2401,6 +2470,13 @@ private class FunctionCompiler(
         ) {
             return result(ValueType.Char) { Instruction.ArrayLoad(it, arguments[0], arguments[1]) }
         }
+        if (arguments.size == 2 &&
+            argumentExpressions[0].type.isExactClass(kotlinIntArrayClass) &&
+            name == "get" &&
+            fqName == "kotlin.IntArray.get"
+        ) {
+            return result(ValueType.I32) { Instruction.ArrayLoad(it, arguments[0], arguments[1]) }
+        }
         if (arguments.size == 2 && guestTypes.isStringArray(argumentExpressions[0].type) && name == "get") {
             return result(stringType) { Instruction.ArrayLoad(it, arguments[0], arguments[1]) }
         }
@@ -2408,6 +2484,14 @@ private class FunctionCompiler(
             argumentExpressions[0].type.isExactClass(kotlinCharArrayClass) &&
             name == "set" &&
             fqName == "kotlin.CharArray.set"
+        ) {
+            emit(Instruction.ArrayStore(arguments[0], arguments[1], arguments[2]))
+            return null
+        }
+        if (arguments.size == 3 &&
+            argumentExpressions[0].type.isExactClass(kotlinIntArrayClass) &&
+            name == "set" &&
+            fqName == "kotlin.IntArray.set"
         ) {
             emit(Instruction.ArrayStore(arguments[0], arguments[1], arguments[2]))
             return null
@@ -2839,6 +2923,8 @@ private class FunctionCompiler(
                     ValueType.Unit
                 } else if (type.isExactClass(kotlinCharArrayClass)) {
                     charArrayType
+                } else if (type.isExactClass(kotlinIntArrayClass)) {
+                    intArrayType
                 } else if (guestTypes.isStringArray(type)) {
                     stringArrayType
                 } else if (type is IrSimpleType && type.classifier is IrClassSymbol) {
@@ -3014,7 +3100,7 @@ private class LiteralCollector(
         }
         if (fqName == "kotlin.emptyArray") {
             values += 0
-        } else if (fqName == "kotlin.arrayOf") {
+        } else if (fqName == "kotlin.arrayOf" || fqName == "kotlin.intArrayOf") {
             val size = (expression.arguments.filterNotNull().singleOrNull() as? IrVararg)?.elements?.size
             if (size != null) values.addAll(0..size)
         } else if (fqName == "kotlin.collections.copyOfRange") {
