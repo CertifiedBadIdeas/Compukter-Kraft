@@ -279,7 +279,7 @@ class EditorDocument(
         selectionRange?.let { return replace(it, "", EditorHistoryKind.Atomic, EditorChangeOrigin.User) }
         if (caretOffset == 0) return EditorEditResult.NoChange
         return replace(
-            EditorRange(previousWordBoundary(caretOffset), caretOffset),
+            EditorRange(previousWordDeletionBoundary(caretOffset), caretOffset),
             "",
             EditorHistoryKind.Atomic,
             EditorChangeOrigin.User,
@@ -502,6 +502,13 @@ class EditorDocument(
             cursor = previous
         }
         return cursor
+    }
+
+    private fun previousWordDeletionBoundary(offset: Int): Int {
+        val lineIndex = lines.lineOfOffset(offset)
+        val line = lines.line(lineIndex)
+        if (offset == line.startUtf16 && lineIndex > 0) return lines.line(lineIndex - 1).contentEndUtf16
+        return previousWordBoundary(offset)
     }
 
     private fun nextWordBoundary(offset: Int): Int {

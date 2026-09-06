@@ -112,6 +112,20 @@ class EditorDocumentTest {
     }
 
     @Test
+    fun `word deletion backward at an empty line removes only its preceding separator`() {
+        val source = "alpha\r\n\r\n\r\nomega"
+        val editor = EditorDocument(source)
+        assertTrue(editor.setCaret("alpha\r\n\r\n".length))
+
+        assertIs<EditorEditResult.Applied>(editor.deleteWordBackward())
+
+        assertEquals("alpha\r\n\r\nomega", editor.materialize())
+        assertEquals("alpha\r\n".length, editor.caretOffset)
+        assertIs<EditorEditResult.Applied>(editor.undo())
+        assertEquals(source, editor.materialize())
+    }
+
+    @Test
     fun `block indentation preserves selected text direction and is one undo step`() {
         val editor = EditorDocument("one\r\n  two\r\nthree")
         assertTrue(editor.setCaret("one\r\n  two".length))
