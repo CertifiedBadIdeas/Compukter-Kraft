@@ -55,6 +55,12 @@ interface AnalysisRequestCoordinator : AutoCloseable {
         offsetUtf16: Int,
     ): CompletableFuture<AnalysisClientResult> = unsupportedInteractiveRequest()
 
+    fun format(
+        path: VirtualSourcePath,
+        source: String,
+        caretOffsetUtf16: Int,
+    ): CompletableFuture<AnalysisClientResult> = unsupportedInteractiveRequest()
+
     fun cancelPointerInteraction() = Unit
 }
 
@@ -223,6 +229,19 @@ class DefaultAnalysisRequestCoordinator(
         oldNavigation?.let(client::cancel)
         completeNavigation(expected, future, result)
         return result
+    }
+
+    override fun format(
+        path: VirtualSourcePath,
+        source: String,
+        caretOffsetUtf16: Int,
+    ): CompletableFuture<AnalysisClientResult> {
+        val current =
+            synchronized(lock) {
+                check(!closed) { "analysis request coordinator is closed" }
+                checkNotNull(snapshot) { "analysis snapshot is not open" }
+            }
+        return client.query(current, AnalysisQuery.Format(current.identity, path, source, caretOffsetUtf16))
     }
 
     override fun cancelPointerInteraction() {

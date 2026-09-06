@@ -18,6 +18,7 @@
 
 package ru.lazyhat.compukters.ide.client.state
 
+import ru.lazyhat.compukters.ide.analysis.controller.AnalysisClientResult
 import ru.lazyhat.compukters.ide.client.analysis.IdeCompletionSelection
 import ru.lazyhat.compukters.ide.client.analysis.IdeDeclarationOutcome
 import ru.lazyhat.compukters.ide.client.build.IdeBuildState
@@ -116,6 +117,14 @@ sealed interface IdeEvent {
         val result: IdeSaveResult,
     ) : IdeEvent
 
+    data class FormatCompleted(
+        val generation: Long,
+        val operationId: Long,
+        val path: ProjectPath,
+        val editorRevision: Long,
+        val result: AnalysisClientResult,
+    ) : IdeEvent
+
     data class DeleteAdmitted(
         val generation: Long,
         val operationId: Long,
@@ -202,6 +211,7 @@ internal fun IdeEvent.copyForQueue(): IdeEvent =
         is IdeEvent.FileOpened,
         is IdeEvent.DeclarationResolved,
         is IdeEvent.SaveCompleted,
+        is IdeEvent.FormatCompleted,
         is IdeEvent.DeleteAdmitted,
         is IdeEvent.MutationCompleted,
         is IdeEvent.ComputerImportCompleted,

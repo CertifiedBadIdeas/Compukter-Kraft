@@ -20,6 +20,9 @@ package ru.lazyhat.compukters.ide.client.controller
 
 import ru.lazyhat.compukters.compiler.worker.protocol.VirtualSourcePath
 import ru.lazyhat.compukters.ide.analysis.AnalysisModuleIdentity
+import ru.lazyhat.compukters.ide.analysis.AnalysisResult
+import ru.lazyhat.compukters.ide.analysis.controller.AnalysisClientResult
+import ru.lazyhat.compukters.ide.analysis.protocol.AnalysisFailureKind
 import ru.lazyhat.compukters.ide.client.IdeClientLimits
 import ru.lazyhat.compukters.ide.client.analysis.IdeAnalysisCoordinator
 import ru.lazyhat.compukters.ide.client.analysis.IdeAnalysisState
@@ -152,6 +155,7 @@ class IdeClientController(
     private var latestOpenOperation = 0L
     private var latestDeclarationOperation = 0L
     private var latestSaveOperation = 0L
+    private var latestFormatOperation = 0L
     private var latestMutationOperation = 0L
     private var latestComputerImportOperation = 0L
     private var pendingFile: ProjectPath? = null
@@ -160,6 +164,7 @@ class IdeClientController(
     private var openingProjectNavigation: PendingProjectNavigation? = null
     private var pendingProjectDirectory: String? = null
     private var pendingSave = false
+    private var pendingFormatSave = false
     private var rememberedFile: ProjectPath? = null
     private var closeRequested = false
     private var closeReady = false
@@ -299,7 +304,7 @@ class IdeClientController(
             }
 
             IdeCommand.Save -> {
-                requestSave()
+                requestFormatAndSave()
             }
 
             IdeCommand.Poll -> {
@@ -314,8 +319,9 @@ class IdeClientController(
                 closeRequested = true
                 val active = editor
                 when {
-                    active == null || !active.dirty -> closeReady = true
+                    active == null || (!active.dirty && active.formatInFlight == null) -> closeReady = true
                     active.conflict -> showConflictDialog(closing = true)
+                    active.formatInFlight != null -> pendingSave = true
                     else -> requestSave()
                 }
             }
@@ -443,7 +449,7 @@ class IdeClientController(
         refreshComputerFiles()
         val active = editor
         if (
-            active != null && active.dirty && !active.conflict && active.saveInFlight == null &&
+            active != null && active.dirty && !active.conflict && active.saveInFlight == null && active.formatInFlight == null &&
             clock.nowMillis() - active.lastEditMillis >= AUTOSAVE_DELAY_MILLIS
         ) {
             requestSave()
@@ -534,6 +540,8 @@ class IdeClientController(
         project?.let { persistPreferences(editor?.path ?: binary?.path) }
         cancelBuildJobs()
         pendingBuildAction = null
+        pendingSave = false
+        pendingFormatSave = false
         buildState = IdeBuildState.Idle
         editor?.close()
         editor = null
@@ -973,6 +981,10 @@ class IdeClientController(
             pendingSave = true
             return
         }
+        if (active.formatInFlight != null) {
+            pendingSave = true
+            return
+        }
         if (!active.dirty || active.conflict || active.saveInFlight != null) return
         val operationId = nextOperationId++
         latestSaveOperation = operationId
@@ -996,6 +1008,57 @@ class IdeClientController(
                 enqueueFailure(requestGeneration, IdeBusyOperation.Save, failure)
             }
         }
+    }
+
+    private fun requestFormatAndSave() {
+        if (attachedSourcePreview != null || computerPreview != null) {
+            requestSave()
+            return
+        }
+        val active = editor ?: return
+        if (!active.path.isKotlinSource) {
+            requestSave()
+            return
+        }
+        if (IdeBusyOperation.Project in state.busy || active.saveInFlight != null || active.formatInFlight != null) {
+            pendingFormatSave = true
+            return
+        }
+        if (active.conflict) return
+        val analysis = analysisCoordinator
+        if (analysis == null) {
+            publishStatus("Kotlin formatter unavailable; saved without formatting", IdeProblemSeverity.Warning)
+            requestSave()
+            return
+        }
+        val operationId = nextOperationId++
+        latestFormatOperation = operationId
+        val submittedRevision = active.document.revision
+        val source = active.document.materialize()
+        val path = active.path
+        val requestGeneration = generation
+        active.formatInFlight = submittedRevision
+        state = state.copy(busy = state.busy + IdeBusyOperation.Save)
+        publishWorkspace()
+        analysis
+            .format(
+                VirtualSourcePath.kotlin(path.value),
+                source,
+                active.document.caretOffset,
+                submittedRevision,
+            ).whenComplete { result, failure ->
+                val outcome =
+                    if (failure == null && result != null) {
+                        result
+                    } else {
+                        val actual = (failure as? CompletionException)?.cause ?: failure
+                        AnalysisClientResult.Failure(
+                            AnalysisFailureKind.InternalAnalysis,
+                            actual?.message ?: "Kotlin formatter failed",
+                        )
+                    }
+                enqueue(IdeEvent.FormatCompleted(requestGeneration, operationId, path, submittedRevision, outcome))
+            }
     }
 
     private fun requestPoll() {
@@ -1030,10 +1093,10 @@ class IdeClientController(
         state = state.copy(busy = state.busy + busy)
         publishWorkspace()
         val active = editor
-        if (active != null && active.dirty) {
+        if (active != null && (active.dirty || active.formatInFlight != null)) {
             if (active.conflict) {
                 failPendingBuild(IdeBuildFailureKind.Conflict, "save conflict must be resolved before build")
-            } else {
+            } else if (active.formatInFlight == null) {
                 requestSave()
             }
             return
@@ -1139,6 +1202,8 @@ class IdeClientController(
             is IdeEvent.DeclarationResolved -> acceptDeclaration(event)
 
             is IdeEvent.SaveCompleted -> acceptSave(event)
+
+            is IdeEvent.FormatCompleted -> acceptFormat(event)
 
             is IdeEvent.DeleteAdmitted -> acceptDeleteAdmitted(event)
 
@@ -1372,7 +1437,76 @@ class IdeClientController(
         publishWorkspace()
         if (active.conflict) showConflictDialog(closeRequested)
         if (closeRequested && !active.dirty) closeReady = true
+        continuePendingSave()
         continuePendingNavigation()
+        continuePendingBuild()
+    }
+
+    private fun acceptFormat(event: IdeEvent.FormatCompleted) {
+        if (event.operationId != latestFormatOperation) return
+        val active = editor ?: return
+        if (active.path != event.path || active.formatInFlight != event.editorRevision) return
+        active.formatInFlight = null
+        state = state.copy(busy = state.busy - IdeBusyOperation.Save)
+        if (active.document.revision != event.editorRevision) {
+            if (pendingFormatSave) {
+                pendingFormatSave = false
+                requestFormatAndSave()
+            } else {
+                pendingSave = false
+                requestSave()
+            }
+            return
+        }
+        pendingFormatSave = false
+        when (val result = event.result) {
+            is AnalysisClientResult.Success -> {
+                val formatted = result.result as? AnalysisResult.Format
+                if (formatted == null) {
+                    formatFailed("analysis worker returned an unexpected result")
+                    return
+                }
+                when (active.document.replaceAll(formatted.source, formatted.caretOffsetUtf16)) {
+                    is EditorEditResult.Applied,
+                    EditorEditResult.NoChange,
+                    -> {
+                        Unit
+                    }
+
+                    is EditorEditResult.Rejected -> {
+                        formatFailed("formatted source was rejected by the editor")
+                        return
+                    }
+                }
+            }
+
+            is AnalysisClientResult.Failure -> {
+                formatFailed(result.detail)
+                return
+            }
+
+            AnalysisClientResult.Cancelled,
+            AnalysisClientResult.Stale,
+            -> {
+                formatFailed("format request did not complete")
+                return
+            }
+        }
+        pendingSave = false
+        requestSave()
+        if (closeRequested && !active.dirty && active.saveInFlight == null) closeReady = true
+        continuePendingBuild()
+    }
+
+    private fun formatFailed(detail: String) {
+        publishStatus(
+            "Kotlin formatting failed: ${detail.boundedUtf8(limits.statusUtf8Bytes)}; saved without formatting",
+            IdeProblemSeverity.Warning,
+        )
+        pendingSave = false
+        requestSave()
+        val active = editor
+        if (closeRequested && active != null && !active.dirty && active.saveInFlight == null) closeReady = true
         continuePendingBuild()
     }
 
@@ -1664,6 +1798,12 @@ class IdeClientController(
     }
 
     private fun continuePendingSave() {
+        if (pendingFormatSave) {
+            pendingFormatSave = false
+            pendingSave = false
+            requestFormatAndSave()
+            return
+        }
         if (!pendingSave) return
         pendingSave = false
         requestSave()
@@ -1676,7 +1816,7 @@ class IdeClientController(
             failPendingBuild(IdeBuildFailureKind.Conflict, "save conflict must be resolved before build")
             return
         }
-        if (active?.dirty == true || active?.saveInFlight != null) return
+        if (active?.dirty == true || active?.saveInFlight != null || active?.formatInFlight != null) return
         val selected = project ?: return
         loadBuildInput(selected, pending.operationId, pending.action, pending.target)
     }
@@ -2376,6 +2516,8 @@ class IdeClientController(
         cancelComputerTransfer()
         cancelBuildJobs()
         pendingBuildAction = null
+        pendingSave = false
+        pendingFormatSave = false
         buildState = IdeBuildState.Idle
         editor?.close()
         editor = null
@@ -2468,6 +2610,7 @@ class IdeClientController(
         val smartTyping = KotlinSmartTyping(document, highlighter)
         var persistedRevision = document.revision
         var saveInFlight: Long? = null
+        var formatInFlight: Long? = null
         var conflict = false
         var lastEditMillis = 0L
         var firstVisibleLine = 0
@@ -2590,6 +2733,8 @@ private fun IdeEvent.generationOrNull(): Long? =
         is IdeEvent.DeclarationResolved -> generation
 
         is IdeEvent.SaveCompleted -> generation
+
+        is IdeEvent.FormatCompleted -> generation
 
         is IdeEvent.DeleteAdmitted -> generation
 

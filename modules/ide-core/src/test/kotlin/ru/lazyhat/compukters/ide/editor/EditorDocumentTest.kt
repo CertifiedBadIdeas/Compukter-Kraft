@@ -281,6 +281,25 @@ class EditorDocumentTest {
     }
 
     @Test
+    fun `whole document replacement preserves the mapped caret as one undoable edit`() {
+        val initial = "fun main(){println(1)}"
+        val formatted = "fun main() {\n    println(1)\n}\n"
+        val editor = EditorDocument(initial)
+        editor.setCaret(initial.indexOf("println"))
+
+        assertIs<EditorEditResult.Applied>(editor.replaceAll(formatted, formatted.indexOf("println")))
+        assertEquals(formatted, editor.materialize())
+        assertEquals(formatted.indexOf("println"), editor.caretOffset)
+        assertEquals(1, editor.undoEntryCount)
+
+        assertIs<EditorEditResult.Applied>(editor.undo())
+        assertEquals(initial, editor.materialize())
+        assertEquals(initial.indexOf("println"), editor.caretOffset)
+        assertIs<EditorEditResult.Applied>(editor.redo())
+        assertEquals(formatted.indexOf("println"), editor.caretOffset)
+    }
+
+    @Test
     fun `compound replacement applies import and symbol as one undoable edit`() {
         val initial = "package application\n\nfun main() { Rem }"
         val editor = EditorDocument(initial)

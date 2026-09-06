@@ -191,6 +191,29 @@ class EditorDocument(
         text: String,
     ): EditorEditResult = replace(range, text, EditorHistoryKind.Atomic, EditorChangeOrigin.User)
 
+    fun replaceAll(
+        text: String,
+        caretOffsetUtf16: Int,
+    ): EditorEditResult {
+        if (
+            caretOffsetUtf16 !in 0..text.length ||
+            (
+                caretOffsetUtf16 > 0 &&
+                    caretOffsetUtf16 < text.length &&
+                    Character.isHighSurrogate(text[caretOffsetUtf16 - 1]) &&
+                    Character.isLowSurrogate(text[caretOffsetUtf16])
+            )
+        ) {
+            return EditorEditResult.Rejected(EditorRejection.InvalidRange)
+        }
+        if (contentEquals(text)) {
+            setCaret(caretOffsetUtf16)
+            return EditorEditResult.NoChange
+        }
+        val caret = EditorSelection(caretOffsetUtf16, caretOffsetUtf16)
+        return replace(EditorRange(0, length), text, EditorHistoryKind.Atomic, EditorChangeOrigin.User, caret)
+    }
+
     fun replaceRanges(
         primaryRange: EditorRange,
         primaryText: String,

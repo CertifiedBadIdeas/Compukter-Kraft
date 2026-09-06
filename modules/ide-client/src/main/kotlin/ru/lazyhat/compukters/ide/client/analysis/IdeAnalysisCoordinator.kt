@@ -290,6 +290,29 @@ class IdeAnalysisCoordinator(
         request?.let { requests.manualCompletion(it.path, it.offsetUtf16) }
     }
 
+    fun format(
+        path: VirtualSourcePath,
+        source: String,
+        caretOffsetUtf16: Int,
+        documentRevision: Long,
+    ): CompletableFuture<AnalysisClientResult> =
+        try {
+            val current =
+                synchronized(lock) {
+                    check(!closed) { "analysis coordinator is closed" }
+                    val active = checkNotNull(session) { "analysis source is not open" }
+                    check(
+                        active.path == path &&
+                            active.text == source &&
+                            active.documentRevision == documentRevision,
+                    ) { "analysis source changed before formatting" }
+                    active
+                }
+            requests.format(current.path, source, caretOffsetUtf16)
+        } catch (failure: RuntimeException) {
+            CompletableFuture.failedFuture(failure)
+        }
+
     fun pointerMoved(
         tokenRange: EditorRange?,
         offsetUtf16: Int?,
@@ -644,6 +667,7 @@ class IdeAnalysisCoordinator(
             is AnalysisResult.Declaration,
             is AnalysisResult.ExpressionInfo,
             is AnalysisResult.References,
+            is AnalysisResult.Format,
             -> {}
         }
     }

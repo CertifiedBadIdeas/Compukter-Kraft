@@ -39,6 +39,7 @@ import ru.lazyhat.compukters.ide.analysis.controller.AnalysisClientResult
 import ru.lazyhat.compukters.ide.analysis.controller.AnalysisRequestCoordinator
 import ru.lazyhat.compukters.ide.analysis.controller.AnalysisResultSink
 import ru.lazyhat.compukters.ide.analysis.protocol.AdmittedAnalysisProfile
+import ru.lazyhat.compukters.ide.analysis.protocol.AnalysisFailureKind
 import ru.lazyhat.compukters.ide.analysis.protocol.AnalysisLimits
 import ru.lazyhat.compukters.ide.client.analysis.IdeAnalysisCoordinator
 import ru.lazyhat.compukters.ide.client.analysis.IdeAnalysisInputLoader
@@ -66,6 +67,122 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class IdeAnalysisFlowTest {
+    @Test
+    fun `explicit save formats Kotlin atomically before persisting`() {
+        val requests = FlowAnalysisRequests()
+        val fixture =
+            ControllerFixture(preferences("demo", "src/main.kt"), analysisCoordinatorFactory = { workspace ->
+                coordinator(workspace, requests)
+            })
+        fixture.startAndTick()
+        val source = "fun main(){println(1)}"
+        val formatted = "fun main() {\n    println(1)\n}\n"
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SelectAll))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type(source)))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SetCaret(source.indexOf("println"), false)))
+
+        fixture.controller.dispatch(IdeCommand.Save)
+
+        assertTrue(fixture.workspace.saveRequests.isEmpty())
+        assertEquals(source, requests.formatRequests.single().source)
+        assertEquals(source.indexOf("println"), requests.formatRequests.single().caretOffsetUtf16)
+        requests.completeFormat(formatted, formatted.indexOf("println"))
+        fixture.controller.tick()
+
+        assertEquals(listOf("fun main() {", "    println(1)", "}", ""), fixture.textEditor().visibleLines)
+        assertEquals(formatted.indexOf("println"), fixture.textEditor().caretUtf16)
+        assertEquals(
+            formatted,
+            fixture.workspace.saveRequests
+                .single()
+                .text,
+        )
+        fixture.workspace.completeSave()
+        fixture.controller.tick()
+        assertTrue(!fixture.textEditor().dirty)
+        fixture.controller.close()
+    }
+
+    @Test
+    fun `stale format result never overwrites newer typing and saves the latest text`() {
+        val requests = FlowAnalysisRequests()
+        val fixture =
+            ControllerFixture(preferences("demo", "src/main.kt"), analysisCoordinatorFactory = { workspace ->
+                coordinator(workspace, requests)
+            })
+        fixture.startAndTick()
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SelectAll))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type("fun main(){}")))
+        fixture.controller.dispatch(IdeCommand.Save)
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type(" // newer")))
+
+        requests.completeFormat("fun main() {\n}\n", 13)
+        fixture.controller.tick()
+
+        assertEquals("fun main(){} // newer", fixture.textEditor().visibleLines.single())
+        assertEquals(
+            "fun main(){} // newer",
+            fixture.workspace.saveRequests
+                .single()
+                .text,
+        )
+        fixture.controller.close()
+    }
+
+    @Test
+    fun `format failure warns and saves the unformatted Kotlin source`() {
+        val requests = FlowAnalysisRequests()
+        val fixture =
+            ControllerFixture(preferences("demo", "src/main.kt"), analysisCoordinatorFactory = { workspace ->
+                coordinator(workspace, requests)
+            })
+        fixture.startAndTick()
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SelectAll))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type("fun main(){}")))
+        fixture.controller.dispatch(IdeCommand.Save)
+
+        requests.failFormat("syntactically incomplete")
+        fixture.controller.tick()
+
+        assertEquals(
+            "fun main(){}",
+            fixture.workspace.saveRequests
+                .single()
+                .text,
+        )
+        assertTrue(
+            fixture
+                .workspaceView()
+                .status
+                ?.message
+                .orEmpty()
+                .contains("saved without formatting"),
+        )
+        fixture.controller.close()
+    }
+
+    @Test
+    fun `explicit save leaves non-Kotlin text outside the formatter`() {
+        val requests = FlowAnalysisRequests()
+        val fixture =
+            ControllerFixture(preferences("demo", "notes.txt"), analysisCoordinatorFactory = { workspace ->
+                coordinator(workspace, requests)
+            })
+        fixture.startAndTick()
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type(" unformatted")))
+
+        fixture.controller.dispatch(IdeCommand.Save)
+
+        assertTrue(requests.formatRequests.isEmpty())
+        assertEquals(
+            " unformattednotes",
+            fixture.workspace.saveRequests
+                .single()
+                .text,
+        )
+        fixture.controller.close()
+    }
+
     @Test
     fun `completion Tab is atomic while Tab without popup indents and manual has priority`() {
         val requests = FlowAnalysisRequests()
@@ -251,13 +368,18 @@ private class FlowAnalysisRequests : AnalysisRequestCoordinator {
     lateinit var sink: AnalysisResultSink
     val automaticOffsets = mutableListOf<Int>()
     val manualOffsets = mutableListOf<Int>()
+    val formatRequests = mutableListOf<FlowFormatRequest>()
+    private var snapshot: AdmittedAnalysisSnapshot? = null
+    private var formatFuture: CompletableFuture<AnalysisClientResult>? = null
 
     fun publish(result: AnalysisClientResult) = sink.publish(result)
 
     override fun sourceChanged(
         snapshot: AdmittedAnalysisSnapshot,
         activePath: VirtualSourcePath,
-    ) = Unit
+    ) {
+        this.snapshot = snapshot
+    }
 
     override fun automaticCompletion(
         path: VirtualSourcePath,
@@ -274,8 +396,39 @@ private class FlowAnalysisRequests : AnalysisRequestCoordinator {
         return CompletableFuture()
     }
 
+    override fun format(
+        path: VirtualSourcePath,
+        source: String,
+        caretOffsetUtf16: Int,
+    ): CompletableFuture<AnalysisClientResult> {
+        val identity = checkNotNull(snapshot).identity
+        formatRequests += FlowFormatRequest(identity, path, source, caretOffsetUtf16)
+        return CompletableFuture<AnalysisClientResult>().also { formatFuture = it }
+    }
+
+    fun completeFormat(
+        source: String,
+        caretOffsetUtf16: Int,
+    ) {
+        val request = formatRequests.last()
+        checkNotNull(formatFuture).complete(
+            AnalysisClientResult.Success(AnalysisResult.Format.create(request.identity, source, caretOffsetUtf16)),
+        )
+    }
+
+    fun failFormat(detail: String) {
+        checkNotNull(formatFuture).complete(AnalysisClientResult.Failure(AnalysisFailureKind.InternalAnalysis, detail))
+    }
+
     override fun close() = Unit
 }
+
+private data class FlowFormatRequest(
+    val identity: AnalysisSnapshotIdentity,
+    val path: VirtualSourcePath,
+    val source: String,
+    val caretOffsetUtf16: Int,
+)
 
 private fun analysisSnapshot(
     original: ProjectSnapshot,

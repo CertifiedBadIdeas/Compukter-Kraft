@@ -32,6 +32,23 @@ import kotlin.test.assertTrue
 
 class AnalysisRequestCoordinatorTest {
     @Test
+    fun `format query carries exact source independently of the admitted snapshot text`() {
+        val client = RecordingAnalysisClient()
+        val coordinator = DefaultAnalysisRequestCoordinator(client, ManualAnalysisTaskScheduler(), 0, 0)
+        val snapshot = admittedSnapshot("fun main() = Unit")
+        coordinator.sourceChanged(snapshot, testPath())
+
+        val submitted = "fun main(){println(1)}"
+        val future = coordinator.format(testPath(), submitted, submitted.indexOf("println"))
+
+        val query = assertIs<AnalysisQuery.Format>(client.queries.single())
+        assertSame(snapshot, client.querySnapshots.single())
+        assertEquals(submitted, query.source)
+        assertEquals(submitted.indexOf("println"), query.caretOffsetUtf16)
+        assertSame(client.queryFutures.single(), future)
+    }
+
+    @Test
     fun `hover waits for debounce and coalesces in the pointer lane`() {
         val scheduler = ManualAnalysisTaskScheduler()
         val client = RecordingAnalysisClient()
