@@ -30,8 +30,11 @@ in the loader layer.
 - Use ordinary module tests for pure adapters, codecs, geometry, input transforms, and lifecycle state machines.
 - Use `src/gameTest/kotlin` and the real GameTest server for registration, world lifecycle, ticks, block entities,
   persistence, networking-visible server behavior, or redstone interaction.
-- Use the development client for behavior whose correctness is inherently visual or interactive; record the manual
-  observation and provide screenshots or a short recording when preparing a pull request.
+- Use the development client only for behavior whose correctness is inherently visual or interactive and cannot be
+  established at a lower automated layer. Define the initial test-world state, exact player actions, expected visible
+  result, and completion condition before launching it. A successful launch is not evidence that the scenario passed.
+  If the agent cannot control or observe the client, hand back the bounded scenario as pending manual evidence. Record
+  the observation and provide screenshots or a short recording when it matters to review.
 - Build the production JAR for the configured native resources when metadata, resources, native packaging, access
   transformers, or archive composition changes. Use `compukters-release` for a distributable artifact or universal
   release-readiness claim; the production task's historical name alone does not prove multi-platform coverage.

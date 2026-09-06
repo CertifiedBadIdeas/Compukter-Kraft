@@ -47,6 +47,26 @@ limit, lifetime, or failure cases when those contracts are affected.
 | Metadata, resources, native packaging, access transformers, or archive composition | `:v26_1-neoforge:buildProductionUniversalJar` and inspection produced by its verification tasks | `verifyLocalFull`; use the release gate as well only for a release candidate |
 | Tagged distributable release | `verifyLocalFull` on the exact candidate revision before tagging | `:v26_1-neoforge:buildReleaseUniversalJar` from the clean exact tag with configured release bundles |
 
+## Manual client scenarios
+
+Require a development-client observation only when the changed contract is inherently visual or interactive and
+cannot be established by a lower automated layer. Examples include rendering, screen layout, focus, keyboard or mouse
+interaction, and the visible result of reconnecting or opening a viewer. Do not require a client run for VM, compiler,
+server lifecycle, networking-state, or persistence behavior that focused tests or GameTests can prove directly.
+
+Before launching the client, write down a bounded scenario containing:
+
+- the clean test world and initial state;
+- the exact player actions;
+- the observable expected result;
+- a timeout or clear completion condition;
+- the log, screenshot, or short recording needed to preserve the observation when it matters to review.
+
+Run manual scenarios on a disposable test world, not a user save. If the agent cannot control or observe the client,
+report the scenario as pending manual evidence instead of treating a successful client launch as verification. Promote
+a recurring scenario to GameTest or another automated test when the behavior becomes observable without subjective
+visual judgment.
+
 ## Release evidence
 
 For an artifact or release-readiness claim, record:
