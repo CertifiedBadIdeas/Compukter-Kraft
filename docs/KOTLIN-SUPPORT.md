@@ -557,6 +557,17 @@ cannot become one merely by copying its package, name, and signature.
   tests `edits propagate lexical state and remain identical to a full scan`
   and `seeded random edits always equal the full-scan oracle`.
 
+- [x] **Smart Kotlin delimiter and block entry** — writable Kotlin sources
+  insert and track balanced delimiters, wrap selections, remove untouched
+  pairs with Backspace, and preserve structural indentation and line endings
+  on Enter without applying the behavior to plain-text files. Evidence:
+  [`KotlinSmartTypingTest`](../modules/ide-core/src/test/kotlin/ru/lazyhat/compukters/ide/editor/KotlinSmartTypingTest.kt),
+  tests `pairs wrap and tracked closers remain distinct from ordinary source`,
+  `paired backspace and undo are atomic`, `pairing is suppressed inside strings and comments`,
+  and `structural enter preserves CRLF and splits an automatic brace pair`,
+  plus [`IdeClientControllerTest`](../modules/ide-client/src/test/kotlin/ru/lazyhat/compukters/ide/client/controller/IdeClientControllerTest.kt),
+  test `Kotlin smart typing flows through writable editor while plain text stays literal`.
+
 - [x] **Semantic highlighting and inferred-type presentation** — declarations,
   extension functions, inferred expressions, and smart casts receive K2-backed
   semantic tokens; mutable properties, locals, and their resolved references
