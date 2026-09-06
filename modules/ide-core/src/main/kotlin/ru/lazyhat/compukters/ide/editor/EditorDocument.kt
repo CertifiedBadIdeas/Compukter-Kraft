@@ -279,7 +279,7 @@ class EditorDocument(
         selectionRange?.let { return replace(it, "", EditorHistoryKind.Atomic, EditorChangeOrigin.User) }
         if (caretOffset == 0) return EditorEditResult.NoChange
         return replace(
-            EditorRange(previousWordDeletionBoundary(caretOffset), caretOffset),
+            EditorRange(previousWordBoundary(caretOffset), caretOffset),
             "",
             EditorHistoryKind.Atomic,
             EditorChangeOrigin.User,
@@ -487,7 +487,7 @@ class EditorDocument(
         return true
     }
 
-    private fun previousWordBoundary(offset: Int): Int {
+    private fun previousLexicalWordBoundary(offset: Int): Int {
         var cursor = offset
         while (cursor > 0) {
             val previous = previousCaretBoundary(cursor)
@@ -504,7 +504,7 @@ class EditorDocument(
         return cursor
     }
 
-    private fun previousWordDeletionBoundary(offset: Int): Int {
+    private fun previousWordBoundary(offset: Int): Int {
         val lineIndex = lines.lineOfOffset(offset)
         val line = lines.line(lineIndex)
         if (offset > line.startUtf16 && offset <= line.contentEndUtf16) {
@@ -515,7 +515,7 @@ class EditorDocument(
             if (cursor == offset) return line.startUtf16
         }
         if (offset == line.startUtf16 && lineIndex > 0) return lines.line(lineIndex - 1).contentEndUtf16
-        return previousWordBoundary(offset)
+        return previousLexicalWordBoundary(offset)
     }
 
     private fun nextWordBoundary(offset: Int): Int {

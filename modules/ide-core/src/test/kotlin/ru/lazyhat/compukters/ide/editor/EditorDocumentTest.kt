@@ -112,6 +112,19 @@ class EditorDocumentTest {
     }
 
     @Test
+    fun `word navigation left crosses blank lines one boundary at a time`() {
+        val editor = EditorDocument("alpha\r\n\r\n    ")
+        assertTrue(editor.setCaret(editor.length))
+
+        assertTrue(editor.moveWordLeft())
+        assertEquals("alpha\r\n\r\n".length, editor.caretOffset)
+        assertTrue(editor.moveWordLeft())
+        assertEquals("alpha\r\n".length, editor.caretOffset)
+        assertTrue(editor.moveWordLeft())
+        assertEquals("alpha".length, editor.caretOffset)
+    }
+
+    @Test
     fun `word deletion backward at an empty line removes only its preceding separator`() {
         val source = "alpha\r\n\r\n\r\nomega"
         val editor = EditorDocument(source)
