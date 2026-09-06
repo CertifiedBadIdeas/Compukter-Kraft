@@ -55,6 +55,7 @@ import ru.lazyhat.compukters.compiler.artifact.model.ValueType
 import ru.lazyhat.compukters.compiler.artifact.write.ArtifactWriteResult
 import ru.lazyhat.compukters.compiler.artifact.write.ArtifactWriter
 import ru.lazyhat.compukters.compiler.artifact.write.encodeTypeRef
+import ru.lazyhat.compukters.compiler.artifact.write.instructionFixedCost
 
 /** Links named library modules by semantic identity and removes every unreachable record. */
 object LibraryModuleLinker {
@@ -165,9 +166,17 @@ object LibraryModuleLinker {
                 function = applicationRelocation.function(application.entry.function),
             )
         val features = semanticFeatures(modules, capabilities)
+        val maximumBlockCost =
+            modules
+                .asSequence()
+                .flatMap { module -> module.blocks.asSequence() }
+                .maxOfOrNull { block -> block.instructions.sumOf { instruction -> instructionFixedCost(instruction).toLong() } }
+                ?.toUInt()
+                ?: 0u
         val manifest =
-            application.manifest.withRequiredStackBytes(
+            application.manifest.withLinkedRequirements(
                 ExecutionStorage.requiredStackBytes(modules, application.manifest.maximumCallDepth),
+                maximumBlockCost,
             )
         val linked =
             ReferenceLiveness.derive(
@@ -192,7 +201,10 @@ object LibraryModuleLinker {
     }
 }
 
-private fun Manifest.withRequiredStackBytes(requiredStackBytes: UInt): Manifest =
+private fun Manifest.withLinkedRequirements(
+    requiredStackBytes: UInt,
+    requiredMaximumBlockCost: UInt,
+): Manifest =
     Manifest(
         requiredHeapBytes = requiredHeapBytes,
         requiredStackBytes = requiredStackBytes,
@@ -200,8 +212,8 @@ private fun Manifest.withRequiredStackBytes(requiredStackBytes: UInt): Manifest 
         maximumCallDepth = maximumCallDepth,
         maximumHostRequests = maximumHostRequests,
         maximumEvents = maximumEvents,
-        maximumBlockCost = maximumBlockCost,
-        minimumSliceCost = minimumSliceCost,
+        maximumBlockCost = maxOf(maximumBlockCost, requiredMaximumBlockCost),
+        minimumSliceCost = maxOf(minimumSliceCost, requiredMaximumBlockCost),
         compilerAbi = compilerAbi,
         platformAbi = platformAbi,
     )

@@ -120,6 +120,32 @@ class LibraryModuleLinkerTest {
     }
 
     @Test
+    fun `linker recomputes block cost requirements after adding a library`() {
+        val base = libraryModule()
+        val expensive =
+            base.copy(
+                blocks =
+                    base.blocks.mapIndexed { index, block ->
+                        if (index == 0) {
+                            block.copy(
+                                instructions =
+                                    List(70) { Instruction.Const(RegisterId.of(0u), ConstantId.of(1u)) } +
+                                        Instruction.Return(Destination.Unit),
+                            )
+                        } else {
+                            block
+                        }
+                    },
+            )
+
+        val linked = LibraryModuleLinker.link(application(expensive), mapOf("sample:library" to expensive))
+
+        assertEquals(71u, linked.manifest.maximumBlockCost)
+        assertEquals(71u, linked.manifest.minimumSliceCost)
+        assertIs<ArtifactWriteResult.Success>(ArtifactWriter.write(linked))
+    }
+
+    @Test
     fun `two level libraries link identically for every input map order`() {
         val dependency = libraryModule()
         val facade = facadeModule(ArtifactWriter.moduleSemanticHash(dependency))

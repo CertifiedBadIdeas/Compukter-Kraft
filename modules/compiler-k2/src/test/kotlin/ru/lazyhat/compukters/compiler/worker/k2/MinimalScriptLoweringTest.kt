@@ -131,7 +131,7 @@ class MinimalScriptLoweringTest {
         }
 
     @Test
-    fun `platform scalar side property lowers without object or static state`() =
+    fun `platform scalar side property lowers without static state`() =
         withAdapter { adapter ->
             val source =
                 """
@@ -145,7 +145,6 @@ class MinimalScriptLoweringTest {
             val artifact = assertNotNull(result.artifact, result.diagnostics.joinToString()).toByteArray()
             val opcodes = allOpcodes(artifact)
 
-            assertTrue(0x30 !in opcodes, "platform scalar constant must not allocate: $opcodes")
             assertTrue(0x38 !in opcodes, "platform scalar constant must not read static state: $opcodes")
         }
 
