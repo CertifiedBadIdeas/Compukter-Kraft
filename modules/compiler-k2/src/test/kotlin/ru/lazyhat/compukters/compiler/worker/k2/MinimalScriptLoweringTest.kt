@@ -101,6 +101,30 @@ class MinimalScriptLoweringTest {
         }
 
     @Test
+    fun `Int for loop supplies its generated increment constant`() =
+        withAdapter { adapter ->
+            val result =
+                adapter.compile(
+                    request(
+                        """
+                        import compukter.redstone.Redstone
+
+                        fun main() {
+                            while (true) {
+                                for (i in 0..15) {
+                                    Redstone.right.set(i)
+                                }
+                            }
+                        }
+                        """.trimIndent(),
+                    ),
+                )
+
+            assertNotNull(result.artifact, result.diagnostics.joinToString())
+            assertTrue(result.diagnostics.none { it.severity.name == "ERROR" }, result.diagnostics.toString())
+        }
+
+    @Test
     fun `ordinary and suspend zero argument Unit main lower deterministically`() =
         withAdapter { adapter ->
             listOf(false, true).forEach { suspending ->

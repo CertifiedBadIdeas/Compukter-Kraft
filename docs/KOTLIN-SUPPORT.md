@@ -161,7 +161,8 @@ supported.
   Evidence:
   [`MinimalScriptLoweringTest`](../modules/compiler-k2/src/test/kotlin/ru/lazyhat/compukters/compiler/worker/k2/MinimalScriptLoweringTest.kt),
   tests `inclusive Int for loops lower without range or iterator allocation`,
-  `exclusive Int for loops lower without range or iterator allocation`, and
+  `exclusive Int for loops lower without range or iterator allocation`,
+  `Int for loop supplies its generated increment constant`, and
   `allocation free Int loops lower deterministically for vm execution`, plus
   [`kotlin_writer.rs`](../modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs),
   test `k2_int_loops_execute_across_quota_slices_without_host_io`.

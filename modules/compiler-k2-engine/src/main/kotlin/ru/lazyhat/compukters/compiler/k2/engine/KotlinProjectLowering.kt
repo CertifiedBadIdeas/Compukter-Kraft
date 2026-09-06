@@ -2385,7 +2385,7 @@ private class FunctionCompiler(
     ): RegisterId {
         val id =
             constantIds[Constant.I32(value)]
-                ?: throw UnsupportedKotlinIr(element, "generated array constant is absent from canonical pool")
+                ?: throw UnsupportedKotlinIr(element, "generated Int constant is absent from canonical pool")
         return allocate(ValueType.I32).also { emit(Instruction.Const(it, id)) }
     }
 
@@ -3161,6 +3161,11 @@ private class LiteralCollector(
     override fun visitConst(expression: IrConst) {
         expression.value?.takeIf { it is String || it is Int || it is Boolean || it is Char }?.let(values::add)
         super.visitConst(expression)
+    }
+
+    override fun visitBlock(expression: IrBlock) {
+        if (expression.origin?.toString() == "FOR_LOOP") values += 1
+        super.visitBlock(expression)
     }
 
     override fun visitCall(expression: IrCall) {
