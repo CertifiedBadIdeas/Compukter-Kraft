@@ -160,6 +160,24 @@ class DiagnosticQueryTest {
     }
 
     @Test
+    fun `incomplete for range produces a diagnostic instead of failing expression checkers`() {
+        val source =
+            """
+            fun main() {
+                while (true) {
+                    for (i in )
+                }
+            }
+            """.trimIndent()
+        K2QueryFixture.source("main.kt" to source).use { fixture ->
+            val result = fixture.execute(fixture.presentation()) as AnalysisResult.Presentation
+            val active = result.value.accept(fixture.identity) as SnapshotPresentationAcceptance.Active
+
+            assertTrue(active.diagnostics.isNotEmpty())
+        }
+    }
+
+    @Test
     fun `raw diagnostics beyond the negotiated cap fail explicitly`() {
         K2QueryFixture.source("main.kt" to "val broken: String = 42").use { fixture ->
             assertFailsWith<AnalysisOutputLimitException> {

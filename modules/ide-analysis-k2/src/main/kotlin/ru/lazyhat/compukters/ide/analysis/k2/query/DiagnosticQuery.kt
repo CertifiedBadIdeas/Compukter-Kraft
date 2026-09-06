@@ -65,6 +65,7 @@ internal object DiagnosticQuery {
                 }
             },
         )
+        if (result.isNotEmpty()) return result.sorted()
         val diagnostics = with(session) { file.collectDiagnostics(KaDiagnosticCheckerFilter.ONLY_COMMON_CHECKERS) }
         diagnostics.forEach { diagnostic ->
             if (result.size >= limits.diagnostics) {
@@ -79,8 +80,11 @@ internal object DiagnosticQuery {
                     range = range?.let { EditorRange(it.startOffset, it.endOffset) },
                 )
         }
-        return result.sortedWith(compareBy({ it.path?.value }, { it.range?.startUtf16 ?: -1 }, { it.message }))
+        return result.sorted()
     }
+
+    private fun List<EditorDiagnostic>.sorted(): List<EditorDiagnostic> =
+        sortedWith(compareBy({ it.path?.value }, { it.range?.startUtf16 ?: -1 }, { it.message }))
 }
 
 private fun KaSeverity.toEditorSeverity(): EditorDiagnosticSeverity =
