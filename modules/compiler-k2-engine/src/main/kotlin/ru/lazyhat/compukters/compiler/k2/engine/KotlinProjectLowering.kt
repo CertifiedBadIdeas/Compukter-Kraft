@@ -1587,6 +1587,7 @@ private fun linkedPlatformSymbols(
 
     fun considerTypeSymbol(symbol: IrClassSymbol) {
         val fqName = symbol.owner.fqNameWhenAvailable?.asString() ?: return
+        if (fqName == "kotlin.IntArray") return
         val link = typeLinks[fqName] ?: return
         types[symbol] = ExternalTypeTarget(link.exportName, link.moduleHash.copyOf())
     }
