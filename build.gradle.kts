@@ -169,7 +169,8 @@ fun registerKotlinVmConformance(
     artifactTask: String,
     artifact: Provider<RegularFile>,
     cargoTargetDirectory: String,
-    artifactEnvironmentVariables: List<String>,
+    artifactEnvironmentVariable: String,
+    rustTestName: String,
 ) {
     val conformanceTask =
         tasks.register<Exec>(taskName) {
@@ -195,11 +196,15 @@ fun registerKotlinVmConformance(
                 "--offline",
                 "--manifest-path",
                 compilerArtifactVmConformanceHarness.absolutePath,
+                "--test",
+                "kotlin_writer",
+                rustTestName,
+                "--",
+                "--exact",
+                "--ignored",
             )
             environment("CARGO_TARGET_DIR", rootProject.file(cargoTargetDirectory).absolutePath)
-            artifactEnvironmentVariables.forEach { variable ->
-                environment(variable, artifact.get().asFile.absolutePath)
-            }
+            environment(artifactEnvironmentVariable, artifact.get().asFile.absolutePath)
         }
     verifyKotlinVmConformance.configure {
         dependsOn(conformanceTask)
@@ -212,7 +217,8 @@ registerKotlinVmConformance(
     artifactTask = ":compiler-artifact:test",
     artifact = project(":compiler-artifact").layout.buildDirectory.file("generated/conformance/executable-instructions.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-artifact-conformance",
-    artifactEnvironmentVariables = listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT"),
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT",
+    rustTestName = "pinned_vm_verifies_kotlin_executable_instruction_artifact",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinSubsetVmConformance",
@@ -220,8 +226,8 @@ registerKotlinVmConformance(
     artifactTask = ":compiler-k2:generateKotlinSubsetConformanceArtifact",
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/kotlin-subset.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-conformance",
-    artifactEnvironmentVariables =
-        listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", "COMPUKTER_KOTLIN_SUBSET_ARTIFACT"),
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_SUBSET_ARTIFACT",
+    rustTestName = "k2_string_materialization_executes_char_arrays_and_scalar_templates",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinSuspendCallVmConformance",
@@ -229,8 +235,8 @@ registerKotlinVmConformance(
     artifactTask = ":compiler-k2:generateSuspendCallConformanceArtifact",
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/suspend-call.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-suspend-call-conformance",
-    artifactEnvironmentVariables =
-        listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", "COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT"),
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT",
+    rustTestName = "k2_suspend_project_call_resumes_across_async_capability",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinWhenVmConformance",
@@ -238,8 +244,8 @@ registerKotlinVmConformance(
     artifactTask = ":compiler-k2:generateWhenConformanceArtifact",
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/when.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-when-conformance",
-    artifactEnvironmentVariables =
-        listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", "COMPUKTER_KOTLIN_WHEN_ARTIFACT"),
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_WHEN_ARTIFACT",
+    rustTestName = "k2_bounded_when_selects_matched_and_fallback_branches",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinArgvVmConformance",
@@ -247,8 +253,8 @@ registerKotlinVmConformance(
     artifactTask = ":compiler-k2:generateArgvConformanceArtifact",
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/argv.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-argv-conformance",
-    artifactEnvironmentVariables =
-        listOf("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT", "COMPUKTER_KOTLIN_ARGV_ARTIFACT"),
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_ARGV_ARTIFACT",
+    rustTestName = "k2_string_array_entry_executes_exact_utf16_arguments",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinPlatformScalarVmConformance",
@@ -256,7 +262,8 @@ registerKotlinVmConformance(
     artifactTask = ":compiler-k2:generatePlatformScalarConformanceArtifact",
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/platform-scalar.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-platform-scalar-conformance",
-    artifactEnvironmentVariables = listOf("COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT"),
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT",
+    rustTestName = "k2_platform_scalar_precondition_traps_before_publishing_a_value",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinIntLoopsVmConformance",
@@ -264,7 +271,8 @@ registerKotlinVmConformance(
     artifactTask = ":compiler-k2:generateIntLoopsConformanceArtifact",
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/kotlin-int-loops.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-int-loops-conformance",
-    artifactEnvironmentVariables = listOf("COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT"),
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT",
+    rustTestName = "k2_int_loops_execute_across_quota_slices_without_host_io",
 )
 
 val buildScriptsTest = gradle.includedBuild("build-scripts").task(":test")

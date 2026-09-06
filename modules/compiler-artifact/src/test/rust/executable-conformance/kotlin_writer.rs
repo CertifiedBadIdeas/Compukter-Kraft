@@ -7,10 +7,10 @@ use compukter_vm::{
 };
 
 #[test]
+#[ignore = "requires a generated Kotlin executable artifact"]
 fn pinned_vm_verifies_kotlin_executable_instruction_artifact() {
-    let Ok(path) = std::env::var("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT") else {
-        return;
-    };
+    let path = std::env::var("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT must be set for this conformance test");
     let bytes = fs::read(path).expect("Kotlin writer output must exist");
 
     let verified = verify_artifact(Arc::from(bytes), ArtifactLimits::default())
@@ -28,10 +28,10 @@ fn entry_argument_limits() -> EntryArgumentLimits {
 }
 
 #[test]
+#[ignore = "requires a generated Kotlin Int-loops artifact"]
 fn k2_int_loops_execute_across_quota_slices_without_host_io() {
-    let Ok(path) = std::env::var("COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT") else {
-        return;
-    };
+    let path = std::env::var("COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT must be set for this conformance test");
     let bytes = fs::read(path).expect("K2 Int loops output must exist");
     let verified = verify_artifact(Arc::from(bytes), ArtifactLimits::default())
         .expect("pinned VM must verify K2 Int loops output");
@@ -70,10 +70,10 @@ fn k2_int_loops_execute_across_quota_slices_without_host_io() {
 }
 
 #[test]
+#[ignore = "requires a generated Kotlin platform-scalar artifact"]
 fn k2_platform_scalar_precondition_traps_before_publishing_a_value() {
-    let Ok(path) = std::env::var("COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT") else {
-        return;
-    };
+    let path = std::env::var("COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT must be set for this conformance test");
     let bytes = fs::read(path).expect("K2 platform-scalar output must exist");
     let verified = verify_artifact(Arc::from(bytes), ArtifactLimits::default())
         .expect("pinned VM must verify K2 platform-scalar output");
@@ -93,11 +93,17 @@ fn k2_platform_scalar_precondition_traps_before_publishing_a_value() {
         maximum_accepted_responses: 64,
         entry_argument_limits: entry_argument_limits(),
     };
-    let mut session = Session::admit(verified, profile, &[]).expect("platform-scalar artifact must admit");
-    session.start(&[]).expect("platform-scalar artifact must start");
+    let mut session =
+        Session::admit(verified, profile, &[]).expect("platform-scalar artifact must admit");
+    session
+        .start(&[])
+        .expect("platform-scalar artifact must start");
 
     loop {
-        match session.advance(64, 64).expect("platform-scalar artifact must advance") {
+        match session
+            .advance(64, 64)
+            .expect("platform-scalar artifact must advance")
+        {
             AdvanceOutcome::SliceExhausted => {}
             AdvanceOutcome::Crashed(GuestTrap::DivisionByZero) => break,
             AdvanceOutcome::HostRequestBatch(_) => {
@@ -109,10 +115,10 @@ fn k2_platform_scalar_precondition_traps_before_publishing_a_value() {
 }
 
 #[test]
+#[ignore = "requires a generated Kotlin argv artifact"]
 fn k2_string_array_entry_executes_exact_utf16_arguments() {
-    let Ok(path) = std::env::var("COMPUKTER_KOTLIN_ARGV_ARTIFACT") else {
-        return;
-    };
+    let path = std::env::var("COMPUKTER_KOTLIN_ARGV_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_ARGV_ARTIFACT must be set for this conformance test");
     let bytes = fs::read(path).expect("K2 argv output must exist");
     let verified = verify_artifact(Arc::from(bytes), ArtifactLimits::default())
         .expect("pinned VM must verify K2 argv output");
@@ -212,10 +218,10 @@ fn k2_string_array_entry_executes_exact_utf16_arguments() {
 }
 
 #[test]
+#[ignore = "requires a generated Kotlin subset artifact"]
 fn k2_string_materialization_executes_char_arrays_and_scalar_templates() {
-    let Ok(path) = std::env::var("COMPUKTER_KOTLIN_SUBSET_ARTIFACT") else {
-        return;
-    };
+    let path = std::env::var("COMPUKTER_KOTLIN_SUBSET_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_SUBSET_ARTIFACT must be set for this conformance test");
     let bytes = fs::read(path).expect("K2 subset output must exist");
     let verified = verify_artifact(Arc::from(bytes), ArtifactLimits::default())
         .expect("pinned VM must verify K2 subset output");
@@ -321,10 +327,10 @@ fn k2_string_materialization_executes_char_arrays_and_scalar_templates() {
 }
 
 #[test]
+#[ignore = "requires a generated Kotlin suspend-call artifact"]
 fn k2_suspend_project_call_resumes_across_async_capability() {
-    let Ok(path) = std::env::var("COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT") else {
-        return;
-    };
+    let path = std::env::var("COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT must be set for this conformance test");
     let bytes = fs::read(path).expect("K2 suspend-call output must exist");
     let verified = verify_artifact(Arc::from(bytes), ArtifactLimits::default())
         .expect("pinned VM must verify K2 suspend-call output");
@@ -424,10 +430,10 @@ fn k2_suspend_project_call_resumes_across_async_capability() {
 }
 
 #[test]
+#[ignore = "requires a generated Kotlin when artifact"]
 fn k2_bounded_when_selects_matched_and_fallback_branches() {
-    let Ok(path) = std::env::var("COMPUKTER_KOTLIN_WHEN_ARTIFACT") else {
-        return;
-    };
+    let path = std::env::var("COMPUKTER_KOTLIN_WHEN_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_WHEN_ARTIFACT must be set for this conformance test");
     let bytes = fs::read(path).expect("K2 when output must exist");
 
     assert_eq!(utf16("enter"), execute_when_artifact(&bytes, 13));
