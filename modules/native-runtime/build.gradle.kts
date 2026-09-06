@@ -68,7 +68,7 @@ val compukterVmCommit =
         workingDir(compukterVmRoot)
         commandLine("git", "rev-parse", "HEAD")
     }.standardOutput.asText.map(String::trim)
-val runtimeBundleContract = compukterVmCommit.map(::runtime5BundleContract)
+val runtimeBundleContract = compukterVmCommit.map(::currentRuntimeBundleContract)
 val downloadedRuntimeBundleDirectory =
     providers.provider {
         rootProject.gradle.gradleUserHomeDir

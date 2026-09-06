@@ -26,7 +26,7 @@ dependencies = [
 
 [[package]]
 name = "compukter-vm"
-version = "0.5.1"
+version = "0.9.0"
 dependencies = [
  "sha2",
 ]

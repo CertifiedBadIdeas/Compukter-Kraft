@@ -25,7 +25,7 @@ stages are integrated.
 | `./gradlew-sandbox-dev-parallel verifyLocalFast` | Policy and build-script checks plus the curated fast JVM slice | Complete module, VM, GameTest, or release coverage |
 | `./gradlew-sandbox-dev-parallel verifyAllModuleChecks` | Every current Gradle subproject `check` lifecycle | Host Rust crate checks, Kotlin-to-VM conformance, or the real GameTest server |
 | `./gradlew-sandbox-dev-parallel verifyKotlinVmConformance` | Every execution-conformance scenario registered through the root build's conformance registration path | Unrelated JVM, IDE, Minecraft, or release behavior |
-| `./gradlew-sandbox-dev-parallel verifyLocalFull` | Complete current checkout: all subproject checks, registered conformance, Rust/FFM, integrations, real GameTests, and the production artifact for the locally configured native platform | Clean-tag state or Linux-and-Windows universal release readiness |
+| `./gradlew-sandbox-dev-parallel verifyLocalFull` | Complete current checkout: all subproject checks, registered conformance, Rust/FFM and Runtime-version consistency, integrations, real GameTests, and the production artifact for the locally configured native platform | Clean-tag state or Linux-and-Windows universal release readiness |
 | `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildProductionUniversalJar` | Official-name production JAR and archive checks for the configured local native resources | A clean tagged universal release or unconfigured target platforms |
 | `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildReleaseUniversalJar` | Clean exact-tag release state, Linux and Windows native bundles, archive contents, and packaged-native execution | Publication, upload, push, or external release creation |
 

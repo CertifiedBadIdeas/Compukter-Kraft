@@ -41,17 +41,17 @@ class RuntimeBundleSupportTest {
     lateinit var temporary: Path
 
     @Test
-    fun pinsTheNextAbi5RuntimeRelease() {
-        val contract = runtime5BundleContract("0".repeat(40))
+    fun pinsTheCurrentAbi9RuntimeRelease() {
+        val contract = currentRuntimeBundleContract("0".repeat(40))
 
-        assertEquals("0.5.1", contract.runtimeVersion)
-        assertEquals("v0.5.1", contract.releaseTag)
-        assertEquals(5, contract.ffiAbi)
+        assertEquals("0.9.0", contract.runtimeVersion)
+        assertEquals("v0.9.0", contract.releaseTag)
+        assertEquals(9, contract.ffiAbi)
     }
 
     @Test
     fun downloadsTheExactPinnedReleaseAssetsAndReusesTheCompleteCache() {
-        val contract = runtime5BundleContract("0".repeat(40))
+        val contract = currentRuntimeBundleContract("0".repeat(40))
         val destination = temporary.resolve("downloaded")
         val requested = mutableListOf<URI>()
         val payloads =
@@ -84,7 +84,7 @@ class RuntimeBundleSupportTest {
 
     @Test
     fun failedAssetDownloadDoesNotPublishAPartialFileAndCanResume() {
-        val contract = runtime5BundleContract("0".repeat(40))
+        val contract = currentRuntimeBundleContract("0".repeat(40))
         val destination = temporary.resolve("resume")
         val names = runtimeBundleAssetNames(contract)
         var fail = true
@@ -111,7 +111,7 @@ class RuntimeBundleSupportTest {
 
     @Test
     fun acceptsAnAssetPublishedConcurrentlyByAnotherDownloader() {
-        val contract = runtime5BundleContract("0".repeat(40))
+        val contract = currentRuntimeBundleContract("0".repeat(40))
         val destination = temporary.resolve("concurrent")
         val firstAsset = runtimeBundleAssetNames(contract).first()
 
@@ -194,12 +194,12 @@ class RuntimeBundleSupportTest {
         val bundles: Path = root.resolve("bundles")
         val staging: Path = root.resolve("staging")
         val contract: RuntimeBundleContract = CONTRACT.copy(vmCommit = COMMIT)
-        val checksums: Path = bundles.resolve("compukter-runtime-0.5.1-checksums.sha256")
+        val checksums: Path = bundles.resolve("compukter-runtime-0.9.0-checksums.sha256")
 
         init {
             Files.createDirectories(bundles)
-            val linux = bundles.resolve("compukter-runtime-0.5.1-linux-x86_64.tar.gz")
-            val windows = bundles.resolve("compukter-runtime-0.5.1-windows-x86_64.zip")
+            val linux = bundles.resolve("compukter-runtime-0.9.0-linux-x86_64.tar.gz")
+            val windows = bundles.resolve("compukter-runtime-0.9.0-windows-x86_64.zip")
             writeTar(linux, entries("x86_64-unknown-linux-gnu", "libcompukter_ffi.so", linuxNative, vmCommit))
             writeZip(
                 windows,
@@ -224,10 +224,10 @@ class RuntimeBundleSupportTest {
             """
             {
               "schema": 1,
-              "runtime_version": "0.5.1",
-              "release_tag": "v0.5.1",
+              "runtime_version": "0.9.0",
+              "release_tag": "v0.9.0",
               "vm_commit": "$vmCommit",
-              "ffi_abi": 5,
+              "ffi_abi": 9,
               "formats": {
                 "artifact": 2,
                 "compilation-request": 1,
@@ -277,8 +277,8 @@ class RuntimeBundleSupportTest {
             val WINDOWS_NATIVE = "windows-native".encodeToByteArray()
             val CONTRACT =
                 RuntimeBundleContract(
-                    runtimeVersion = "0.5.1",
-                    ffiAbi = 5,
+                    runtimeVersion = "0.9.0",
+                    ffiAbi = 9,
                     vmCommit = COMMIT,
                     formats =
                         sortedMapOf(

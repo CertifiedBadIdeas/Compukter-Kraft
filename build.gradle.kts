@@ -503,5 +503,6 @@ tasks.register("verifyLocalFull") {
     dependsOn(fmtCompukterFfiRust)
     dependsOn(clippyCompukterFfiRust)
     dependsOn(cargoBuildCompukterFfi)
+    dependsOn("checkCompukterVmRelease")
     dependsOn(":v26_1-neoforge:runGameTestServer")
 }
