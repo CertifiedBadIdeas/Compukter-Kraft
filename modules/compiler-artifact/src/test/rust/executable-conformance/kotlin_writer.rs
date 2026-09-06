@@ -261,8 +261,21 @@ fn k2_platform_scalar_precondition_traps_before_publishing_a_value() {
         maximum_accepted_responses: 64,
         entry_argument_limits: entry_argument_limits(),
     };
+    let side_arguments = [HostValueType::I32];
+    let side_and_level_arguments = [HostValueType::I32, HostValueType::I32];
+    let operations = [
+        OperationSchema::synchronous(&side_arguments, HostValueType::I32),
+        OperationSchema::asynchronous(&side_arguments, HostValueType::I32),
+        OperationSchema::asynchronous(&side_and_level_arguments, HostValueType::I32),
+        OperationSchema::asynchronous(&side_and_level_arguments, HostValueType::I32),
+        OperationSchema::asynchronous(&side_and_level_arguments, HostValueType::I32),
+        OperationSchema::synchronous(&[], HostValueType::I32),
+        OperationSchema::asynchronous(&side_and_level_arguments, HostValueType::Unit),
+        OperationSchema::asynchronous(&side_arguments, HostValueType::Unit),
+    ];
+    let binding = CapabilityBinding::new("compukter", "redstone", 1, 0, &operations);
     let mut session =
-        Session::admit(verified, profile, &[]).expect("platform-scalar artifact must admit");
+        Session::admit(verified, profile, &[binding]).expect("platform-scalar artifact must admit");
     session
         .start(&[])
         .expect("platform-scalar artifact must start");
