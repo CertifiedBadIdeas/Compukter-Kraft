@@ -18,17 +18,34 @@
 
 package ru.lazyhat.compukters.ide.analysis.k2.query
 
+import com.intellij.psi.PsiComment
+import com.intellij.psi.PsiElement
+import org.jetbrains.kotlin.psi.KtBlockExpression
+import org.jetbrains.kotlin.psi.KtBlockStringTemplateEntry
+import org.jetbrains.kotlin.psi.KtClassBody
+import org.jetbrains.kotlin.psi.KtDeclarationWithBody
 import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtImportDirective
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
+import org.jetbrains.kotlin.psi.KtPackageDirective
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
+import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import ru.lazyhat.compukters.ide.editor.EditorRange
+
+internal enum class KeywordContext {
+    File,
+    ClassBody,
+    Block,
+    None,
+}
 
 internal data class CompletionContext(
     val prefix: String,
     val replacement: EditorRange,
     val position: KtElement,
     val receiver: org.jetbrains.kotlin.psi.KtExpression?,
+    val keywordContext: KeywordContext,
 ) {
     companion object {
         fun parse(
@@ -60,7 +77,31 @@ internal data class CompletionContext(
                         null
                     }
             val receiver = qualified?.receiverExpression
-            return CompletionContext(prefix, EditorRange(start, offsetUtf16), position, receiver)
+            val keywordContext = keywordContext(leaf, receiver)
+            return CompletionContext(prefix, EditorRange(start, offsetUtf16), position, receiver, keywordContext)
+        }
+
+        private fun keywordContext(
+            leaf: PsiElement?,
+            receiver: org.jetbrains.kotlin.psi.KtExpression?,
+        ): KeywordContext {
+            if (leaf == null || receiver != null) return KeywordContext.None
+            val ancestors = generateSequence(leaf) { it.parent }.toList()
+            if (ancestors.any { it is PsiComment || it is KtImportDirective || it is KtPackageDirective }) {
+                return KeywordContext.None
+            }
+            val insideString = ancestors.any { it is KtStringTemplateExpression }
+            val insideInterpolation = ancestors.any { it is KtBlockStringTemplateEntry }
+            if (insideString && !insideInterpolation) return KeywordContext.None
+            return when (ancestors.firstOrNull { it is KtBlockExpression || it is KtClassBody || it is KtDeclarationWithBody }) {
+                is KtBlockExpression,
+                is KtDeclarationWithBody,
+                -> KeywordContext.Block
+
+                is KtClassBody -> KeywordContext.ClassBody
+
+                else -> KeywordContext.File
+            }
         }
     }
 }

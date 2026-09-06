@@ -34,6 +34,67 @@ import kotlin.test.assertTrue
 
 class CompletionQueryTest {
     @Test
+    fun `completion proposes keywords for declarations and executable blocks`() {
+        val source =
+            """
+            pac
+            fu
+            class Host {
+                ov
+                fun run() { val variable = 1; va; ret }
+            }
+            """.trimIndent()
+        K2QueryFixture.source("main.kt" to source).use { fixture ->
+            val packageDirective = fixture.complete("main.kt", source.indexOf("pac") + 3)
+            val topLevel = fixture.complete("main.kt", source.indexOf("fu") + 2)
+            val member = fixture.complete("main.kt", source.indexOf("ov") + 2)
+            val local = fixture.complete("main.kt", source.indexOf("va;") + 2)
+            val block = fixture.complete("main.kt", source.indexOf("ret") + 3)
+
+            assertEquals(CompletionKind.Keyword, packageDirective.items.single { it.insertText == "package" }.kind)
+            assertEquals(CompletionKind.Keyword, topLevel.items.single { it.insertText == "fun" }.kind)
+            assertEquals(CompletionKind.Keyword, member.items.single { it.insertText == "override" }.kind)
+            assertEquals(listOf("val", "var"), local.items.take(2).map { it.insertText })
+            assertTrue(local.items.any { it.insertText == "variable" }, local.items.toString())
+            assertEquals(CompletionKind.Keyword, block.items.single { it.insertText == "return" }.kind)
+        }
+    }
+
+    @Test
+    fun `completion suppresses keywords outside unqualified Kotlin code`() {
+        val source =
+            """
+            import ret
+            fun main() {
+                "ret"
+                // ret
+                "text".ret
+            }
+            """.trimIndent()
+        K2QueryFixture.source("main.kt" to source).use { fixture ->
+            val offsets =
+                listOf(
+                    source.indexOf("ret") + 3,
+                    source.indexOf("ret", source.indexOf('"')) + 3,
+                    source.indexOf("ret", source.indexOf("//")) + 3,
+                    source.lastIndexOf("ret") + 3,
+                )
+
+            offsets.forEach { offset ->
+                val result = fixture.complete("main.kt", offset)
+                assertTrue(result.items.none { it.kind == CompletionKind.Keyword }, result.items.toString())
+            }
+        }
+
+        val interpolation = "fun main() { val text = \"\${ret}\" }"
+        K2QueryFixture.source("main.kt" to interpolation).use { fixture ->
+            val result = fixture.complete("main.kt", interpolation.indexOf("ret") + 3)
+
+            assertEquals(CompletionKind.Keyword, result.items.single { it.insertText == "return" }.kind)
+        }
+    }
+
+    @Test
     fun `unqualified completion sees lexical and package declarations`() {
         val declarations = "package sample\nfun localPackageFunction() = Unit"
         val source = "package sample\nfun main(parameter: String) { val localValue = 1; loc }"

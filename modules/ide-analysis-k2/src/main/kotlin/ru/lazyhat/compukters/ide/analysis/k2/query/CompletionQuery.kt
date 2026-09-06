@@ -88,6 +88,23 @@ internal object CompletionQuery {
             name.asString().startsWith(context.prefix)
         }
 
+        KeywordCompletion.candidates(context).forEach { keyword ->
+            val item = CompletionItem(keyword, keyword, CompletionKind.Keyword)
+            ranked.offer(
+                RankedCompletion(
+                    item,
+                    "keyword\u0000$keyword",
+                    CompletionRank(
+                        applicability = 2,
+                        prefixQuality = if (keyword == context.prefix) 2 else 1,
+                        locality = Int.MAX_VALUE,
+                        nameUtf8 = keyword.encodeToByteArray(),
+                        signatureUtf8 = ByteArray(0),
+                    ),
+                ),
+            )
+        }
+
         fun accept(
             symbol: KaDeclarationSymbol,
             locality: Int,

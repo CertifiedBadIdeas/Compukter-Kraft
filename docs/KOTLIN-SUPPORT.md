@@ -597,6 +597,14 @@ cannot become one merely by copying its package, name, and signature.
   [`CompletionIntegrationTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/integration/CompletionIntegrationTest.kt),
   test `forked worker returns semantic completion`.
 
+- [x] **Context-aware keyword completion** — declaration, modifier, statement,
+  and expression keywords are ranked with semantic symbols for valid file,
+  class-body, and executable-block contexts, while imports, package directives,
+  qualified access, comments, and literal string content suppress them. Evidence:
+  [`CompletionQueryTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/query/CompletionQueryTest.kt),
+  tests `completion proposes keywords for declarations and executable blocks`
+  and `completion suppresses keywords outside unqualified Kotlin code`.
+
 - [x] **Expression information and callable signatures** — hover-style
   queries render inferred local types, resolved signatures, and smart-cast
   types. Evidence:
