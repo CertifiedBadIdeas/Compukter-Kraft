@@ -53,6 +53,13 @@ workspace and answers diagnostics, completion, symbol, reference, expression, an
 and analysis use the same resolved platform bundle and source-snapshot identities, but have separate worker sessions
 and result contracts.
 
+Analysis protocol v7 also carries explicit Kotlin format requests. The request includes the exact editor text and
+UTF-16 caret captured by Ctrl+S, so formatting does not depend on whether the semantic snapshot has caught up. The
+worker runs ktlint standard rules in a separately loaded nested classpath because ktlint's compiler-embeddable runtime
+cannot share IntelliJ classes with the standalone K2 analysis environment. Formatted text is bounded by the negotiated
+source-file limit; the client applies a current result as one undoable edit before saving, discards stale results, and
+saves the unchanged source with a warning when formatting fails. Autosave and implicit saves do not format.
+
 ## Server compilation
 
 The trusted server JVM owns compiler scheduling, diagnostics, artifact production, and the server-global
