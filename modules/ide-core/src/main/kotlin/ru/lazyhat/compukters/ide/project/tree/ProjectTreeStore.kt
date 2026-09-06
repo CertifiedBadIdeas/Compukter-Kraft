@@ -24,9 +24,9 @@ import ru.lazyhat.compukters.ide.project.ProjectLimits
 import ru.lazyhat.compukters.ide.project.TomlSupport
 import ru.lazyhat.compukters.ide.project.document.FileRevision
 import ru.lazyhat.compukters.ide.project.fs.ProjectPath
+import ru.lazyhat.compukters.ide.project.fs.SecureImportResult
 import ru.lazyhat.compukters.ide.project.fs.SecureProjectFileException
 import ru.lazyhat.compukters.ide.project.fs.SecureProjectFiles
-import ru.lazyhat.compukters.ide.project.fs.SecureImportResult
 import java.nio.charset.CharacterCodingException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.LinkOption

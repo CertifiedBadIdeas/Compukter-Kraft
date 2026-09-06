@@ -102,9 +102,11 @@ sealed interface VmHostMerge {
 
         override fun equals(other: Any?): Boolean =
             this === other ||
-                other is LastWriteWins &&
-                groupBits == other.groupBits &&
-                entries == other.entries
+                (
+                    other is LastWriteWins &&
+                        groupBits == other.groupBits &&
+                        entries == other.entries
+                )
 
         override fun hashCode(): Int = 31 * groupBits + entries.hashCode()
 
@@ -196,18 +198,24 @@ sealed interface VmOutcome {
 
     data object WaitingForTerminalEvent : VmOutcome
 
-    class HostRequestBatch(requests: List<VmHostRequest>) : VmOutcome {
+    class HostRequestBatch(
+        requests: List<VmHostRequest>,
+    ) : VmOutcome {
         val requests: List<VmHostRequest> = requests.toList()
 
         init {
             require(this.requests.isNotEmpty()) { "host request batch must not be empty" }
-            require(this.requests.map(VmHostRequest::identity).toSet().size == this.requests.size) {
+            require(
+                this.requests
+                    .map(VmHostRequest::identity)
+                    .toSet()
+                    .size == this.requests.size,
+            ) {
                 "host request batch identities must be unique"
             }
         }
 
-        override fun equals(other: Any?): Boolean =
-            this === other || other is HostRequestBatch && requests == other.requests
+        override fun equals(other: Any?): Boolean = this === other || (other is HostRequestBatch && requests == other.requests)
 
         override fun hashCode(): Int = requests.hashCode()
 

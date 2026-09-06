@@ -150,28 +150,30 @@ class PlatformMetadataCompiler {
             declarations = publicDeclarations,
             exportedSymbols = exports,
             completionDeclarations = parsedPlatform.completionDeclarations.sortedWith(COMPLETION_DECLARATION_ORDER),
-            libraryDeclarations = declarations.filter { parsed ->
-                parsed.hasBody ||
-                    (
-                        !parsed.private &&
-                            parsed.libraryKind in
-                            setOf(
-                                PlatformLibraryDeclarationKind.TYPE,
-                                PlatformLibraryDeclarationKind.FIELD,
+            libraryDeclarations =
+                declarations
+                    .filter { parsed ->
+                        parsed.hasBody ||
+                            (
+                                !parsed.private &&
+                                    parsed.libraryKind in
+                                    setOf(
+                                        PlatformLibraryDeclarationKind.TYPE,
+                                        PlatformLibraryDeclarationKind.FIELD,
+                                    )
                             )
-                    )
-            }.map { parsed ->
-                val declaration = parsed.declaration
-                PlatformLibraryDeclaration(
-                    declaration.symbol,
-                    declaration.signature,
-                    declaration.sourcePath,
-                    declaration.startUtf16,
-                    declaration.endUtf16,
-                    requireNotNull(parsed.libraryKind),
-                    !parsed.private,
-                )
-            },
+                    }.map { parsed ->
+                        val declaration = parsed.declaration
+                        PlatformLibraryDeclaration(
+                            declaration.symbol,
+                            declaration.signature,
+                            declaration.sourcePath,
+                            declaration.startUtf16,
+                            declaration.endUtf16,
+                            requireNotNull(parsed.libraryKind),
+                            !parsed.private,
+                        )
+                    },
             scalarTypes = parsedPlatform.scalarTypes.sortedBy(PlatformScalarType::symbol),
             scalarConstants = parsedPlatform.scalarConstants.sortedBy(PlatformScalarConstant::symbol),
         )

@@ -33,7 +33,9 @@ enum class ProjectImportStep {
 sealed interface ProjectImportEntry {
     val relativePath: String
 
-    data class Directory(override val relativePath: String) : ProjectImportEntry
+    data class Directory(
+        override val relativePath: String,
+    ) : ProjectImportEntry
 
     class File(
         override val relativePath: String,

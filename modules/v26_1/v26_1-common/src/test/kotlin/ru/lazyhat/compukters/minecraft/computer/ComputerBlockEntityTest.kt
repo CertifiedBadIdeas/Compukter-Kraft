@@ -32,6 +32,7 @@ import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStateSink
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStopReason
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandidate
+import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalCell
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
@@ -40,7 +41,6 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalPosition
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
-import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 import java.util.stream.Stream
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -62,7 +62,13 @@ class ComputerBlockEntityTest {
         restored.entity.loadForTest(validTag)
         restored.entity.serverTick()
         assertEquals(valid, restored.carriers.single().initialRedstoneOutput)
-        assertEquals(valid, restored.entity.saveForTest().getCompoundOrEmpty("compukters").getIntOr("redstoneOutput", -1))
+        assertEquals(
+            valid,
+            restored.entity
+                .saveForTest()
+                .getCompoundOrEmpty("compukters")
+                .getIntOr("redstoneOutput", -1),
+        )
 
         val malformedTag = fresh.entity.saveForTest()
         malformedTag.getCompoundOrEmpty("compukters").putInt("redstoneOutput", 1 shl 30)

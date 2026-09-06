@@ -111,8 +111,11 @@ open class ComputerBlockEntity internal constructor(
 
     fun fileStat(path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) = carrier?.fileStat(path)
 
-    fun fileList(path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath, startAfter: String?, maximumEntries: Int) =
-        carrier?.fileList(path, startAfter, maximumEntries)
+    fun fileList(
+        path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
+        startAfter: String?,
+        maximumEntries: Int,
+    ) = carrier?.fileList(path, startAfter, maximumEntries)
 
     fun fileRead(
         path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,

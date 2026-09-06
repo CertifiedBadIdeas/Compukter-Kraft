@@ -84,11 +84,12 @@ class ProgramRuntimeHostTest {
             ProgramRuntimeHost(
                 sessionFactory = ProgramVmSessionFactory { session },
                 tickBudget = ProgramTickBudget(8, 4, 2),
-                redstoneHostPort = RedstoneHostPort { packed ->
-                    events += "port:$packed"
-                    committed += packed
-                    RedstoneCommitResult.Committed
-                },
+                redstoneHostPort =
+                    RedstoneHostPort { packed ->
+                        events += "port:$packed"
+                        committed += packed
+                        RedstoneCommitResult.Committed
+                    },
             )
         host.start(byteArrayOf(1))
         events.clear()
@@ -130,10 +131,11 @@ class ProgramRuntimeHostTest {
             ProgramRuntimeHost(
                 sessionFactory = ProgramVmSessionFactory { noOpSession },
                 initialRedstoneOutput = 7,
-                redstoneHostPort = RedstoneHostPort {
-                    commits++
-                    RedstoneCommitResult.Committed
-                },
+                redstoneHostPort =
+                    RedstoneHostPort {
+                        commits++
+                        RedstoneCommitResult.Committed
+                    },
             )
         noOpHost.start(byteArrayOf(1))
         noOpSession.confirmedOutputs.clear()
@@ -176,10 +178,11 @@ class ProgramRuntimeHostTest {
             ProgramRuntimeHost(
                 sessionFactory = ProgramVmSessionFactory { sessions.removeFirst() },
                 initialRedstoneOutput = 23,
-                redstoneHostPort = RedstoneHostPort {
-                    commits += it
-                    RedstoneCommitResult.Committed
-                },
+                redstoneHostPort =
+                    RedstoneHostPort {
+                        commits += it
+                        RedstoneCommitResult.Committed
+                    },
             )
 
         host.start(byteArrayOf(1))
@@ -473,6 +476,7 @@ class ProgramRuntimeHostTest {
     @Test
     fun `tick shares host credits and stops only when vm cannot progress`() {
         val addon = CapabilityIdentity("addon", "device", 1, 0)
+
         fun batch(
             first: Long,
             count: Int,

@@ -31,8 +31,8 @@ import ru.lazyhat.compukters.platform.bundle.PlatformScalarValue
 import ru.lazyhat.compukters.platform.bundle.PlatformSource
 import ru.lazyhat.compukters.worker.value.ImmutableBytes
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 import kotlin.test.assertContains
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse

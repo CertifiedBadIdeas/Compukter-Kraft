@@ -33,8 +33,8 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import ru.lazyhat.compukters.lang.runtime.vm.VmBridgeException
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentCandidate
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
-import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequestIdentity
+import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
 import ru.lazyhat.compukters.lang.runtime.vm.VmSession
 
 internal interface ProgramVmSession : AutoCloseable {

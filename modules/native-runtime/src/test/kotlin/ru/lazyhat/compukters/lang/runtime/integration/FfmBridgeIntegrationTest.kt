@@ -22,9 +22,9 @@ import kotlinx.coroutines.runBlocking
 import ru.lazyhat.compukters.lang.runtime.vm.FfmBridge
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
-import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentConflictException
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
+import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
 import ru.lazyhat.compukters.lang.runtime.vm.VmSession
 import ru.lazyhat.compukters.lang.runtime.vm.VmVerificationException
 import java.nio.file.Path
@@ -51,9 +51,10 @@ class FfmBridgeIntegrationTest {
                 assertEquals(VmExecutableRevision.Absent, session.executableRevision(path))
 
                 val first = session.verifyForDeploy(artifact)
-                val installed = assertIs<VmExecutableRevision.Present>(
-                    session.deploy(path, VmExecutableRevision.Absent, first),
-                )
+                val installed =
+                    assertIs<VmExecutableRevision.Present>(
+                        session.deploy(path, VmExecutableRevision.Absent, first),
+                    )
                 assertEquals(installed, session.executableRevision(path))
 
                 val retry = session.verifyForDeploy(artifact)

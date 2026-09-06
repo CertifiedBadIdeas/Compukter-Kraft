@@ -79,13 +79,16 @@ data class VmFileChunk(
 ) {
     override fun equals(other: Any?): Boolean =
         this === other ||
-            other is VmFileChunk &&
-            generation == other.generation &&
-            nextOffset == other.nextOffset &&
-            eof == other.eof &&
-            bytes.contentEquals(other.bytes)
+            (
+                other is VmFileChunk &&
+                    generation == other.generation &&
+                    nextOffset == other.nextOffset &&
+                    eof == other.eof &&
+                    bytes.contentEquals(other.bytes)
+            )
 
-    override fun hashCode(): Int = 31 * (31 * (31 * generation.hashCode() + nextOffset.hashCode()) + eof.hashCode()) + bytes.contentHashCode()
+    override fun hashCode(): Int =
+        31 * (31 * (31 * generation.hashCode() + nextOffset.hashCode()) + eof.hashCode()) + bytes.contentHashCode()
 }
 
 enum class VmFileSystemReadFailure {

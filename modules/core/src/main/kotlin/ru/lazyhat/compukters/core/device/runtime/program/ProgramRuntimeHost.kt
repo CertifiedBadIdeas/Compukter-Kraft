@@ -155,7 +155,9 @@ class ProgramRuntimeHost internal constructor(
                     return
                 }
 
-                VmOutcome.WaitingForHostQuota -> return
+                VmOutcome.WaitingForHostQuota -> {
+                    return
+                }
 
                 is VmOutcome.Halted -> {
                     state = ProgramRuntimeState.Halted(outcome.value)
@@ -404,7 +406,9 @@ class ProgramRuntimeHost internal constructor(
                         HostResponse.UnitSuccess
                     }
 
-                    is RedstoneCommitResult.Failed -> HostResponse.Failure(result.kind, result.code)
+                    is RedstoneCommitResult.Failed -> {
+                        HostResponse.Failure(result.kind, result.code)
+                    }
                 }
             }
         for (request in requests) {

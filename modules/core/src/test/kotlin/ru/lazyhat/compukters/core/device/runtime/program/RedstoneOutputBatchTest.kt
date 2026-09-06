@@ -18,14 +18,14 @@
 
 package ru.lazyhat.compukters.core.device.runtime.program
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import ru.lazyhat.compukters.lang.runtime.vm.CapabilityIdentity
 import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequest
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequestIdentity
 import ru.lazyhat.compukters.lang.runtime.vm.VmValue
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class RedstoneOutputBatchTest {
     @Test

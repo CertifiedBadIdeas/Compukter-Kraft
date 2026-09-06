@@ -126,6 +126,7 @@ class VmSessionTest {
         assertEquals(listOf("run\ud800now".toList()), bridge.canonicalLines)
         assertFailsWith<VmBridgeException> { session.executableRevision("/home/broken") }
     }
+
     @Test
     fun `boot session copies ROM and does not pass a separate artifact`() {
         val bridge = FakeBridge(createResult = bytes(0, long(19)))

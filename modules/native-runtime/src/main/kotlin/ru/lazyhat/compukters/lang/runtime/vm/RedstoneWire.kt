@@ -38,21 +38,18 @@ object RedstoneWire {
         }
     }
 
-    fun requireInputPacket(packet: Int): Int =
-        packet.also { require(it and REGISTER_MASK.inv() == 0) }
+    fun requireInputPacket(packet: Int): Int = packet.also { require(it and REGISTER_MASK.inv() == 0) }
 
     fun inputChangedMask(packet: Int): Int = requireInputPacket(packet) and ALL_SIDES_MASK
 
-    fun withAllInputSidesChanged(packet: Int): Int =
-        (requireInputPacket(packet) and ALL_SIDES_MASK.inv()) or ALL_SIDES_MASK
+    fun withAllInputSidesChanged(packet: Int): Int = (requireInputPacket(packet) and ALL_SIDES_MASK.inv()) or ALL_SIDES_MASK
 
     fun inputLevel(
         packet: Int,
         side: Int,
     ): Int = (requireInputPacket(packet) ushr inputShift(side)) and SIGNAL_MASK
 
-    fun requireOutputRegister(packed: Int): Int =
-        packed.also { require(it and REGISTER_MASK.inv() == 0) }
+    fun requireOutputRegister(packed: Int): Int = packed.also { require(it and REGISTER_MASK.inv() == 0) }
 
     fun output(
         packed: Int,

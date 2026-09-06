@@ -55,13 +55,14 @@ internal data class RedstoneOutputBatch(
                             RedstoneWire.requireOutputRegister(request.arguments[0].i32("redstone output register"))
                         }
 
-                        else -> throw IllegalArgumentException("request is not a redstone output operation")
+                        else -> {
+                            throw IllegalArgumentException("request is not a redstone output operation")
+                        }
                     }
             }
             return RedstoneOutputBatch(candidate, requests.map(VmHostRequest::identity))
         }
 
-        private fun VmValue.i32(label: String): Int =
-            (this as? VmValue.I32)?.value ?: throw IllegalArgumentException("$label must be i32")
+        private fun VmValue.i32(label: String): Int = (this as? VmValue.I32)?.value ?: throw IllegalArgumentException("$label must be i32")
     }
 }

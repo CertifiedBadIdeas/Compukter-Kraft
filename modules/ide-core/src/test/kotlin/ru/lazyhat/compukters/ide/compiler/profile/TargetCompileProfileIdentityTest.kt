@@ -34,12 +34,11 @@ class TargetCompileProfileIdentityTest {
         payload: Int = 1,
         moduleHash: Int = 2,
         limits: WorkerLimits = WorkerLimits(),
-    ) =
-        TargetCompileProfile(
-            ToolchainLockIdentity("2.4.0", "2.4", 1u, 2u, 1u, hash(payload), hash(7)),
-            listOf(ResolvedModule(ModuleId("std", "terminal"), ApiMajor(2), "2.0.0", hash(moduleHash))),
-            limits,
-        )
+    ) = TargetCompileProfile(
+        ToolchainLockIdentity("2.4.0", "2.4", 1u, 2u, 1u, hash(payload), hash(7)),
+        listOf(ResolvedModule(ModuleId("std", "terminal"), ApiMajor(2), "2.0.0", hash(moduleHash))),
+        limits,
+    )
 
     private fun hash(value: Int) = Hash256.of(ByteArray(32) { value.toByte() })
 }

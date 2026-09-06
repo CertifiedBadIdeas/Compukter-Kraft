@@ -18,8 +18,8 @@
 
 package ru.lazyhat.compukters.compiler.artifact.link
 
-import ru.lazyhat.compukters.compiler.artifact.analysis.ReferenceLiveness
 import ru.lazyhat.compukters.compiler.artifact.analysis.ExecutionStorage
+import ru.lazyhat.compukters.compiler.artifact.analysis.ReferenceLiveness
 import ru.lazyhat.compukters.compiler.artifact.model.Artifact
 import ru.lazyhat.compukters.compiler.artifact.model.Block
 import ru.lazyhat.compukters.compiler.artifact.model.BlockId
@@ -40,8 +40,8 @@ import ru.lazyhat.compukters.compiler.artifact.model.FunctionRef
 import ru.lazyhat.compukters.compiler.artifact.model.Import
 import ru.lazyhat.compukters.compiler.artifact.model.ImportId
 import ru.lazyhat.compukters.compiler.artifact.model.Instruction
-import ru.lazyhat.compukters.compiler.artifact.model.MetadataText
 import ru.lazyhat.compukters.compiler.artifact.model.Manifest
+import ru.lazyhat.compukters.compiler.artifact.model.MetadataText
 import ru.lazyhat.compukters.compiler.artifact.model.Module
 import ru.lazyhat.compukters.compiler.artifact.model.ModuleId
 import ru.lazyhat.compukters.compiler.artifact.model.ModuleKind

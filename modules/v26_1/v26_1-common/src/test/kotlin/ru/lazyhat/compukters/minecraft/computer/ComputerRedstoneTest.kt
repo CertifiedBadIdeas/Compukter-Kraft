@@ -18,11 +18,11 @@
 
 package ru.lazyhat.compukters.minecraft.computer
 
+import net.minecraft.core.Direction
+import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import net.minecraft.core.Direction
-import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 
 class ComputerRedstoneTest {
     @Test

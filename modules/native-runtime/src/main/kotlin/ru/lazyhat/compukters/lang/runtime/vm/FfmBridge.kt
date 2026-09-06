@@ -18,6 +18,8 @@
 
 package ru.lazyhat.compukters.lang.runtime.vm
 
+import ru.lazyhat.compukters.lang.runtime.fs.VmFileSystemReadException
+import ru.lazyhat.compukters.lang.runtime.fs.VmFileSystemReadFailure
 import java.lang.foreign.Arena
 import java.lang.foreign.FunctionDescriptor
 import java.lang.foreign.Linker
@@ -26,8 +28,6 @@ import java.lang.foreign.SymbolLookup
 import java.lang.foreign.ValueLayout
 import java.lang.invoke.MethodHandle
 import java.nio.file.Path
-import ru.lazyhat.compukters.lang.runtime.fs.VmFileSystemReadException
-import ru.lazyhat.compukters.lang.runtime.fs.VmFileSystemReadFailure
 
 internal class FfmBridge private constructor(
     private val arena: Arena,
@@ -331,13 +331,23 @@ internal class FfmBridge private constructor(
                         candidateOut,
                     ) as Int
             ) {
-                STATUS_OK ->
+                STATUS_OK -> {
                     candidateOut
                         .get(ValueLayout.JAVA_LONG, 0)
                         .also { if (it == 0L) throw VmBridgeException("native deployment verification returned a zero handle") }
-                STATUS_VERIFICATION -> throw VmVerificationException()
-                STATUS_ADMISSION -> throw VmDeploymentAdmissionException()
-                else -> throw failure("deployment verification", status)
+                }
+
+                STATUS_VERIFICATION -> {
+                    throw VmVerificationException()
+                }
+
+                STATUS_ADMISSION -> {
+                    throw VmDeploymentAdmissionException()
+                }
+
+                else -> {
+                    throw failure("deployment verification", status)
+                }
             }
         }
 
@@ -634,15 +644,37 @@ internal class FfmBridge private constructor(
 
     private fun canonicalLineFailure(status: Int): RuntimeException =
         when (status) {
-            STATUS_INPUT_NO_PENDING_READ -> VmCanonicalLineException(VmCanonicalLineFailure.NO_PENDING_READ)
-            STATUS_INPUT_BUSY -> VmCanonicalLineException(VmCanonicalLineFailure.INPUT_BUSY)
-            STATUS_INPUT_PARTIAL -> VmCanonicalLineException(VmCanonicalLineFailure.PARTIAL_INPUT)
-            STATUS_INPUT_UNSUPPORTED_CODE_UNIT ->
+            STATUS_INPUT_NO_PENDING_READ -> {
+                VmCanonicalLineException(VmCanonicalLineFailure.NO_PENDING_READ)
+            }
+
+            STATUS_INPUT_BUSY -> {
+                VmCanonicalLineException(VmCanonicalLineFailure.INPUT_BUSY)
+            }
+
+            STATUS_INPUT_PARTIAL -> {
+                VmCanonicalLineException(VmCanonicalLineFailure.PARTIAL_INPUT)
+            }
+
+            STATUS_INPUT_UNSUPPORTED_CODE_UNIT -> {
                 VmCanonicalLineException(VmCanonicalLineFailure.UNSUPPORTED_CODE_UNIT)
-            STATUS_INPUT_LINE_TOO_LONG -> VmCanonicalLineException(VmCanonicalLineFailure.LINE_TOO_LONG)
-            STATUS_INPUT_TERMINAL -> VmCanonicalLineException(VmCanonicalLineFailure.TERMINAL)
-            STATUS_INPUT_RESUME -> VmCanonicalLineException(VmCanonicalLineFailure.RESUME)
-            else -> failure("canonical line submission", status)
+            }
+
+            STATUS_INPUT_LINE_TOO_LONG -> {
+                VmCanonicalLineException(VmCanonicalLineFailure.LINE_TOO_LONG)
+            }
+
+            STATUS_INPUT_TERMINAL -> {
+                VmCanonicalLineException(VmCanonicalLineFailure.TERMINAL)
+            }
+
+            STATUS_INPUT_RESUME -> {
+                VmCanonicalLineException(VmCanonicalLineFailure.RESUME)
+            }
+
+            else -> {
+                failure("canonical line submission", status)
+            }
         }
 
     private fun filesystemFailure(
@@ -651,20 +683,28 @@ internal class FfmBridge private constructor(
     ): RuntimeException =
         when (status) {
             STATUS_FILESYSTEM_INVALID_PATH -> VmFileSystemReadException(VmFileSystemReadFailure.INVALID_PATH)
+
             STATUS_FILESYSTEM_NOT_FOUND -> VmFileSystemReadException(VmFileSystemReadFailure.NOT_FOUND)
+
             STATUS_FILESYSTEM_NOT_DIRECTORY -> VmFileSystemReadException(VmFileSystemReadFailure.NOT_DIRECTORY)
+
             STATUS_FILESYSTEM_IS_DIRECTORY -> VmFileSystemReadException(VmFileSystemReadFailure.NOT_FILE)
+
             STATUS_FILESYSTEM_READ_ONLY,
             STATUS_FILESYSTEM_PERMISSION_DENIED,
             -> VmFileSystemReadException(VmFileSystemReadFailure.PERMISSION)
+
             STATUS_FILESYSTEM_STALE -> VmFileSystemReadException(VmFileSystemReadFailure.STALE_GENERATION)
+
             STATUS_FILESYSTEM_LIMIT_EXCEEDED -> VmFileSystemReadException(VmFileSystemReadFailure.LIMIT)
+
             STATUS_FILESYSTEM_BUSY,
             STATUS_FILESYSTEM_FAULTED,
             STATUS_FILESYSTEM_CLOSED,
             STATUS_FILESYSTEM_OTHER,
             STATUS_FILESYSTEM_INVALID_RANGE,
             -> VmFileSystemReadException(VmFileSystemReadFailure.STORAGE)
+
             else -> failure(operation, status)
         }
 

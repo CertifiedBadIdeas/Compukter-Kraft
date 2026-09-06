@@ -95,8 +95,7 @@ class VmSession private constructor(
         response: HostResponse,
     ) = resume(VmHostRequestIdentity(1, requestId), response)
 
-    fun resumeUnit(identity: VmHostRequestIdentity) =
-        bridge.resumeUnit(requireHandle(), identity.taskId, identity.requestId)
+    fun resumeUnit(identity: VmHostRequestIdentity) = bridge.resumeUnit(requireHandle(), identity.taskId, identity.requestId)
 
     fun resumeUnit(requestId: Long) = resumeUnit(VmHostRequestIdentity(1, requestId))
 
@@ -220,14 +219,11 @@ class VmSession private constructor(
         return decodeNative { ExecutableRevisionWireDecoder(result).revision() }
     }
 
-    fun submitCanonicalLine(line: CharArray): Unit =
-        bridge.submitCanonicalLine(requireHandle(), line.copyOf())
+    fun submitCanonicalLine(line: CharArray): Unit = bridge.submitCanonicalLine(requireHandle(), line.copyOf())
 
-    fun submitRedstoneInput(packet: Int): Unit =
-        bridge.submitRedstoneInput(requireHandle(), RedstoneWire.requireInputPacket(packet))
+    fun submitRedstoneInput(packet: Int): Unit = bridge.submitRedstoneInput(requireHandle(), RedstoneWire.requireInputPacket(packet))
 
-    fun confirmRedstoneOutput(packed: Int): Unit =
-        bridge.confirmRedstoneOutput(requireHandle(), RedstoneWire.requireOutputRegister(packed))
+    fun confirmRedstoneOutput(packed: Int): Unit = bridge.confirmRedstoneOutput(requireHandle(), RedstoneWire.requireOutputRegister(packed))
 
     override fun close() {
         val closing = handle.getAndSet(CLOSED)
@@ -547,8 +543,11 @@ private class WireDecoder(
 
     private fun merge(): VmHostMerge =
         when (u8()) {
-            0 -> VmHostMerge.Ordinary
-            1 ->
+            0 -> {
+                VmHostMerge.Ordinary
+            }
+
+            1 -> {
                 VmHostMerge.LastWriteWins(
                     groupBits = i32(),
                     entries =
@@ -556,7 +555,11 @@ private class WireDecoder(
                             VmHostMergeEntry(i32(), i32())
                         },
                 )
-            else -> invalid()
+            }
+
+            else -> {
+                invalid()
+            }
         }
 
     private fun value(): VmValue =

@@ -28,13 +28,13 @@ import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneHostPort
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import ru.lazyhat.compukters.lang.runtime.fs.WorldFileSystemStore
+import ru.lazyhat.compukters.lang.runtime.vm.HostFailureKind
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalModifier
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
-import ru.lazyhat.compukters.lang.runtime.vm.HostFailureKind
 
 class ProgramComputer internal constructor(
     private val deviceId: Int,
