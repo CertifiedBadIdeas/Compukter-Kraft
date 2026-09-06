@@ -170,7 +170,7 @@ fun registerKotlinVmConformance(
     artifact: Provider<RegularFile>,
     cargoTargetDirectory: String,
     artifactEnvironmentVariable: String,
-    rustTestName: String,
+    conformanceScenario: String,
 ) {
     val conformanceTask =
         tasks.register<Exec>(taskName) {
@@ -198,10 +198,8 @@ fun registerKotlinVmConformance(
                 compilerArtifactVmConformanceHarness.absolutePath,
                 "--test",
                 "kotlin_writer",
-                rustTestName,
                 "--",
-                "--exact",
-                "--ignored",
+                conformanceScenario,
             )
             environment("CARGO_TARGET_DIR", rootProject.file(cargoTargetDirectory).absolutePath)
             environment(artifactEnvironmentVariable, artifact.get().asFile.absolutePath)
@@ -218,7 +216,7 @@ registerKotlinVmConformance(
     artifact = project(":compiler-artifact").layout.buildDirectory.file("generated/conformance/executable-instructions.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-artifact-conformance",
     artifactEnvironmentVariable = "COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT",
-    rustTestName = "pinned_vm_verifies_kotlin_executable_instruction_artifact",
+    conformanceScenario = "executable",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinSubsetVmConformance",
@@ -227,7 +225,7 @@ registerKotlinVmConformance(
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/kotlin-subset.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-conformance",
     artifactEnvironmentVariable = "COMPUKTER_KOTLIN_SUBSET_ARTIFACT",
-    rustTestName = "k2_string_materialization_executes_char_arrays_and_scalar_templates",
+    conformanceScenario = "subset",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinSuspendCallVmConformance",
@@ -236,7 +234,7 @@ registerKotlinVmConformance(
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/suspend-call.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-suspend-call-conformance",
     artifactEnvironmentVariable = "COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT",
-    rustTestName = "k2_suspend_project_call_resumes_across_async_capability",
+    conformanceScenario = "suspend-call",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinWhenVmConformance",
@@ -245,7 +243,7 @@ registerKotlinVmConformance(
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/when.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-when-conformance",
     artifactEnvironmentVariable = "COMPUKTER_KOTLIN_WHEN_ARTIFACT",
-    rustTestName = "k2_bounded_when_selects_matched_and_fallback_branches",
+    conformanceScenario = "when",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinArgvVmConformance",
@@ -254,7 +252,7 @@ registerKotlinVmConformance(
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/argv.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-argv-conformance",
     artifactEnvironmentVariable = "COMPUKTER_KOTLIN_ARGV_ARTIFACT",
-    rustTestName = "k2_string_array_entry_executes_exact_utf16_arguments",
+    conformanceScenario = "argv",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinPlatformScalarVmConformance",
@@ -263,7 +261,7 @@ registerKotlinVmConformance(
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/platform-scalar.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-platform-scalar-conformance",
     artifactEnvironmentVariable = "COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT",
-    rustTestName = "k2_platform_scalar_precondition_traps_before_publishing_a_value",
+    conformanceScenario = "platform-scalar",
 )
 registerKotlinVmConformance(
     taskName = "testKotlinIntLoopsVmConformance",
@@ -272,7 +270,7 @@ registerKotlinVmConformance(
     artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/kotlin-int-loops.cpkt"),
     cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-int-loops-conformance",
     artifactEnvironmentVariable = "COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT",
-    rustTestName = "k2_int_loops_execute_across_quota_slices_without_host_io",
+    conformanceScenario = "int-loops",
 )
 
 val buildScriptsTest = gradle.includedBuild("build-scripts").task(":test")

@@ -6,8 +6,30 @@ use compukter_vm::{
     HostValueView, OperationSchema, RequestId, Session,
 };
 
-#[test]
-#[ignore = "requires a generated Kotlin executable artifact"]
+fn main() {
+    let mut arguments = std::env::args().skip(1);
+    let scenario = arguments
+        .next()
+        .expect("a Kotlin-to-VM conformance scenario argument is required");
+    assert!(
+        arguments.next().is_none(),
+        "exactly one Kotlin-to-VM conformance scenario argument is required"
+    );
+
+    match scenario.as_str() {
+        "executable" => pinned_vm_verifies_kotlin_executable_instruction_artifact(),
+        "int-loops" => k2_int_loops_execute_across_quota_slices_without_host_io(),
+        "platform-scalar" => k2_platform_scalar_precondition_traps_before_publishing_a_value(),
+        "argv" => k2_string_array_entry_executes_exact_utf16_arguments(),
+        "subset" => k2_string_materialization_executes_char_arrays_and_scalar_templates(),
+        "suspend-call" => k2_suspend_project_call_resumes_across_async_capability(),
+        "when" => k2_bounded_when_selects_matched_and_fallback_branches(),
+        _ => panic!("unknown Kotlin-to-VM conformance scenario: {scenario}"),
+    }
+
+    println!("Kotlin-to-VM conformance scenario passed: {scenario}");
+}
+
 fn pinned_vm_verifies_kotlin_executable_instruction_artifact() {
     let path = std::env::var("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT")
         .expect("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT must be set for this conformance test");
@@ -27,8 +49,6 @@ fn entry_argument_limits() -> EntryArgumentLimits {
     }
 }
 
-#[test]
-#[ignore = "requires a generated Kotlin Int-loops artifact"]
 fn k2_int_loops_execute_across_quota_slices_without_host_io() {
     let path = std::env::var("COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT")
         .expect("COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT must be set for this conformance test");
@@ -69,8 +89,6 @@ fn k2_int_loops_execute_across_quota_slices_without_host_io() {
     );
 }
 
-#[test]
-#[ignore = "requires a generated Kotlin platform-scalar artifact"]
 fn k2_platform_scalar_precondition_traps_before_publishing_a_value() {
     let path = std::env::var("COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT")
         .expect("COMPUKTER_KOTLIN_PLATFORM_SCALAR_ARTIFACT must be set for this conformance test");
@@ -114,8 +132,6 @@ fn k2_platform_scalar_precondition_traps_before_publishing_a_value() {
     }
 }
 
-#[test]
-#[ignore = "requires a generated Kotlin argv artifact"]
 fn k2_string_array_entry_executes_exact_utf16_arguments() {
     let path = std::env::var("COMPUKTER_KOTLIN_ARGV_ARTIFACT")
         .expect("COMPUKTER_KOTLIN_ARGV_ARTIFACT must be set for this conformance test");
@@ -217,8 +233,6 @@ fn k2_string_array_entry_executes_exact_utf16_arguments() {
     }
 }
 
-#[test]
-#[ignore = "requires a generated Kotlin subset artifact"]
 fn k2_string_materialization_executes_char_arrays_and_scalar_templates() {
     let path = std::env::var("COMPUKTER_KOTLIN_SUBSET_ARTIFACT")
         .expect("COMPUKTER_KOTLIN_SUBSET_ARTIFACT must be set for this conformance test");
@@ -326,8 +340,6 @@ fn k2_string_materialization_executes_char_arrays_and_scalar_templates() {
     }
 }
 
-#[test]
-#[ignore = "requires a generated Kotlin suspend-call artifact"]
 fn k2_suspend_project_call_resumes_across_async_capability() {
     let path = std::env::var("COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT")
         .expect("COMPUKTER_KOTLIN_SUSPEND_CALL_ARTIFACT must be set for this conformance test");
@@ -429,8 +441,6 @@ fn k2_suspend_project_call_resumes_across_async_capability() {
     }
 }
 
-#[test]
-#[ignore = "requires a generated Kotlin when artifact"]
 fn k2_bounded_when_selects_matched_and_fallback_branches() {
     let path = std::env::var("COMPUKTER_KOTLIN_WHEN_ARTIFACT")
         .expect("COMPUKTER_KOTLIN_WHEN_ARTIFACT must be set for this conformance test");

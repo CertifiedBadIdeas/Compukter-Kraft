@@ -10,3 +10,4 @@ compukter-vm = { path = "../../../../../../host/compukter-vm" }
 [[test]]
 name = "kotlin_writer"
 path = "kotlin_writer.rs"
+harness = false
