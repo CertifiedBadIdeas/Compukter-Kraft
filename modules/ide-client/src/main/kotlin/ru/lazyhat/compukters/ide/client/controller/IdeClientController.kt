@@ -76,6 +76,7 @@ import ru.lazyhat.compukters.ide.editor.EditorChange
 import ru.lazyhat.compukters.ide.editor.EditorDocument
 import ru.lazyhat.compukters.ide.editor.EditorEditResult
 import ru.lazyhat.compukters.ide.editor.EditorTextEdit
+import ru.lazyhat.compukters.ide.editor.KotlinSmartTyping
 import ru.lazyhat.compukters.ide.highlight.IncrementalKotlinHighlighter
 import ru.lazyhat.compukters.ide.project.ProjectDependencyReceipt
 import ru.lazyhat.compukters.ide.project.ProjectDependencyRollback
@@ -658,7 +659,7 @@ class IdeClientController(
         val result =
             when (input) {
                 is IdeEditorInput.Type -> {
-                    active.document.type(input.text)
+                    if (active.path.isKotlinSource) active.smartTyping.type(input.text) else active.document.type(input.text)
                 }
 
                 is IdeEditorInput.SetCaret -> {
@@ -698,7 +699,7 @@ class IdeClientController(
                 }
 
                 IdeEditorInput.Backspace -> {
-                    active.document.backspace()
+                    if (active.path.isKotlinSource) active.smartTyping.backspace() else active.document.backspace()
                 }
 
                 IdeEditorInput.Delete -> {
@@ -714,7 +715,7 @@ class IdeClientController(
                 }
 
                 IdeEditorInput.Enter -> {
-                    active.document.enter()
+                    if (active.path.isKotlinSource) active.smartTyping.enter() else active.document.enter()
                 }
 
                 IdeEditorInput.Tab -> {
@@ -750,7 +751,7 @@ class IdeClientController(
             updateAnalysis(active, (input as? IdeEditorInput.Type)?.text, result.change)
         } else if (
             input is IdeEditorInput.SetCaret || input is IdeEditorInput.Move || input is IdeEditorInput.MoveWord ||
-            input is IdeEditorInput.Page || input is IdeEditorInput.SelectToken
+            input is IdeEditorInput.Page || input is IdeEditorInput.SelectToken || input is IdeEditorInput.Type
         ) {
             analysisCoordinator?.dismissCompletion()
             refreshAnalysisState()
@@ -2464,6 +2465,7 @@ class IdeClientController(
         var diskRevision: FileRevision,
     ) {
         val highlighter = IncrementalKotlinHighlighter(document)
+        val smartTyping = KotlinSmartTyping(document, highlighter)
         var persistedRevision = document.revision
         var saveInFlight: Long? = null
         var conflict = false
@@ -2473,6 +2475,7 @@ class IdeClientController(
         val dirty: Boolean get() = document.revision != persistedRevision
 
         fun close() {
+            smartTyping.close()
             highlighter.close()
             document.close()
         }

@@ -212,6 +212,27 @@ class IdeClientControllerTest {
     }
 
     @Test
+    fun `Kotlin smart typing flows through writable editor while plain text stays literal`() {
+        val fixture = ControllerFixture(preferences = preferences("demo", "src/main.kt"))
+        fixture.startAndTick()
+
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SelectAll))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type("fun main() ")))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type("{")))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Enter))
+
+        assertEquals("fun main() {\n    \n}", fixture.textEditor().visibleLines.joinToString("\n"))
+        assertEquals("fun main() {\n    ".length, fixture.textEditor().caretUtf16)
+
+        val plain = ControllerFixture(preferences = preferences("demo", "notes.txt"))
+        plain.startAndTick()
+        plain.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SetCaret("notes".length, false)))
+        plain.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type("(")))
+
+        assertEquals("notes(", plain.textEditor().visibleLines.joinToString("\n"))
+    }
+
+    @Test
     fun `save completion marks only submitted editor revision`() {
         val fixture = ControllerFixture(preferences = preferences("demo", "src/main.kt"))
         fixture.startAndTick()
