@@ -17,6 +17,7 @@
  */
 
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 plugins {
     application
@@ -122,6 +123,8 @@ val verifyToolingRuntimeLicenses =
                 "manifests/compiler.payload",
                 "manifests/analysis.payload",
                 "META-INF/licenses/Compukters-Apache-2.0.txt",
+                "META-INF/licenses/jvm/ktlint-1.8.0-MIT.txt",
+                "META-INF/licenses/jvm/slf4j-2.0.18-MIT.txt",
                 "META-INF/NOTICE.txt",
                 "META-INF/THIRD-PARTY-NOTICES.md",
             ).forEach { required ->
@@ -168,6 +171,36 @@ val verifyToolingRuntimeLicenses =
             }
             check(actualExternal.none { "embeddable" in it || "scripting-compiler" in it }) {
                 "embeddable or scripting compiler distribution leaked into ${archive.name}"
+            }
+            val expectedFormatter =
+                rootProject
+                    .file("licenses/distribution-components.tsv")
+                    .readLines()
+                    .drop(1)
+                    .filter { it.isNotBlank() }
+                    .map { it.split('\t') }
+                    .filter { it[0] == "jvm-analysis-formatter" }
+                    .map { (_, component, version, _) -> "$component-$version.jar" }
+                    .sorted()
+            val actualFormatter =
+                ZipFile(archive).use { tooling ->
+                    val analysisJar =
+                        tooling.entries().asSequence().single {
+                            it.name.startsWith("analysis/lib/ide-analysis-k2-") && it.name.endsWith(".jar")
+                        }
+                    ZipInputStream(tooling.getInputStream(analysisJar)).use { nested ->
+                        buildList {
+                            while (true) {
+                                val entry = nested.nextEntry ?: break
+                                if (entry.name.startsWith("META-INF/compukters/kotlin-formatter/") && entry.name.endsWith(".jar")) {
+                                    add(entry.name.substringAfterLast('/'))
+                                }
+                            }
+                        }
+                    }
+                }.filterNot { it.startsWith("ide-kotlin-formatter-") }.sorted()
+            check(actualFormatter == expectedFormatter) {
+                "embedded formatter inventory mismatch: expected $expectedFormatter, found $actualFormatter"
             }
         }
     }

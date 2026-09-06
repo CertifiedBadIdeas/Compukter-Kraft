@@ -55,6 +55,28 @@ generated POMs name unpublished source modules which are already shaded into
 the `for-ide` JARs, so the build resolves those aggregates non-transitively and
 verifies the complete packaged JAR inventory.
 
+## Kotlin formatter runtime
+
+The analysis worker privately embeds ktlint 1.8.0 and its standard ruleset for
+explicit Kotlin format-on-save. Ktlint is copyright Pinterest, Inc., Stanley
+Shyiko, and contributors and is licensed under MIT. Its complete license is at
+`licenses/jvm/ktlint-1.8.0-MIT.txt`. The formatter uses EditorConfig Java
+(`ec4j-core`) 1.1.1, Poko annotations 0.20.1, and Kotlin Logging 7.0.13 under
+Apache-2.0.
+
+The private formatter classpath contains Kotlin compiler/runtime 2.4.10,
+`kotlin-reflect` 1.6.10, and coroutines 1.8.0 under the Kotlin and coroutines
+terms listed elsewhere in this notice. It is loaded separately from the K2
+Analysis API classpath.
+
+SLF4J API 2.0.18 is copyright QOS.ch Sarl and licensed under MIT. Its complete
+license is at `licenses/jvm/slf4j-2.0.18-MIT.txt`.
+
+- Ktlint upstream: <https://github.com/pinterest/ktlint>
+- EditorConfig Java upstream: <https://github.com/ec4j/editorconfig-core-java>
+- Poko upstream: <https://github.com/drewhamilton/Poko>
+- SLF4J upstream: <https://github.com/qos-ch/slf4j>
+
 ## Kotlin coroutines and logging
 
 The worker contains `kotlinx-coroutines-core-jvm` 1.8.0 and the outer archive

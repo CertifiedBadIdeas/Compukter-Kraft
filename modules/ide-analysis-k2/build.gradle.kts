@@ -22,6 +22,7 @@ import java.nio.ByteOrder
 import java.nio.file.Files
 import java.security.MessageDigest
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 plugins {
     alias(libs.plugins.kotlinConvention)
@@ -72,6 +73,15 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
+val kotlinFormatterRuntime = configurations.create("kotlinFormatterRuntime") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+dependencies {
+    add(kotlinFormatterRuntime.name, project(":ide-kotlin-formatter"))
+}
+
 val guestPlatformSources = configurations.create("guestPlatformSources") {
     isCanBeConsumed = false
     isCanBeResolved = true
@@ -86,6 +96,13 @@ dependencies {
 tasks.withType<Jar>().configureEach {
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
+}
+
+tasks.jar {
+    dependsOn(kotlinFormatterRuntime)
+    from(kotlinFormatterRuntime) {
+        into("META-INF/compukters/kotlin-formatter")
+    }
 }
 
 val analysisWorkerPayloadDirectory = layout.buildDirectory.dir("worker-payload/content")
@@ -117,6 +134,12 @@ val prepareAnalysisWorkerPayload = tasks.register<Sync>("prepareAnalysisWorkerPa
         into("META-INF/licenses/kotlin/v2.4.10")
     }
     from(rootProject.layout.projectDirectory.file("licenses/jvm/checker-qual-3.19.0-MIT.txt")) {
+        into("META-INF/licenses/jvm")
+    }
+    from(rootProject.layout.projectDirectory.file("licenses/jvm/ktlint-1.8.0-MIT.txt")) {
+        into("META-INF/licenses/jvm")
+    }
+    from(rootProject.layout.projectDirectory.file("licenses/jvm/slf4j-2.0.18-MIT.txt")) {
         into("META-INF/licenses/jvm")
     }
     from(rootProject.layout.projectDirectory.file("licenses/distribution-components.tsv")) {
@@ -198,6 +221,8 @@ val verifyAnalysisWorkerLicenses = tasks.register("verifyAnalysisWorkerLicenses"
         listOf(
             "META-INF/licenses/Compukters-Apache-2.0.txt",
             "META-INF/licenses/jvm/checker-qual-3.19.0-MIT.txt",
+            "META-INF/licenses/jvm/ktlint-1.8.0-MIT.txt",
+            "META-INF/licenses/jvm/slf4j-2.0.18-MIT.txt",
             "META-INF/NOTICE.txt",
             "META-INF/THIRD-PARTY-NOTICES.md",
         ).forEach { required ->
@@ -237,6 +262,40 @@ val verifyAnalysisWorkerLicenses = tasks.register("verifyAnalysisWorkerLicenses"
         check(actualExternal == expectedExternal) {
             "analysis worker library inventory mismatch: expected $expectedExternal, found $actualExternal"
         }
+        check(actualExternal.none { "embeddable" in it }) {
+            "formatter compiler leaked onto the analysis worker launch classpath"
+        }
+
+        val expectedFormatter =
+            rootProject
+                .file("licenses/distribution-components.tsv")
+                .readLines()
+                .drop(1)
+                .filter { it.isNotBlank() }
+                .map { it.split('\t') }
+                .filter { it[0] == "jvm-analysis-formatter" }
+                .map { (_, component, version, _) -> "$component-$version.jar" }
+                .sorted()
+        val actualFormatter =
+            ZipFile(archive).use { worker ->
+                val analysisJar =
+                    worker.entries().asSequence().single {
+                        it.name.startsWith("lib/ide-analysis-k2-") && it.name.endsWith(".jar")
+                    }
+                ZipInputStream(worker.getInputStream(analysisJar)).use { nested ->
+                    buildList {
+                        while (true) {
+                            val entry = nested.nextEntry ?: break
+                            if (entry.name.startsWith("META-INF/compukters/kotlin-formatter/") && entry.name.endsWith(".jar")) {
+                                add(entry.name.substringAfterLast('/'))
+                            }
+                        }
+                    }
+                }
+            }.filterNot { it.startsWith("ide-kotlin-formatter-") }.sorted()
+        check(actualFormatter == expectedFormatter) {
+            "embedded formatter inventory mismatch: expected $expectedFormatter, found $actualFormatter"
+        }
     }
 }
 
@@ -245,6 +304,7 @@ tasks.test {
     val platformBundle = project(":guest-platform").tasks.named("assemblePlatformBundle")
     dependsOn(guestApiJar, platformBundle)
     doFirst {
+        systemProperty("compukters.test.kotlinFormatterClasspath", kotlinFormatterRuntime.files.joinToString(File.pathSeparator))
         systemProperty("compukters.test.guestApi", guestApiJar.get().archiveFile.get().asFile.absolutePath)
         systemProperty(
             "compukters.test.platformBundle",

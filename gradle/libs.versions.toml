@@ -31,6 +31,7 @@ kotlinx-collections-immutable = "0.5.0"
 tomlj = "1.1.1"
 antlr4-runtime = "4.11.1"
 checker-qual = "3.21.2"
+ktlint = "1.8.0"
 kotlinx-serialization-runtime = "1.7.3"
 caffeine-kotlin = "2.9.3"
 intellij-coroutines = "1.8.0-intellij-13"
@@ -45,6 +46,7 @@ kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = 
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 kotlin-compiler = { module = "org.jetbrains.kotlin:kotlin-compiler", version.ref = "kotlin" }
+kotlin-compiler-embeddable = { module = "org.jetbrains.kotlin:kotlin-compiler-embeddable", version.ref = "kotlin" }
 kotlin-analysis-api-standalone = { module = "org.jetbrains.kotlin:analysis-api-standalone-for-ide", version.ref = "kotlin" }
 kotlin-analysis-api = { module = "org.jetbrains.kotlin:analysis-api-for-ide", version.ref = "kotlin" }
 kotlin-analysis-api-impl-base = { module = "org.jetbrains.kotlin:analysis-api-impl-base-for-ide", version.ref = "kotlin" }
@@ -63,6 +65,8 @@ intellij-util-diff = { module = "com.jetbrains.intellij.platform:util-diff", ver
 tomlj = { module = "org.tomlj:tomlj", version.ref = "tomlj" }
 antlr4-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr4-runtime" }
 checker-qual = { module = "org.checkerframework:checker-qual", version.ref = "checker-qual" }
+ktlint-rule-engine = { module = "com.pinterest.ktlint:ktlint-rule-engine", version.ref = "ktlint" }
+ktlint-ruleset-standard = { module = "com.pinterest.ktlint:ktlint-ruleset-standard", version.ref = "ktlint" }
 
 # 26.1
 minecraft-v261 = { module = "net.minecraft:minecraft", version.ref = "minecraft-v261" }
