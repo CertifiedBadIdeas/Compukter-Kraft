@@ -101,6 +101,19 @@ class KotlinSmartTypingTest {
         }
     }
 
+    @Test
+    fun `rejected structural edit retains its automatic pair`() {
+        val document = EditorDocument("", EditorLimits(maxCodeUnits = 2, maxUtf8Bytes = 2))
+        val highlighter = IncrementalKotlinHighlighter(document)
+        KotlinSmartTyping(document, highlighter).use { typing ->
+            assertIs<EditorEditResult.Applied>(typing.type("{"))
+            assertEquals(EditorEditResult.Rejected(EditorRejection.CodeUnitLimit), typing.enter())
+            assertIs<EditorEditResult.Applied>(typing.backspace())
+            assertEquals("", document.materialize())
+        }
+        highlighter.close()
+    }
+
     private fun fixture(
         source: String,
         block: (EditorDocument, KotlinSmartTyping) -> Unit,

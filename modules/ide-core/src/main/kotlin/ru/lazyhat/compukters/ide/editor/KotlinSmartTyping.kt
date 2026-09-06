@@ -68,7 +68,6 @@ class KotlinSmartTyping(
             document.selectionRange == null && closer != null && caret > 0 && caret < document.length &&
             document.charAt(caret) == closer && PAIRS[document.charAt(caret - 1)] == closer
         ) {
-            automaticClosers.remove(caret)
             return document.replaceRange(EditorRange(caret - 1, caret + 1), "")
         }
         return document.backspace()
@@ -85,7 +84,6 @@ class KotlinSmartTyping(
         val contentIndent = indent + " ".repeat(document.limits.tabWidth)
         val separator = document.preferredLineSeparator
         val automaticClosingBrace = automaticClosers[caret] == '}' && caret < document.length && document.charAt(caret) == '}'
-        if (automaticClosingBrace) automaticClosers.remove(caret)
         val inserted =
             if (automaticClosingBrace) {
                 separator + contentIndent + separator + indent
