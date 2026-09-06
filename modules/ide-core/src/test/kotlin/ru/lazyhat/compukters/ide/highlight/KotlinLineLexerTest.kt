@@ -79,6 +79,50 @@ class KotlinLineLexerTest {
     }
 
     @Test
+    fun `lexes Kotlin expressions inside quoted string templates`() {
+        val source = """println("${'$'}{values.size}: ${'$'}{values[1]}")"""
+        val line = scan(source)
+
+        assertEquals(
+            listOf(
+                "println" to KotlinLexicalKind.Identifier,
+                "(" to KotlinLexicalKind.Operator,
+                "\"" to KotlinLexicalKind.String,
+                "${'$'}{" to KotlinLexicalKind.Operator,
+                "values" to KotlinLexicalKind.Identifier,
+                "." to KotlinLexicalKind.Operator,
+                "size" to KotlinLexicalKind.Identifier,
+                "}" to KotlinLexicalKind.Operator,
+                ": " to KotlinLexicalKind.String,
+                "${'$'}{" to KotlinLexicalKind.Operator,
+                "values" to KotlinLexicalKind.Identifier,
+                "[" to KotlinLexicalKind.Operator,
+                "1" to KotlinLexicalKind.Number,
+                "]" to KotlinLexicalKind.Operator,
+                "}" to KotlinLexicalKind.Operator,
+                "\"" to KotlinLexicalKind.String,
+                ")" to KotlinLexicalKind.Operator,
+            ),
+            line.spans.map { source.substring(it.startUtf16, it.endUtf16) to it.kind },
+        )
+    }
+
+    @Test
+    fun `lexes short identifiers inside quoted string templates`() {
+        val source = "\"${'$'}name\""
+
+        assertEquals(
+            listOf(
+                "\"" to KotlinLexicalKind.String,
+                "${'$'}" to KotlinLexicalKind.Operator,
+                "name" to KotlinLexicalKind.Identifier,
+                "\"" to KotlinLexicalKind.String,
+            ),
+            scan(source).spans.map { source.substring(it.startUtf16, it.endUtf16) to it.kind },
+        )
+    }
+
+    @Test
     fun `excludes line separators and respects keyword and identifier boundaries`() {
         val document = EditorDocument("whenish `fun` when\r\nnext")
         val first = KotlinLineLexer.scan(document, 0, KotlinLexicalState())

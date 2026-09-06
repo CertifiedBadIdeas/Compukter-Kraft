@@ -126,12 +126,60 @@ object KotlinLineLexer {
                         return
                     }
 
+                    '$' -> {
+                        if (kind == KotlinLexicalKind.String && scanStringTemplate(segmentStart)) {
+                            segmentStart = offset
+                        } else {
+                            offset++
+                        }
+                    }
+
                     else -> {
                         offset++
                     }
                 }
             }
             add(segmentStart, offset, kind)
+        }
+
+        private fun scanStringTemplate(segmentStart: Int): Boolean {
+            if (input[offset] != '$') return false
+            if (input.matches(offset, "${'$'}{")) {
+                add(segmentStart, offset, KotlinLexicalKind.String)
+                val opening = offset
+                offset += 2
+                add(opening, offset, KotlinLexicalKind.Operator)
+                scanTemplateExpression()
+                return true
+            }
+            val identifierStart = offset + 1
+            if (identifierStart >= input.length || !isIdentifierStart(identifierStart)) return false
+            add(segmentStart, offset, KotlinLexicalKind.String)
+            add(offset, identifierStart, KotlinLexicalKind.Operator)
+            offset = identifierStart
+            scanIdentifier()
+            return true
+        }
+
+        private fun scanTemplateExpression() {
+            var braceDepth = 1
+            while (offset < input.length && braceDepth > 0) {
+                when (input[offset]) {
+                    '{' -> {
+                        add(offset, ++offset, KotlinLexicalKind.Operator)
+                        braceDepth++
+                    }
+
+                    '}' -> {
+                        add(offset, ++offset, KotlinLexicalKind.Operator)
+                        braceDepth--
+                    }
+
+                    else -> {
+                        scanToken()
+                    }
+                }
+            }
         }
 
         private fun scanBacktickedIdentifier() {
