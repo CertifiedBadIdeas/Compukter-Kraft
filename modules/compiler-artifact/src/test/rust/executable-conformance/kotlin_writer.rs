@@ -286,7 +286,7 @@ fn k2_platform_scalar_precondition_traps_before_publishing_a_value() {
             .expect("platform-scalar artifact must advance")
         {
             AdvanceOutcome::SliceExhausted => {}
-            AdvanceOutcome::Crashed(GuestTrap::DivisionByZero) => break,
+            AdvanceOutcome::Crashed(GuestTrap::InvalidArgument) => break,
             AdvanceOutcome::HostRequestBatch(_) => {
                 panic!("invalid platform scalar construction must trap before a host request")
             }

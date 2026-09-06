@@ -59,7 +59,8 @@ class DiagnosticQueryTest {
 
             fun main() {
                 val level = Redstone.left.get()
-                Redstone.right.set(level, false)
+                Redstone.right.set(level)
+                Redstone.top.set(15, Redstone.Power.DIRECT)
                 Redstone.front.await()
                 Redstone.back.await(7)
                 Redstone.top.awaitAtLeast(7)
@@ -73,6 +74,24 @@ class DiagnosticQueryTest {
                 active.diagnostics.none { it.severity == EditorDiagnosticSeverity.Error },
                 active.diagnostics.toString(),
             )
+        }
+    }
+
+    @Test
+    fun `redstone output mode does not accept a Boolean`() {
+        val source =
+            """
+            import compukter.redstone.Redstone
+
+            fun main() {
+                Redstone.right.set(15, true)
+            }
+            """.trimIndent()
+        K2QueryFixture.sourceWithGuestApi(false, "main.kt" to source).use { fixture ->
+            val result = fixture.execute(fixture.presentation()) as AnalysisResult.Presentation
+            val active = result.value.accept(fixture.identity) as SnapshotPresentationAcceptance.Active
+
+            assertTrue(active.diagnostics.any { it.severity == EditorDiagnosticSeverity.Error }, active.diagnostics.toString())
         }
     }
 

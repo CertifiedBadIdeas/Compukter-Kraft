@@ -24,6 +24,7 @@ import ru.lazyhat.compukters.compiler.worker.protocol.BinaryValue
 import ru.lazyhat.compukters.compiler.worker.protocol.VirtualSourcePath
 import ru.lazyhat.compukters.compiler.worker.protocol.WorkerDiagnostic
 import ru.lazyhat.compukters.compiler.worker.protocol.WorkerLimits
+import ru.lazyhat.compukters.platform.bundle.PlatformDefaultArgument
 import ru.lazyhat.compukters.platform.bundle.PlatformModuleId
 import ru.lazyhat.compukters.platform.bundle.PlatformScalarConstant
 import ru.lazyhat.compukters.platform.bundle.PlatformScalarType
@@ -74,6 +75,7 @@ data class PlatformFunctionLink(
     val signature: String,
     val exportName: String,
     val moduleHash: ByteArray,
+    val defaultArguments: List<PlatformDefaultArgument?> = emptyList(),
 ) {
     init {
         require(moduleHash.size == 32) { "platform function module hash must be SHA-256" }

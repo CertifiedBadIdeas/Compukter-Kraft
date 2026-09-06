@@ -308,7 +308,7 @@ class CompletionQueryTest {
             val items = fixture.complete("main.kt", redstoneSource.indexOf("Redstone.") + "Redstone.".length).items
             val names = items.map { it.insertText }.toSet()
 
-            assertTrue(names.containsAll(setOf("front", "back", "left", "right", "top", "bottom")), items.toString())
+            assertTrue(names.containsAll(setOf("Power", "front", "back", "left", "right", "top", "bottom")), items.toString())
             assertTrue("outputs" !in names, items.toString())
         }
 
@@ -320,6 +320,13 @@ class CompletionQueryTest {
             assertTrue(items.any { it.insertText == "get" }, items.toString())
             assertTrue(items.any { it.insertText == "set" }, items.toString())
             assertTrue(items.any { it.insertText == "awaitAtLeast" }, items.toString())
+        }
+
+        val powerSource = "import compukter.redstone.Redstone\nfun main() { Redstone.Power. }"
+        K2QueryFixture.sourceWithGuestApi(false, "main.kt" to powerSource).use { fixture ->
+            val items = fixture.complete("main.kt", powerSource.indexOf("Redstone.Power.") + "Redstone.Power.".length).items
+
+            assertTrue(items.map { it.insertText }.containsAll(setOf("WEAK", "DIRECT")), items.toString())
         }
     }
 

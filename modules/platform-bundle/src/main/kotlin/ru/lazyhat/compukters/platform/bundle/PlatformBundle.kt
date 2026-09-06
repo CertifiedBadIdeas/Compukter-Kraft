@@ -58,7 +58,14 @@ data class PlatformDeclaration(
     val startUtf16: Int,
     val endUtf16: Int,
     val trustedExternal: Boolean,
+    val defaultArguments: List<PlatformDefaultArgument?> = emptyList(),
 )
+
+sealed interface PlatformDefaultArgument {
+    data class EnumEntry(
+        val symbol: String,
+    ) : PlatformDefaultArgument
+}
 
 enum class PlatformCompletionKind {
     CLASS,

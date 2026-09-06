@@ -25,9 +25,12 @@ import org.jetbrains.kotlin.analysis.api.components.canBeCalledAsExtensionOn
 import org.jetbrains.kotlin.analysis.api.components.createUseSiteVisibilityChecker
 import org.jetbrains.kotlin.analysis.api.components.expressionType
 import org.jetbrains.kotlin.analysis.api.components.render
+import org.jetbrains.kotlin.analysis.api.components.resolveSymbol
 import org.jetbrains.kotlin.analysis.api.components.scopeContext
+import org.jetbrains.kotlin.analysis.api.components.staticMemberScope
 import org.jetbrains.kotlin.analysis.api.renderer.declarations.impl.KaDeclarationRendererForSource
 import org.jetbrains.kotlin.analysis.api.renderer.types.impl.KaTypeRendererForSource
+import org.jetbrains.kotlin.analysis.api.scopes.KaScope
 import org.jetbrains.kotlin.analysis.api.symbols.KaCallableSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassKind
 import org.jetbrains.kotlin.analysis.api.symbols.KaClassLikeSymbol
@@ -40,6 +43,8 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaTypeParameterSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaValueParameterSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.markers.KaNamedSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.symbol
+import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
+import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.types.Variance
 import ru.lazyhat.compukters.ide.analysis.AnalysisQuery
 import ru.lazyhat.compukters.ide.analysis.AnalysisResult
@@ -208,6 +213,25 @@ internal object CompletionQuery {
             receiverType.scope?.let { memberScope ->
                 memberScope.getCallableSignatures(nameMatches).forEach { accept(it.symbol, Int.MAX_VALUE) }
                 memberScope.getClassifierSymbols(nameMatches).forEach { accept(it, Int.MAX_VALUE) }
+            }
+            val receiverClass =
+                when (val receiver = context.receiver) {
+                    is KtNameReferenceExpression -> {
+                        receiver.resolveSymbol() as? KaNamedClassSymbol
+                    }
+
+                    is KtDotQualifiedExpression -> {
+                        (receiver.selectorExpression as? KtNameReferenceExpression)?.resolveSymbol() as? KaNamedClassSymbol
+                    }
+
+                    else -> {
+                        null
+                    }
+                }
+            val staticScope: KaScope? = receiverClass?.staticMemberScope
+            staticScope?.let {
+                it.callables(nameMatches).forEach { symbol -> accept(symbol, Int.MAX_VALUE) }
+                it.classifiers(nameMatches).forEach { symbol -> accept(symbol, Int.MAX_VALUE) }
             }
             scopeContext.scopes.forEachIndexed { scopeIndex, scopeWithKind ->
                 scopeWithKind.scope

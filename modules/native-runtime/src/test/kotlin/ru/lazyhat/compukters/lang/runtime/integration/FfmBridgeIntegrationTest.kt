@@ -38,7 +38,7 @@ class FfmBridgeIntegrationTest {
     @Test
     fun `JDK 25 FFM reads the native ABI version`() {
         FfmBridge.open(Path.of(requiredProperty("compukter.ffi.library"))).use { bridge ->
-            assertEquals(8, bridge.abiVersion())
+            assertEquals(9, bridge.abiVersion())
         }
     }
 

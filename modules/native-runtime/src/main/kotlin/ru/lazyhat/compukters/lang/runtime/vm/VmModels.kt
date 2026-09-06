@@ -156,6 +156,7 @@ enum class GuestTrap(
     NULL_REFERENCE(3),
     INDEX_OUT_OF_BOUNDS(4),
     CLASS_CAST(5),
+    INVALID_ARGUMENT(7),
 }
 
 enum class VmFault(

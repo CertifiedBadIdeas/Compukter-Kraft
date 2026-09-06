@@ -1191,7 +1191,7 @@ internal class FfmBridge private constructor(
                             ),
                         ),
                 ).also { bridge ->
-                    if (bridge.abiVersion() != 8) throw VmBridgeException("unsupported Compukter FFM ABI")
+                    if (bridge.abiVersion() != 9) throw VmBridgeException("unsupported Compukter FFM ABI")
                 }
             } catch (error: Throwable) {
                 arena.close()

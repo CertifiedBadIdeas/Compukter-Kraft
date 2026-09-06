@@ -322,6 +322,7 @@ class K2CompilerAdapter(
                             declaration.signature,
                             library.strings[export.name.value.toInt()].toString(),
                             moduleHash.copyOf(),
+                            declaration.defaultArguments,
                         )
                     }
             library.exports.filter { it.kind == SymbolKind.TYPE }.forEach { export ->

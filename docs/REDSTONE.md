@@ -15,8 +15,8 @@ import compukter.redstone.Redstone
 fun main() {
     val current = Redstone.left.get()
 
-    Redstone.right.set(15, false) // weak power
-    Redstone.top.set(15, true)    // direct power
+    Redstone.right.set(15)                         // weak power by default
+    Redstone.top.set(15, Redstone.Power.DIRECT)   // direct power
 
     val changed = Redstone.left.await()
     Redstone.front.await(7)
@@ -37,10 +37,10 @@ The wait operations block the current VM task:
 - `awaitAtLeast(level)` is level-triggered and completes when the input is at
   least that level. It may also complete immediately.
 
-`set(level, direct)` is blocking host I/O. With `direct = false`, the side emits
-weak power. With `direct = true`, the same level is additionally exposed as
-vanilla direct power, allowing propagation through an adjacent solid
-conductor. Direct power is a flag, not a second independently programmable
+`set(level, power = Redstone.Power.WEAK)` is blocking host I/O. `WEAK` emits
+ordinary weak power and is the default. `DIRECT` additionally exposes the same
+level as vanilla direct power, allowing propagation through an adjacent solid
+conductor. Direct power is a mode, not a second independently programmable
 level.
 
 The public API intentionally has no packed-register or multi-side builder. The

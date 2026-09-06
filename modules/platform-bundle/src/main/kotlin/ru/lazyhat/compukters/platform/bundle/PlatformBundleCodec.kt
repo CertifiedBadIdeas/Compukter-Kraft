@@ -31,7 +31,7 @@ import java.security.MessageDigest
 object PlatformBundleCodec {
     const val SUPPORTED_PLATFORM_ABI = 1
 
-    private const val FORMAT_VERSION = 3
+    private const val FORMAT_VERSION = 4
     private const val MAX_BUNDLE_BYTES = 128 * 1024 * 1024
     private const val MAX_BINARY_BYTES = 64 * 1024 * 1024
     private const val MAX_TEXT_BYTES = 1024 * 1024
@@ -39,6 +39,7 @@ object PlatformBundleCodec {
     private const val MAX_DEPENDENCIES = 4096
     private const val MAX_SOURCES = 65_536
     private const val MAX_DECLARATIONS = 262_144
+    private const val MAX_DEFAULT_ARGUMENTS = 1024
     private const val MAX_COMPLETION_DECLARATIONS = 262_144
     private const val MAX_SCALAR_TYPES = 65_536
     private const val MAX_SCALAR_CONSTANTS = 262_144
@@ -191,6 +192,16 @@ object PlatformBundleCodec {
                 require(declarationKeys.add(declaration.symbol to declaration.signature)) {
                     "duplicate platform declaration ${declaration.symbol} ${declaration.signature}"
                 }
+                require(declaration.defaultArguments.size <= MAX_DEFAULT_ARGUMENTS) {
+                    "platform declaration ${declaration.symbol} has too many default arguments"
+                }
+                declaration.defaultArguments.filterNotNull().forEach { argument ->
+                    when (argument) {
+                        is PlatformDefaultArgument.EnumEntry -> {
+                            strictUtf8(argument.symbol, "platform enum default argument")
+                        }
+                    }
+                }
             }
             val completionKeys = mutableSetOf<Pair<String, String>>()
             module.completionDeclarations.forEach { declaration ->
@@ -339,6 +350,19 @@ object PlatformBundleCodec {
                 u32(declaration.startUtf16)
                 u32(declaration.endUtf16)
                 output.write(if (declaration.trustedExternal) 1 else 0)
+                count(declaration.defaultArguments.size)
+                declaration.defaultArguments.forEach { argument ->
+                    when (argument) {
+                        null -> {
+                            output.write(0)
+                        }
+
+                        is PlatformDefaultArgument.EnumEntry -> {
+                            output.write(1)
+                            string(argument.symbol)
+                        }
+                    }
+                }
             }
             count(value.completionDeclarations.size)
             value.completionDeclarations.forEach { declaration ->
@@ -476,6 +500,14 @@ object PlatformBundleCodec {
                                 0 -> false
                                 1 -> true
                                 else -> throw IllegalArgumentException("invalid trusted external flag: $value")
+                            },
+                        defaultArguments =
+                            List(count(MAX_DEFAULT_ARGUMENTS, "platform default argument")) {
+                                when (val tag = u8()) {
+                                    0 -> null
+                                    1 -> PlatformDefaultArgument.EnumEntry(string("platform enum default argument"))
+                                    else -> throw IllegalArgumentException("invalid platform default argument tag: $tag")
+                                }
                             },
                     )
                 }

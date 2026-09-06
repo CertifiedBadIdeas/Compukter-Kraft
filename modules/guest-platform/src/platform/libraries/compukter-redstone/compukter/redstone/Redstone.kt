@@ -13,8 +13,8 @@ public value class RedstoneSide internal constructor(internal val index: Int) {
 
     public fun get(): Int = redstoneLevel(RedstoneBindings.input(index))
 
-    public fun set(level: Int, direct: Boolean) {
-        RedstoneBindings.setOutput(index, redstoneOutput(level, direct))
+    public fun set(level: Int, power: Redstone.Power = Redstone.Power.WEAK) {
+        RedstoneBindings.setOutput(index, redstoneOutput(level, power))
     }
 
     public fun await(): Int = redstoneLevel(RedstoneBindings.awaitInputChange(index))
@@ -27,6 +27,11 @@ public value class RedstoneSide internal constructor(internal val index: Int) {
 }
 
 public object Redstone {
+    public enum class Power {
+        WEAK,
+        DIRECT,
+    }
+
     public val front: RedstoneSide
         get() = RedstoneSide(0)
 
@@ -74,4 +79,5 @@ private value class RedstoneLevel(private val value: Int) {
 
 private fun redstoneLevel(level: Int): Int = RedstoneLevel(level).asInt()
 
-private fun redstoneOutput(level: Int, direct: Boolean): Int = redstoneLevel(level) or if (direct) 0x10 else 0
+private fun redstoneOutput(level: Int, power: Redstone.Power): Int =
+    redstoneLevel(level) or if (power == Redstone.Power.DIRECT) 0x10 else 0

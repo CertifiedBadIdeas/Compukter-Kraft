@@ -465,7 +465,9 @@ cannot become one merely by copying its package, name, and signature.
 
 - [x] **Redstone GPIO** — `Redstone.<side>` exposes immediate `get()`,
   edge-triggered `await()`, exact `await(level)`, threshold
-  `awaitAtLeast(level)`, and blocking `set(level, direct)`. These operations
+  `awaitAtLeast(level)`, and blocking
+  `set(level, power = Redstone.Power.WEAK)`, with `Redstone.Power.DIRECT` for
+  direct power. These operations
   lower through the trusted scalar capability while packed output batching
   remains private to the runtime. Rust waiter tests, core batch-commit tests, and the
   real NeoForge `compukters:computer_redstone` GameTest cover the complete path.

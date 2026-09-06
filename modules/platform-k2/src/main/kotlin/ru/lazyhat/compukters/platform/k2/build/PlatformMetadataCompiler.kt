@@ -50,6 +50,7 @@ import ru.lazyhat.compukters.platform.bundle.CompuktersDefaultImports
 import ru.lazyhat.compukters.platform.bundle.PlatformCompletionDeclaration
 import ru.lazyhat.compukters.platform.bundle.PlatformCompletionKind
 import ru.lazyhat.compukters.platform.bundle.PlatformDeclaration
+import ru.lazyhat.compukters.platform.bundle.PlatformDefaultArgument
 import ru.lazyhat.compukters.platform.bundle.PlatformModuleId
 import ru.lazyhat.compukters.platform.bundle.PlatformScalarConstant
 import ru.lazyhat.compukters.platform.bundle.PlatformScalarRepresentation
@@ -415,6 +416,7 @@ class PlatformMetadataCompiler {
         packageName: String,
         owners: List<String>,
         inheritedPrivate: Boolean = false,
+        ownerHasDispatchReceiver: Boolean = false,
         declaration: KtDeclaration,
     ): List<ParsedDeclaration> {
         val named = declaration as? KtNamedDeclaration ?: return emptyList()
@@ -435,6 +437,7 @@ class PlatformMetadataCompiler {
                 startUtf16 = declaration.declarationStartOffset(),
                 endUtf16 = declaration.textRange.endOffset,
                 trustedExternal = external,
+                defaultArguments = defaultArguments(packageName, ownerHasDispatchReceiver, declaration),
             )
         val private =
             inheritedPrivate || declaration.hasModifier(KtTokens.PRIVATE_KEYWORD) || declaration.hasModifier(KtTokens.INTERNAL_KEYWORD)
@@ -449,7 +452,17 @@ class PlatformMetadataCompiler {
                 (declaration as? KtDeclarationContainer)?.declarations.orEmpty() +
                     listOfNotNull((declaration as? KtClass)?.primaryConstructor) +
                     propertyParameters
-            ).flatMap { child -> collect(module, sourcePath, packageName, owners + name, private, child) }
+            ).flatMap { child ->
+                collect(
+                    module,
+                    sourcePath,
+                    packageName,
+                    owners + name,
+                    private,
+                    declaration is KtClass,
+                    child,
+                )
+            }
         val parsed =
             ParsedDeclaration(
                 platformDeclaration,
@@ -483,6 +496,29 @@ class PlatformMetadataCompiler {
                     )
                 }
         return listOf(parsed) + listOfNotNull(getter) + nested
+    }
+
+    private fun defaultArguments(
+        packageName: String,
+        ownerHasDispatchReceiver: Boolean,
+        declaration: KtDeclaration,
+    ): List<PlatformDefaultArgument?> {
+        val function = declaration as? KtNamedFunction ?: return emptyList()
+        val values =
+            function.valueParameters.map { parameter ->
+                parameter.defaultValue?.let { expression ->
+                    val reference = expression.text
+                    require(reference.matches(QUALIFIED_IDENTIFIER)) {
+                        "platform default argument must be a qualified enum entry: $reference"
+                    }
+                    PlatformDefaultArgument.EnumEntry(
+                        if (reference.startsWith("$packageName.")) reference else "$packageName.$reference",
+                    )
+                }
+            }
+        if (values.none { it != null }) return emptyList()
+        val implicitParameters = (if (ownerHasDispatchReceiver) 1 else 0) + (if (function.receiverTypeReference == null) 0 else 1)
+        return List(implicitParameters) { null } + values
     }
 
     private fun signature(declaration: KtDeclaration): String =
@@ -575,6 +611,7 @@ class PlatformMetadataCompiler {
     )
 
     private companion object {
+        val QUALIFIED_IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")
         val DECLARATION_ORDER =
             compareBy<ParsedDeclaration>(
                 { it.declaration.symbol },
@@ -594,7 +631,7 @@ class PlatformMetadataCompiler {
 }
 
 object PlatformMetadataCodec {
-    private const val FORMAT = 2
+    private const val FORMAT = 3
     private val MAGIC = byteArrayOf('C'.code.toByte(), 'P'.code.toByte(), 'M'.code.toByte(), 'D'.code.toByte())
 
     fun encode(metadata: DecodedPlatformMetadata): ImmutableBytes {
@@ -613,6 +650,19 @@ object PlatformMetadataCodec {
                         sink.writeInt(declaration.startUtf16)
                         sink.writeInt(declaration.endUtf16)
                         sink.writeBoolean(declaration.trustedExternal)
+                        sink.writeInt(declaration.defaultArguments.size)
+                        declaration.defaultArguments.forEach { argument ->
+                            when (argument) {
+                                null -> {
+                                    sink.writeByte(0)
+                                }
+
+                                is PlatformDefaultArgument.EnumEntry -> {
+                                    sink.writeByte(1)
+                                    sink.string(argument.symbol)
+                                }
+                            }
+                        }
                     }
                     sink.writeInt(metadata.exportedSymbols.size)
                     metadata.exportedSymbols.forEach(sink::string)
@@ -644,6 +694,14 @@ object PlatformMetadataCodec {
                         startUtf16 = source.readInt().also { require(it >= 0) },
                         endUtf16 = source.readInt().also { require(it >= 0) },
                         trustedExternal = source.readBoolean(),
+                        defaultArguments =
+                            List(source.count("default argument")) {
+                                when (val tag = source.readUnsignedByte()) {
+                                    0 -> null
+                                    1 -> PlatformDefaultArgument.EnumEntry(source.string())
+                                    else -> throw IllegalArgumentException("invalid platform default argument tag: $tag")
+                                }
+                            },
                     )
                 }
             val exports = List(source.count("export")) { source.string() }

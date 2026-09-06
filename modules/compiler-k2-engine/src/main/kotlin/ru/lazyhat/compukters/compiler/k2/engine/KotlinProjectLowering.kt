@@ -118,6 +118,7 @@ import ru.lazyhat.compukters.compiler.artifact.pool.ConstantPoolBuilder
 import ru.lazyhat.compukters.compiler.artifact.write.ArtifactWriter
 import ru.lazyhat.compukters.compiler.k2.engine.intrinsic.CapabilityOperationHandler
 import ru.lazyhat.compukters.compiler.k2.engine.intrinsic.IntrinsicBlockingMode
+import ru.lazyhat.compukters.platform.bundle.PlatformDefaultArgument
 import ru.lazyhat.compukters.platform.bundle.PlatformScalarConstant
 import ru.lazyhat.compukters.platform.bundle.PlatformScalarRepresentation
 import ru.lazyhat.compukters.platform.bundle.PlatformScalarType
@@ -576,6 +577,7 @@ internal object KotlinProjectLowering {
                     linkedSymbols.types.values.map(ExternalTypeTarget::exportName) +
                     linkedSymbols.fieldsByGetter.values.map(ExternalFieldTarget::exportName) +
                     linkedSymbols.enumEntries.values.map(ExternalFieldTarget::exportName) +
+                    linkedSymbols.defaultEnumEntries.values.map(ExternalFieldTarget::exportName) +
                     userFunctions.map { requireNotNull(functionArtifactNames[it.symbol]) } +
                     userClasses.map { it.fqNameWhenAvailable?.asString() ?: it.name.asString() } +
                     userClasses.flatMap { declaration ->
@@ -673,7 +675,7 @@ internal object KotlinProjectLowering {
                 }.toMap()
         val externalClassTypes = externalTypeImports.mapValues { (_, target) -> TypeRef.Imported(target.importId) }
         val externalFieldImports =
-            (linkedSymbols.fieldsByGetter.values + linkedSymbols.enumEntries.values)
+            (linkedSymbols.fieldsByGetter.values + linkedSymbols.enumEntries.values + linkedSymbols.defaultEnumEntries.values)
                 .distinctBy(ExternalFieldTarget::sortKey)
                 .sortedBy(ExternalFieldTarget::sortKey)
                 .mapIndexed { index, target ->
@@ -684,6 +686,8 @@ internal object KotlinProjectLowering {
             linkedSymbols.fieldsByGetter.mapValues { (_, target) -> requireNotNull(externalFieldsBySortKey[target.sortKey]) }
         val externalEnumFieldImports =
             linkedSymbols.enumEntries.mapValues { (_, target) -> requireNotNull(externalFieldsBySortKey[target.sortKey]) }
+        val externalDefaultEnumFieldImports =
+            linkedSymbols.defaultEnumEntries.mapValues { (_, target) -> requireNotNull(externalFieldsBySortKey[target.sortKey]) }
         val externalFieldImportCount = externalFieldImports.size
         val externalFunctionTypeBase = initializerTypeBase + initializerClasses.size
         val externalFunctionImports =
@@ -768,6 +772,7 @@ internal object KotlinProjectLowering {
                         classLayouts.flatMap { layout -> layout.enumEntries }.associateBy { it.declaration.symbol },
                     externalFieldsByGetter = externalGetterFieldImports,
                     externalEnumEntries = externalEnumFieldImports,
+                    externalDefaultEnumEntries = externalDefaultEnumFieldImports,
                     externalFunctions = externalFunctionImports,
                 )
             val compiled = compiler.compile()
@@ -1542,6 +1547,16 @@ private data class CompiledFunction(
     val blocks: List<Block>,
 )
 
+private sealed interface ResolvedCallArgument {
+    data class Expression(
+        val expression: IrExpression,
+    ) : ResolvedCallArgument
+
+    data class PlatformDefault(
+        val value: PlatformDefaultArgument,
+    ) : ResolvedCallArgument
+}
+
 private data class ExternalFunctionTarget(
     val exportName: String,
     val moduleHash: ByteArray,
@@ -1572,6 +1587,7 @@ private data class LinkedPlatformSymbols(
     val types: Map<IrClassSymbol, ExternalTypeTarget>,
     val fieldsByGetter: Map<IrSimpleFunctionSymbol, ExternalFieldTarget>,
     val enumEntries: Map<IrEnumEntrySymbol, ExternalFieldTarget>,
+    val defaultEnumEntries: Map<String, ExternalFieldTarget>,
 )
 
 @OptIn(UnsafeDuringIrConstructionAPI::class)
@@ -1584,9 +1600,12 @@ private fun linkedPlatformSymbols(
     val types = linkedMapOf<IrClassSymbol, ExternalTypeTarget>()
     val fieldsByGetter = linkedMapOf<IrSimpleFunctionSymbol, ExternalFieldTarget>()
     val enumEntries = linkedMapOf<IrEnumEntrySymbol, ExternalFieldTarget>()
+    val classSymbols = linkedMapOf<String, IrClassSymbol>()
+    val neededDefaultArguments = mutableListOf<PlatformDefaultArgument>()
 
     fun considerTypeSymbol(symbol: IrClassSymbol) {
         val fqName = symbol.owner.fqNameWhenAvailable?.asString() ?: return
+        classSymbols[fqName] = symbol
         if (fqName == "kotlin.IntArray") return
         val link = typeLinks[fqName] ?: return
         types[symbol] = ExternalTypeTarget(link.exportName, link.moduleHash.copyOf())
@@ -1618,6 +1637,13 @@ private fun linkedPlatformSymbols(
                 val target = expression.symbol.owner
                 considerType(target.returnType)
                 target.parameters.forEach { considerType(it.type) }
+                val targetSymbol = target.fqNameWhenAvailable?.asString()
+                val targetSignature = target.canonicalPlatformSignature()
+                session.platformFunctions
+                    .singleOrNull { link -> link.symbol == targetSymbol && link.signature == targetSignature }
+                    ?.defaultArguments
+                    ?.filterNotNull()
+                    ?.let(neededDefaultArguments::addAll)
                 val property = target.correspondingPropertySymbol?.owner ?: target.parent as? IrProperty
                 val owner = property?.parent as? IrClass
                 val fieldSymbol = property?.fqNameWhenAvailable?.asString()
@@ -1655,7 +1681,20 @@ private fun linkedPlatformSymbols(
         function.parameters.forEach { considerType(it.type) }
         function.accept(visitor, null)
     }
-    return LinkedPlatformSymbols(types, fieldsByGetter, enumEntries)
+    val defaultEnumEntries = linkedMapOf<String, ExternalFieldTarget>()
+    neededDefaultArguments
+        .filterIsInstance<PlatformDefaultArgument.EnumEntry>()
+        .forEach { argument ->
+            val owner =
+                classSymbols[argument.symbol.substringBeforeLast('.')]
+                    ?: throw IllegalArgumentException("platform enum default owner is unavailable: ${argument.symbol}")
+            val field =
+                fieldTarget(argument.symbol, owner)
+                    ?: throw IllegalArgumentException("platform enum default entry is unavailable: ${argument.symbol}")
+            require(field.static) { "platform enum default entry is not static: ${argument.symbol}" }
+            defaultEnumEntries[argument.symbol] = field
+        }
+    return LinkedPlatformSymbols(types, fieldsByGetter, enumEntries, defaultEnumEntries)
 }
 
 @OptIn(UnsafeDuringIrConstructionAPI::class)
@@ -1718,6 +1757,7 @@ private class FunctionCompiler(
     private val enumEntries: Map<IrEnumEntrySymbol, GuestEnumEntryLayout>,
     private val externalFieldsByGetter: Map<IrSimpleFunctionSymbol, ExternalFieldTarget>,
     private val externalEnumEntries: Map<IrEnumEntrySymbol, ExternalFieldTarget>,
+    private val externalDefaultEnumEntries: Map<String, ExternalFieldTarget>,
     private val externalFunctions: Map<IrSimpleFunctionSymbol, ExternalFunctionTarget>,
 ) {
     private val localTypes = mutableListOf<ValueType>()
@@ -2149,7 +2189,7 @@ private class FunctionCompiler(
         }
         externalFunctions[target.symbol]?.let { external ->
             val argumentExpressions = resolveProjectCallArguments(call, target)
-            val arguments = argumentExpressions.map(::compileExpression)
+            val arguments = argumentExpressions.map(::compileCallArgument)
             val destination = destinationFor(target.returnType, call)
             if (target.isSuspend) {
                 val resume = createBlock()
@@ -2163,16 +2203,12 @@ private class FunctionCompiler(
         }
         compileCompareToPredicate(call, target.name.asString())?.let { return it }
         val targetId = functionIds[target.symbol]
-        val argumentExpressions =
-            if (targetId == null) {
-                call.arguments.filterNotNull()
-            } else {
-                resolveProjectCallArguments(call, target)
-            }
-        val arguments = argumentExpressions.map(::compileExpression)
         if (targetId == null) {
+            val argumentExpressions = call.arguments.filterNotNull()
+            val arguments = argumentExpressions.map(::compileExpression)
             return compileBuiltinCall(call, target, argumentExpressions, arguments)
         }
+        val arguments = resolveProjectCallArguments(call, target).map(::compileCallArgument)
         val destination = destinationFor(target.returnType, call)
         if (target.isSuspend) {
             val resume = createBlock()
@@ -2188,16 +2224,50 @@ private class FunctionCompiler(
     private fun resolveProjectCallArguments(
         call: IrCall,
         target: IrSimpleFunction,
-    ): List<IrExpression> =
-        loweredParameters(target, session).map { parameter ->
+    ): List<ResolvedCallArgument> {
+        val platformDefaults =
+            session.platformFunctions
+                .singleOrNull { link ->
+                    link.symbol == target.fqNameWhenAvailable?.asString() &&
+                        link.signature == target.canonicalPlatformSignature()
+                }?.defaultArguments
+                .orEmpty()
+        return loweredParameters(target, session).mapIndexed { loweredIndex, parameter ->
             val index = target.parameters.indexOf(parameter)
-            call.arguments.getOrNull(index)
+            call.arguments.getOrNull(index)?.let(ResolvedCallArgument::Expression)
+                ?: platformDefaults.getOrNull(loweredIndex)?.let(ResolvedCallArgument::PlatformDefault)
                 ?: parameter.defaultValue
                     ?.expression
-                    ?.takeIf { expression ->
-                        isSupportedScalarDefault(expression) || isSupportedStringArrayDefault(expression)
+                    ?.takeIf { expression -> isSupportedScalarDefault(expression) || isSupportedStringArrayDefault(expression) }
+                    ?.let(ResolvedCallArgument::Expression)
+                ?: throw UnsupportedKotlinIr(
+                    call,
+                    "omitted argument ${parameter.name} is outside the project subset",
+                )
+        }
+    }
+
+    private fun compileCallArgument(argument: ResolvedCallArgument): RegisterId =
+        when (argument) {
+            is ResolvedCallArgument.Expression -> {
+                compileExpression(argument.expression)
+            }
+
+            is ResolvedCallArgument.PlatformDefault -> {
+                when (val value = argument.value) {
+                    is PlatformDefaultArgument.EnumEntry -> {
+                        val field =
+                            externalDefaultEnumEntries[value.symbol]
+                                ?: throw IllegalArgumentException("platform enum default entry is not linked: ${value.symbol}")
+                        val ownerType =
+                            externalClassTypes[field.ownerSymbol]
+                                ?: throw IllegalArgumentException("platform enum default owner is not linked: ${value.symbol}")
+                        allocate(ValueType.Ref(nullable = false, type = ownerType)).also { destination ->
+                            emit(Instruction.StaticGet(destination, FieldRef.Imported(field.importId)))
+                        }
                     }
-                ?: throw UnsupportedKotlinIr(call, "omitted argument is outside the project subset")
+                }
+            }
         }
 
     private fun isSupportedScalarDefault(expression: IrExpression): Boolean =
@@ -2339,10 +2409,11 @@ private class FunctionCompiler(
         emit(Instruction.Branch(above, blockId(failure), blockId(success)))
 
         currentBlock = failure
-        val zero = emitI32Constant(0, element)
-        val trapped = allocate(ValueType.I32)
-        emit(Instruction.DivideI32(trapped, zero, zero))
-        emit(Instruction.Unreachable)
+        prepareAllocationBlock()
+        val exceptionType = TypeRef.Imported(ImportId.of(3u))
+        val exception = allocate(ValueType.Ref(nullable = false, type = exceptionType))
+        emit(Instruction.NewObject(exception, exceptionType))
+        emit(Instruction.Throw(exception))
 
         currentBlock = success
     }
@@ -3187,7 +3258,7 @@ private fun IrType.canonicalPlatformType(): String {
     val classifier = simple.classifier
     val name =
         when (classifier) {
-            is IrClassSymbol -> classifier.owner.name.asString()
+            is IrClassSymbol -> classifier.owner.relativeClassName()
             is IrTypeParameterSymbol -> classifier.owner.name.asString()
             else -> classifier.toString()
         }
@@ -3199,6 +3270,13 @@ private fun IrType.canonicalPlatformType(): String {
             .orEmpty()
     return name + arguments + if (simple.isNullable()) "?" else ""
 }
+
+private fun IrClass.relativeClassName(): String =
+    generateSequence(this) { declaration -> declaration.parent as? IrClass }
+        .map { declaration -> declaration.name.asString() }
+        .toList()
+        .asReversed()
+        .joinToString(".")
 
 private fun capabilityOperationCount(
     namespace: String,

@@ -18,15 +18,49 @@
 
 package ru.lazyhat.compukters.platform.k2
 
+import ru.lazyhat.compukters.platform.bundle.PlatformDefaultArgument
 import ru.lazyhat.compukters.platform.bundle.PlatformModuleId
 import ru.lazyhat.compukters.platform.bundle.PlatformSource
 import ru.lazyhat.compukters.platform.k2.build.PlatformMetadataCompiler
 import ru.lazyhat.compukters.worker.value.ImmutableBytes
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlatformMetadataCompilerTest {
+    @Test
+    fun `enum defaults retain their qualified entry and hidden receiver position`() {
+        val metadata =
+            PlatformMetadataCompiler().compile(
+                PlatformModuleId("sample", "defaults"),
+                listOf(
+                    PlatformSource(
+                        "Defaults.kt",
+                        ImmutableBytes.of(
+                            """
+                            package sample
+
+                            object Api {
+                                enum class Power { WEAK, DIRECT }
+                            }
+
+                            value class Side(val index: Int) {
+                                fun set(level: Int, power: Api.Power = Api.Power.WEAK) = level
+                            }
+                            """.trimIndent().encodeToByteArray(),
+                        ),
+                    ),
+                ),
+            )
+
+        val set = metadata.declarations.single { it.symbol == "sample.Side.set" }
+        assertEquals(
+            listOf(null, null, PlatformDefaultArgument.EnumEntry("sample.Api.Power.WEAK")),
+            set.defaultArguments,
+        )
+    }
+
     @Test
     fun `public nominal types constructor properties and enum entries are linkable`() {
         val metadata =

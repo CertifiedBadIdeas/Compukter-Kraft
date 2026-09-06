@@ -78,13 +78,13 @@ class MinimalScriptLoweringTest {
 
                 fun main() {
                     Redstone.left.awaitAtLeast(7)
-                    Redstone.right.set(15, false)
+                    Redstone.right.set(15)
                     Redstone.front.await(15)
-                    Redstone.top.set(15, true)
-                    Redstone.bottom.set(0, false)
+                    Redstone.top.set(15, Redstone.Power.DIRECT)
+                    Redstone.bottom.set(0)
                     var writes = 0
                     while (writes < 80) {
-                        Redstone.right.set(15, true)
+                        Redstone.right.set(15, Redstone.Power.DIRECT)
                         writes = writes + 1
                     }
                 }
@@ -157,15 +157,16 @@ class MinimalScriptLoweringTest {
                 import compukter.redstone.Redstone
 
                 fun main() {
-                    Redstone.left.set(16, false)
+                    Redstone.left.set(16)
                 }
                 """.trimIndent()
             val result = adapter.compile(request(source))
             val artifact = assertNotNull(result.artifact, result.diagnostics.joinToString()).toByteArray()
             val opcodes = allOpcodes(artifact)
 
-            assertTrue(0x13 in opcodes, "platform scalar range failure must remain observable: $opcodes")
-            assertTrue(0x30 !in opcodes, "platform scalar construction must not allocate: $opcodes")
+            assertTrue(0xe4 in opcodes, "platform scalar range failure must throw: $opcodes")
+            assertTrue(0x13 !in opcodes, "platform scalar range failure must not masquerade as division: $opcodes")
+            assertTrue(0x30 in opcodes, "platform scalar range failure must construct IllegalArgumentException: $opcodes")
             System.getProperty("compukter.vm.platformScalarArtifact")?.let { output ->
                 Path.of(output).also { it.parent.createDirectories() }.writeBytes(artifact)
             }
@@ -828,8 +829,8 @@ class MinimalScriptLoweringTest {
                     import compukter.redstone.Redstone
 
                     fun main() {
-                        Redstone.bottom.set(0, false)
-                        Redstone.top.set(15, true)
+                        Redstone.bottom.set(0)
+                        Redstone.top.set(15, Redstone.Power.DIRECT)
                     }
                     """.trimIndent(),
                 )
