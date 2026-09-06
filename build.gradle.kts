@@ -272,6 +272,15 @@ registerKotlinVmConformance(
     artifactEnvironmentVariable = "COMPUKTER_KOTLIN_INT_LOOPS_ARTIFACT",
     conformanceScenario = "int-loops",
 )
+registerKotlinVmConformance(
+    taskName = "testKotlinIntArrayVmConformance",
+    taskDescription = "Executes specialized K2 IntArray operations with the pinned Compukter VM.",
+    artifactTask = ":compiler-k2:generateIntArrayConformanceArtifact",
+    artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/kotlin-int-array.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-int-array-conformance",
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_INT_ARRAY_ARTIFACT",
+    conformanceScenario = "int-array",
+)
 
 val buildScriptsTest = gradle.includedBuild("build-scripts").task(":test")
 

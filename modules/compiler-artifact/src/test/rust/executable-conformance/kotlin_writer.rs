@@ -18,6 +18,7 @@ fn main() {
 
     match scenario.as_str() {
         "executable" => pinned_vm_verifies_kotlin_executable_instruction_artifact(),
+        "int-array" => k2_int_array_executes_specialized_storage_and_traps(),
         "int-loops" => k2_int_loops_execute_across_quota_slices_without_host_io(),
         "platform-scalar" => k2_platform_scalar_precondition_traps_before_publishing_a_value(),
         "argv" => k2_string_array_entry_executes_exact_utf16_arguments(),
@@ -87,6 +88,155 @@ fn k2_int_loops_execute_across_quota_slices_without_host_io() {
         exhausted_slices > 0,
         "long Int loop must cross a quota boundary"
     );
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum IntArrayOutcome {
+    Halted,
+    Crashed(GuestTrap),
+    AllocationExhausted,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct IntArrayExecution {
+    outcome: IntArrayOutcome,
+    writes: Vec<Vec<u16>>,
+    exhausted_slices: u32,
+}
+
+fn k2_int_array_executes_specialized_storage_and_traps() {
+    let path = std::env::var("COMPUKTER_KOTLIN_INT_ARRAY_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_INT_ARRAY_ARTIFACT must be set for this conformance test");
+    let bytes = fs::read(path).expect("K2 IntArray output must exist");
+
+    let success = execute_int_array_artifact(&bytes, 0);
+    assert_eq!(IntArrayOutcome::Halted, success.outcome);
+    assert_eq!(vec![utf16("7"), utf16("11"), utf16("13")], success.writes);
+    assert!(
+        success.exhausted_slices > 0,
+        "IntArray fill must resume after exhausting a slice"
+    );
+    assert_eq!(
+        IntArrayOutcome::Crashed(GuestTrap::NegativeArraySize),
+        execute_int_array_artifact(&bytes, 1).outcome
+    );
+    assert_eq!(
+        IntArrayOutcome::AllocationExhausted,
+        execute_int_array_artifact(&bytes, 2).outcome
+    );
+    assert_eq!(
+        IntArrayOutcome::Crashed(GuestTrap::IndexOutOfBounds),
+        execute_int_array_artifact(&bytes, 3).outcome
+    );
+    assert_eq!(
+        IntArrayOutcome::Crashed(GuestTrap::IndexOutOfBounds),
+        execute_int_array_artifact(&bytes, 4).outcome
+    );
+}
+
+fn execute_int_array_artifact(bytes: &[u8], mode: i32) -> IntArrayExecution {
+    let verified = verify_artifact(Arc::from(bytes.to_vec()), ArtifactLimits::default())
+        .expect("pinned VM must verify K2 IntArray output");
+    let string_argument = [HostValueType::String];
+    let no_arguments = [];
+    let operations = [
+        OperationSchema::synchronous(&string_argument, HostValueType::Unit),
+        OperationSchema::synchronous(&no_arguments, HostValueType::Unit),
+        OperationSchema::synchronous(&no_arguments, HostValueType::Unit),
+        OperationSchema::asynchronous(&no_arguments, HostValueType::I32),
+        OperationSchema::synchronous(&no_arguments, HostValueType::String),
+        OperationSchema::synchronous(&no_arguments, HostValueType::I32),
+        OperationSchema::synchronous(&no_arguments, HostValueType::I32),
+        OperationSchema::synchronous(&no_arguments, HostValueType::I32),
+        OperationSchema::synchronous(&no_arguments, HostValueType::Unit),
+        OperationSchema::synchronous(
+            &[HostValueType::I32, HostValueType::I32],
+            HostValueType::Unit,
+        ),
+        OperationSchema::synchronous(&[HostValueType::Bool], HostValueType::Unit),
+        OperationSchema::synchronous(
+            &[HostValueType::I32, HostValueType::I32],
+            HostValueType::Unit,
+        ),
+        OperationSchema::synchronous(
+            &[
+                HostValueType::I32,
+                HostValueType::I32,
+                HostValueType::String,
+            ],
+            HostValueType::Unit,
+        ),
+        OperationSchema::synchronous(
+            &[
+                HostValueType::I32,
+                HostValueType::I32,
+                HostValueType::I32,
+                HostValueType::I32,
+                HostValueType::Char,
+            ],
+            HostValueType::Unit,
+        ),
+    ];
+    let binding = CapabilityBinding::new("compukter", "terminal", 2, 0, &operations);
+    let profile = ExecutionProfile {
+        heap_bytes: 1024 * 1024,
+        frame_storage_bytes: 1024 * 1024,
+        maximum_call_depth: 64,
+        maximum_coroutines: 1,
+        maximum_host_requests: 64,
+        maximum_events: 0,
+        maximum_slice_budget: 64,
+        compiler_abi: [0; 32],
+        platform_abi: [0; 32],
+        maximum_host_arguments: 16,
+        maximum_outbound_utf16_code_units: 4096,
+        maximum_inbound_utf16_code_units: 4096,
+        maximum_accepted_responses: 64,
+        entry_argument_limits: entry_argument_limits(),
+    };
+    let mut session =
+        Session::admit(verified, profile, &[binding]).expect("K2 IntArray program must admit");
+    session.start(&[]).expect("K2 IntArray program must start");
+    let mode_request = next_host_request(&mut session, "eventKey", 5, None);
+    session
+        .resume(
+            mode_request,
+            HostResponse::Success(HostValueInput::I32(mode)),
+        )
+        .expect("eventKey must resume IntArray program");
+
+    let mut writes = Vec::new();
+    let mut exhausted_slices = 0;
+    let outcome = loop {
+        match session
+            .advance(64, 64)
+            .expect("K2 IntArray program must advance")
+        {
+            AdvanceOutcome::SliceExhausted => exhausted_slices += 1,
+            AdvanceOutcome::HostRequestBatch(batch) => {
+                let request = batch.get(0).expect("K2 IntArray must publish one request");
+                assert_eq!(0, request.operation(), "only marker writes are expected");
+                let value = match request.arguments().get(0) {
+                    Some(HostValueView::String(value)) => value.to_vec(),
+                    argument => panic!("unexpected IntArray marker argument: {argument:?}"),
+                };
+                let request_id = request.id();
+                writes.push(value);
+                session
+                    .resume(request_id, HostResponse::Success(HostValueInput::Unit))
+                    .expect("IntArray marker write must resume");
+            }
+            AdvanceOutcome::Halted(None) => break IntArrayOutcome::Halted,
+            AdvanceOutcome::Crashed(trap) => break IntArrayOutcome::Crashed(trap),
+            AdvanceOutcome::AllocationExhausted(_) => break IntArrayOutcome::AllocationExhausted,
+            outcome => panic!("unexpected K2 IntArray outcome: {outcome:?}"),
+        }
+    };
+    IntArrayExecution {
+        outcome,
+        writes,
+        exhausted_slices,
+    }
 }
 
 fn k2_platform_scalar_precondition_traps_before_publishing_a_value() {

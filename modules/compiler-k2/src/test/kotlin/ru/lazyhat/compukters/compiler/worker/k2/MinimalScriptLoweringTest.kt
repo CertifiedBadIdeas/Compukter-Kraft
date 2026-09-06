@@ -604,6 +604,69 @@ class MinimalScriptLoweringTest {
         }
 
     @Test
+    fun `specialized IntArray lowers deterministically for vm conformance`() =
+        withAdapter { adapter ->
+            val source =
+                """
+                import compukter.terminal.Terminal
+
+                fun marked(value: Int): Int {
+                    Terminal.write("${'$'}value")
+                    return value
+                }
+
+                fun verify(actual: Int, expected: Int) {
+                    if (actual != expected) {
+                        val zero = actual - actual
+                        1 / zero
+                    }
+                }
+
+                fun main() {
+                    val mode = Terminal.eventKey()
+                    if (mode == 0) {
+                        val empty = IntArray(0)
+                        val emptyLiteral = intArrayOf()
+                        verify(empty.size, 0)
+                        verify(emptyLiteral.size, 0)
+
+                        val values = intArrayOf(marked(7), marked(11), marked(13))
+                        verify(values.size, 3)
+                        verify(values[0], 7)
+                        values[1] = values[1] + values[2]
+                        verify(values[1], 24)
+
+                        val filled = IntArray(256)
+                        var index = 0
+                        while (index < filled.size) {
+                            filled[index] = index
+                            index = index + 1
+                        }
+                        verify(filled[255], 255)
+                    } else if (mode == 1) {
+                        IntArray(-1)
+                    } else if (mode == 2) {
+                        IntArray(Int.MAX_VALUE)
+                    } else if (mode == 3) {
+                        intArrayOf(1)[1]
+                    } else {
+                        val values = IntArray(1)
+                        values[1] = 1
+                    }
+                }
+                """.trimIndent()
+            val first = adapter.compile(request(source))
+            val second = adapter.compile(request(source))
+            val artifact = assertNotNull(first.artifact, first.diagnostics.joinToString()).toByteArray()
+
+            assertContentEquals(artifact, assertNotNull(second.artifact).toByteArray())
+            assertTrue(first.diagnostics.none { it.severity.name == "ERROR" }, first.diagnostics.toString())
+            System.getProperty("compukter.vm.intArrayArtifact")?.let { output ->
+                Path.of(output).also { it.parent.createDirectories() }.writeBytes(artifact)
+            }
+        }
+
+    @Test
     fun `suspend project call lowers deterministically for vm execution`() =
         withAdapter { adapter ->
             val request =

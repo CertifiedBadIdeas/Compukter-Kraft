@@ -279,6 +279,7 @@ val argvConformanceArtifact = layout.buildDirectory.file("generated/conformance/
 val platformScalarConformanceArtifact = layout.buildDirectory.file("generated/conformance/platform-scalar.cpkt")
 val redstoneConformanceArtifact = layout.buildDirectory.file("generated/conformance/redstone.cpkt")
 val intLoopsConformanceArtifact = layout.buildDirectory.file("generated/conformance/kotlin-int-loops.cpkt")
+val intArrayConformanceArtifact = layout.buildDirectory.file("generated/conformance/kotlin-int-array.cpkt")
 val bootArtifact = layout.buildDirectory.file("generated/system/boot.cpkt")
 val shellArtifact = layout.buildDirectory.file("generated/system/shell.cpkt")
 val kotlincArtifact = layout.buildDirectory.file("generated/system/kotlinc.cpkt")
@@ -407,6 +408,22 @@ val generateIntLoopsConformanceArtifact = tasks.register<Test>("generateIntLoops
     doFirst {
         systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
         systemProperty("compukter.vm.intLoopsArtifact", intLoopsConformanceArtifact.get().asFile.absolutePath)
+    }
+}
+
+val generateIntArrayConformanceArtifact = tasks.register<Test>("generateIntArrayConformanceArtifact") {
+    description = "Compiles specialized Kotlin IntArray operations for pinned VM conformance."
+    group = "verification"
+    dependsOn(tasks.jar)
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("*specialized IntArray lowers deterministically for vm conformance*")
+    inputs.file(workerJar)
+    outputs.file(intArrayConformanceArtifact)
+    doFirst {
+        systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
+        systemProperty("compukter.vm.intArrayArtifact", intArrayConformanceArtifact.get().asFile.absolutePath)
     }
 }
 

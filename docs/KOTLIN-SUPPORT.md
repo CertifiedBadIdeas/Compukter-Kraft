@@ -354,9 +354,24 @@ supported.
   `heap_instructions_round_trip_reference_arrays`.
   Tracking: not scheduled
 
-- [ ] **Other primitive arrays — Unsupported** — only `CharArray` has a
-  source-level Guest representation even though the VM can store every
-  primitive array width. Tracking: not scheduled
+- [x] **Specialized `IntArray` storage** — `IntArray(size)`, `intArrayOf(...)`,
+  empty arrays, `size`, indexed get/set, and mutation lower to dense unboxed
+  i32 storage. Factory arguments evaluate left-to-right exactly once; negative
+  sizes, oversized allocations, and invalid indexes preserve VM trap or
+  allocation-exhaustion behavior across quota slices. Initializer lambdas,
+  `Array<Int>`, direct iteration, `indices`, spread arguments, covariance,
+  reflection, and collection helpers remain outside the admitted subset.
+  Evidence:
+  [`MinimalScriptLoweringTest`](../modules/compiler-k2/src/test/kotlin/ru/lazyhat/compukters/compiler/worker/k2/MinimalScriptLoweringTest.kt),
+  tests `specialized IntArray lowers to unboxed primitive array instructions`,
+  `unsupported IntArray forms publish no artifact`, and
+  `specialized IntArray lowers deterministically for vm conformance`, plus
+  [`kotlin_writer.rs`](../modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs),
+  test `k2_int_array_executes_specialized_storage_and_traps`.
+
+- [ ] **Other primitive arrays — Unsupported** — primitive arrays other than
+  `CharArray` and `IntArray` have no source-level Guest representation even
+  though the VM can store every primitive array width. Tracking: not scheduled
 
 - [ ] **Collections, sequences, and iterators — Unsupported** — `List`,
   `Set`, `Map`, collection builders, iteration protocols, and sequence APIs
@@ -435,9 +450,9 @@ cannot become one merely by copying its package, name, and signature.
   bit operations, and math packages are absent. Tracking: not scheduled
 
 - [ ] **Text and array helpers — Partial** — only the `String`, `CharArray`,
-  and `Array<String>` operations listed above are published by the native
-  built-ins and core modules. Regex, Unicode categories, encodings, generic
-  array helpers, and collection conversions are absent. Tracking: not scheduled
+  `IntArray`, and `Array<String>` operations listed above are published by the
+  native built-ins and core modules. Regex, Unicode categories, encodings,
+  generic array helpers, and collection conversions are absent. Tracking: not scheduled
 
 - [ ] **Standard collections and functional helpers — Unsupported** — the
   collection hierarchy and higher-order functions such as `map`, `filter`,
