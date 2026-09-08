@@ -130,6 +130,14 @@ Apache-2.0. Versions are pinned by the single VM workspace lock at
 Crate sources and authorship metadata are available through
 <https://crates.io/> and the source URLs recorded in Cargo package metadata.
 
+## Material Symbols
+
+The IDE toolbar includes a generated PNG atlas derived from Material Symbols
+Sharp icons at commit `0cbb08816df07faaae3dca060d4ebb10b66c214f`, copyright
+Google LLC, licensed under Apache-2.0. The complete license and provenance are
+packaged as `META-INF/licenses/Material-Symbols-Apache-2.0.txt` and
+`META-INF/licenses/Material-Symbols-PROVENANCE.txt`.
+
 ## Terminal fonts
 
 The mod distributes generated bitmap atlases derived from these pinned fonts:

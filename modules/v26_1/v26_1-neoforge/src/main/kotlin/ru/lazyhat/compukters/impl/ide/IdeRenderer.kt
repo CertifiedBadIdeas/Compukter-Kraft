@@ -57,6 +57,7 @@ enum class IdePanelKind {
     Control,
     Dialog,
     ProjectSwitcher,
+    Tooltip,
 }
 
 enum class IdeTextKind {
@@ -77,13 +78,14 @@ enum class IdeTextKind {
     DeclarationChoice,
     ProjectChoice,
     ProjectAction,
+    Tooltip,
 }
 
 enum class IdeTextRotation { None, Clockwise90 }
 
 enum class IdeFillKind { Background, Border, Selection, DropTarget, Caret, Splitter, HyperlinkUnderline, MutableUnderline, DialogScrim }
 
-enum class IdeScissorKind { Tree, Editor, Diagnostics, Completion, SemanticPopup, ProjectSwitcher }
+enum class IdeScissorKind { Tree, Editor, Diagnostics, Completion, SemanticPopup, ProjectSwitcher, Tooltip }
 
 enum class IdeHitAction {
     CreateProject,
@@ -176,6 +178,7 @@ data class IdeDrawModel(
     val fills: List<IdeFillDraw>,
     val scissors: List<IdeScissorDraw>,
     val hitTargets: List<IdeHitTarget>,
+    val icons: List<IdeIconDraw>,
 )
 
 internal object IdeRenderer {
@@ -190,6 +193,8 @@ internal object IdeRenderer {
         terminalVisible: Boolean = false,
         explorerDrag: IdeExplorerDragVisual? = null,
         projectSwitcherOpen: Boolean = false,
+        pointerX: Int? = null,
+        pointerY: Int? = null,
     ): IdeDrawModel {
         val output =
             Builder(
@@ -212,10 +217,13 @@ internal object IdeRenderer {
             is IdePageState.Workspace -> output.workspace(page.value, state.target, state.tooling, state.busy, caretVisible)
         }
         output.terminalTool(state.target)
+        val dialog = state.dialog
         if (prompt != null) {
             output.prompt(prompt)
-        } else {
-            state.dialog?.let(output::dialog)
+        } else if (dialog != null) {
+            output.dialog(dialog)
+        } else if (pointerX != null && pointerY != null) {
+            output.tooltip(pointerX, pointerY)
         }
         return output.build()
     }
@@ -235,6 +243,7 @@ internal object IdeRenderer {
         private val fills = mutableListOf<IdeFillDraw>()
         private val scissors = mutableListOf<IdeScissorDraw>()
         private val hitTargets = mutableListOf<IdeHitTarget>()
+        private val icons = mutableListOf<IdeIconDraw>()
 
         fun base() {
             fills += IdeFillDraw(IdeFillKind.Background, geometry.viewport, IdeColors.DIM, Z_BACKGROUND)
@@ -393,60 +402,113 @@ internal object IdeRenderer {
             var left = geometry.toolbar.left + 6
 
             fun action(
-                label: String,
+                icon: IdeIconKind,
                 action: IdeHitAction,
                 enabled: Boolean = true,
-                tooltip: String? = null,
+                tooltip: String,
                 selected: Boolean = false,
             ) {
-                val width = maxOf(44, label.length * 6 + 10)
-                val bounds = IdeRect(left, geometry.toolbar.top + 3, left + width, geometry.toolbar.bottom - 3)
+                val bounds = IdeRect(left, geometry.toolbar.top + 3, left + TOOLBAR_ICON_CONTROL_WIDTH, geometry.toolbar.bottom - 3)
                 target(action, bounds, enabled, tooltip, selected = selected)
-                ui(IdeTextKind.Toolbar, label, bounds.left + 4, bounds.top + 4, if (enabled) IdeColors.TEXT else IdeColors.DISABLED)
+                icons += IdeIconDraw(icon, bounds, if (enabled) IdeColors.TEXT else IdeColors.DISABLED, Z_TEXT)
                 left = bounds.right + 4
             }
+
+            fun groupGap() {
+                left += TOOLBAR_GROUP_GAP
+            }
+
             val toolingReady = toolingState == IdeToolingState.Ready
-            val toolingTooltip = if (toolingReady) null else "Kotlin tooling is not ready"
+            val toolingUnavailable = if (toolingReady) null else "Kotlin tooling is not ready"
             val build = workspace.build
             val editor = workspace.editor as? IdeEditorView.Text
             val formatBusy = IdeBusyOperation.Format in busy
             val writableKotlin = editor?.readOnly == false && editor.path?.value?.endsWith(".kt") == true
             val formatTooltip =
                 when {
-                    !toolingReady -> toolingTooltip
+                    !toolingReady -> checkNotNull(toolingUnavailable)
                     !writableKotlin -> "Open a writable Kotlin source"
                     formatBusy -> "Kotlin formatting is already running"
                     else -> "Reformat Code (Ctrl+Alt+L)"
                 }
             action(
-                "Format",
+                IdeIconKind.Format,
                 IdeHitAction.Format,
                 toolingReady && writableKotlin && !formatBusy,
                 formatTooltip,
                 selected = formatBusy,
             )
-            action("Resolve", IdeHitAction.Resolve, toolingReady, toolingTooltip)
+            action(IdeIconKind.Resolve, IdeHitAction.Resolve, toolingReady, toolingUnavailable ?: "Resolve dependencies")
             if (build is IdeBuildState.Compiling || build is IdeBuildState.Saving) {
-                action("Cancel", IdeHitAction.Cancel)
+                action(IdeIconKind.Cancel, IdeHitAction.Cancel, tooltip = "Cancel build")
             } else {
-                action("Build", IdeHitAction.Build, toolingReady, toolingTooltip)
+                action(IdeIconKind.Build, IdeHitAction.Build, toolingReady, toolingUnavailable ?: "Build (Ctrl+F9)")
             }
+            groupGap()
             val targetReady =
                 toolingReady && targetState.isReadyForAction && build !is IdeBuildState.Compiling && build !is IdeBuildState.Saving
             val targetTooltip =
                 when {
-                    !toolingReady -> toolingTooltip
+                    !toolingReady -> toolingUnavailable
                     targetState.attachedTarget == null -> NO_TARGET
                     !targetReady -> "Target operation in progress"
                     else -> null
                 }
-            action("Verify", IdeHitAction.Verify, targetReady, targetTooltip)
-            action("Deploy", IdeHitAction.Deploy, targetReady, targetTooltip)
-            action("Run", IdeHitAction.Run, targetReady, targetTooltip)
-            action("+File", IdeHitAction.CreateText)
-            action("+Dir", IdeHitAction.CreateDirectory)
-            action("Rename", IdeHitAction.Rename, hasActiveEntry)
-            action("Delete", IdeHitAction.Delete, hasActiveEntry)
+            action(IdeIconKind.Verify, IdeHitAction.Verify, targetReady, targetTooltip ?: "Verify target artifact")
+            action(IdeIconKind.Deploy, IdeHitAction.Deploy, targetReady, targetTooltip ?: "Deploy to target")
+            action(IdeIconKind.Run, IdeHitAction.Run, targetReady, targetTooltip ?: "Run on target")
+            groupGap()
+            action(IdeIconKind.NewFile, IdeHitAction.CreateText, tooltip = "New file")
+            action(IdeIconKind.NewDirectory, IdeHitAction.CreateDirectory, tooltip = "New directory")
+            action(
+                IdeIconKind.Rename,
+                IdeHitAction.Rename,
+                hasActiveEntry,
+                if (hasActiveEntry) "Rename selected entry" else "Select an entry to rename",
+            )
+            action(
+                IdeIconKind.Delete,
+                IdeHitAction.Delete,
+                hasActiveEntry,
+                if (hasActiveEntry) "Delete selected entry" else "Select an entry to delete",
+            )
+        }
+
+        fun tooltip(
+            pointerX: Int,
+            pointerY: Int,
+        ) {
+            val target =
+                hitTargets
+                    .asReversed()
+                    .firstOrNull { it.tooltip != null && it.bounds.contains(pointerX, pointerY) } ?: return
+            val value = checkNotNull(target.tooltip)
+            val maximumWidth = (geometry.panel.width - TOOLTIP_MARGIN * 2).coerceAtLeast(1)
+            val width = minOf(value.length * 6 + TOOLTIP_HORIZONTAL_PADDING * 2, maximumWidth)
+            val left =
+                (pointerX - width / 2).coerceIn(
+                    geometry.panel.left + TOOLTIP_MARGIN,
+                    geometry.panel.right - TOOLTIP_MARGIN - width,
+                )
+            val proposedTop = pointerY + TOOLTIP_POINTER_OFFSET
+            val top =
+                if (proposedTop + TOOLTIP_HEIGHT <= geometry.status.top) {
+                    proposedTop
+                } else {
+                    pointerY - TOOLTIP_HEIGHT - TOOLTIP_POINTER_OFFSET
+                }.coerceIn(geometry.panel.top + TOOLTIP_MARGIN, geometry.panel.bottom - TOOLTIP_MARGIN - TOOLTIP_HEIGHT)
+            val bounds = IdeRect(left, top, left + width, top + TOOLTIP_HEIGHT)
+            val visibleCharacters = ((width - TOOLTIP_HORIZONTAL_PADDING * 2) / 6).coerceAtLeast(0)
+            panel(IdePanelKind.Tooltip, bounds, IdeColors.PANEL_ALT, Z_TOOLTIP)
+            scissors += IdeScissorDraw(IdeScissorKind.Tooltip, bounds, Z_TOOLTIP)
+            ui(
+                IdeTextKind.Tooltip,
+                value.take(visibleCharacters),
+                bounds.left + TOOLTIP_HORIZONTAL_PADDING,
+                bounds.top + 5,
+                clip = bounds,
+                z = Z_TOOLTIP_TEXT,
+            )
         }
 
         private fun tree(workspace: ru.lazyhat.compukters.ide.client.state.IdeWorkspaceView) {
@@ -1149,7 +1211,15 @@ internal object IdeRenderer {
             hitTargets += IdeHitTarget(action, bounds, enabled, tooltip, focusGroup, z, selected, choiceIndex)
         }
 
-        fun build(): IdeDrawModel = IdeDrawModel(panels.toList(), text.toList(), fills.toList(), scissors.toList(), hitTargets.toList())
+        fun build(): IdeDrawModel =
+            IdeDrawModel(
+                panels.toList(),
+                text.toList(),
+                fills.toList(),
+                scissors.toList(),
+                hitTargets.toList(),
+                icons.toList(),
+            )
 
         private fun projectGlyphs(source: String): String {
             val result = StringBuilder(source.length)
@@ -1273,6 +1343,11 @@ internal object IdeRenderer {
             bounds.bottom + amount,
         )
 
+    private fun IdeRect.contains(
+        x: Int,
+        y: Int,
+    ): Boolean = x >= left && x < right && y >= top && y < bottom
+
     private fun styleColor(style: IdeTextStyle): Int =
         when (style) {
             IdeTextStyle.Ui -> IdeColors.TEXT
@@ -1344,6 +1419,12 @@ internal object IdeRenderer {
     private const val PROJECT_CONTROL_MINIMUM_WIDTH = 80
     private const val PROJECT_SWITCHER_WIDTH = 220
     private const val PROJECT_ROW_HEIGHT = 18
+    private const val TOOLBAR_ICON_CONTROL_WIDTH = 22
+    private const val TOOLBAR_GROUP_GAP = 6
+    private const val TOOLTIP_MARGIN = 4
+    private const val TOOLTIP_HORIZONTAL_PADDING = 5
+    private const val TOOLTIP_POINTER_OFFSET = 12
+    private const val TOOLTIP_HEIGHT = 18
     private const val COMPLETION_MINIMUM_WIDTH = 220
     private const val COMPLETION_HORIZONTAL_PADDING = 8
     private const val SEMANTIC_POPUP_MINIMUM_WIDTH = 180
@@ -1370,6 +1451,8 @@ internal object IdeRenderer {
     private const val Z_PROJECT_SWITCHER_SELECTION = 72
     private const val Z_PROJECT_SWITCHER_TEXT = 75
     private const val Z_PROJECT_SWITCHER_TARGET = 80
+    private const val Z_TOOLTIP = 82
+    private const val Z_TOOLTIP_TEXT = 85
     private const val Z_POPUP_TEXT = 55
     private const val Z_DIALOG_SCRIM = 90
     private const val Z_DIALOG = 100

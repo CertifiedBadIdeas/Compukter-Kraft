@@ -24,7 +24,9 @@ import net.minecraft.client.gui.screens.Screen
 import net.minecraft.client.input.CharacterEvent
 import net.minecraft.client.input.KeyEvent
 import net.minecraft.client.input.MouseButtonEvent
+import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.network.chat.Component
+import net.minecraft.resources.Identifier
 import org.joml.Matrix3x2fStack
 import org.lwjgl.glfw.GLFW
 import ru.lazyhat.compukters.ide.client.IdeClientLimits
@@ -77,6 +79,7 @@ internal fun <T> withIdeTextTransform(
 }
 
 private const val IDE_TERMINAL_OVERLAY_Z = 80
+private val IDE_TOOLBAR_ICON_TEXTURE = Identifier.fromNamespaceAndPath("compukters", "textures/gui/ide_toolbar.png")
 
 internal class IdeScreen(
     private val session: IdeClientSession<IdeClientApplication>,
@@ -391,6 +394,8 @@ internal class IdeScreen(
                 terminalVisible = terminalOverlay.visible,
                 explorerDrag = input.explorerDragVisual,
                 projectSwitcherOpen = projectSwitcherOpen && prompt.state == null && state.dialog == null,
+                pointerX = viewport.toVirtualX(mouseX.toDouble()).toInt(),
+                pointerY = viewport.toVirtualY(mouseY.toDouble()).toInt(),
             )
         IdeVisibleFrameEvidence.from(state, model)?.let { evidence ->
             application.visibleLatency.frameExtracted(
@@ -402,6 +407,27 @@ internal class IdeScreen(
         val operations = mutableListOf<IdeRenderOperation>()
         model.panels.forEach { draw -> operations += IdeRenderOperation(draw.zIndex) { graphics.fill(draw.bounds, draw.color) } }
         model.fills.forEach { draw -> operations += IdeRenderOperation(draw.zIndex) { graphics.fill(draw.bounds, draw.color) } }
+        model.icons.forEach { draw ->
+            operations +=
+                IdeRenderOperation(draw.zIndex) {
+                    val sprite = IdeToolbarIconAtlas.sprite(draw)
+                    graphics.blit(
+                        RenderPipelines.GUI_TEXTURED,
+                        IDE_TOOLBAR_ICON_TEXTURE,
+                        sprite.bounds.left,
+                        sprite.bounds.top,
+                        sprite.sourceX.toFloat(),
+                        0f,
+                        sprite.bounds.width,
+                        sprite.bounds.height,
+                        IdeToolbarIconAtlas.CELL_SIZE,
+                        IdeToolbarIconAtlas.CELL_SIZE,
+                        IdeToolbarIconAtlas.WIDTH,
+                        IdeToolbarIconAtlas.HEIGHT,
+                        draw.color,
+                    )
+                }
+        }
         model.text.forEach { draw ->
             operations +=
                 IdeRenderOperation(draw.zIndex) {

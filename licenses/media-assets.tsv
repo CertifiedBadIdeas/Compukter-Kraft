@@ -5,6 +5,7 @@ modules/v26_1/v26_1-neoforge/src/main/resources/assets/compukters/textures/block
 modules/v26_1/v26_1-neoforge/src/main/resources/assets/compukters/textures/font/terminal/cozette.png	generated-derivative	Cozette v.1.30.0	Copyright Ines	MIT	tools/fonts/cozette/v.1.30.0/PROVENANCE.md	true
 modules/v26_1/v26_1-neoforge/src/main/resources/assets/compukters/textures/font/terminal/dina.png	generated-derivative	Dina v2.92 Regular 6pt	Copyright Jørgen Ibsen	MIT	tools/fonts/dina/v2.92/PROVENANCE.md	true
 modules/v26_1/v26_1-neoforge/src/main/resources/assets/compukters/textures/font/terminal/proggy_tiny.png	generated-derivative	ProggyTiny commit 139ec08a	Copyright Tristan Grimmer	MIT	tools/fonts/proggy/139ec08a/PROVENANCE.md	true
+modules/v26_1/v26_1-neoforge/src/main/resources/assets/compukters/textures/gui/ide_toolbar.png	generated-derivative	Material Symbols Sharp commit 0cbb08816df07faaae3dca060d4ebb10b66c214f	Copyright Google LLC	Apache-2.0	modules/v26_1/v26_1-neoforge/src/main/resources/META-INF/licenses/Material-Symbols-PROVENANCE.txt	true
 tools/fonts/cozette/v.1.30.0/cozette.bdf	third-party	Cozette v.1.30.0	Copyright Ines	MIT	tools/fonts/cozette/v.1.30.0/PROVENANCE.md	false
 tools/fonts/dina/v2.92/Dina_r400-6.bdf	third-party	Dina v2.92 Regular 6pt	Copyright Jørgen Ibsen	MIT	tools/fonts/dina/v2.92/PROVENANCE.md	false
 tools/fonts/proggy/139ec08a/ProggyTiny.bdf	third-party	ProggyTiny commit 139ec08a	Copyright Tristan Grimmer	MIT	tools/fonts/proggy/139ec08a/PROVENANCE.md	false

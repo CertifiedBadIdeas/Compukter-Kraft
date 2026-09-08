@@ -84,6 +84,7 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class IdeRendererStateTest {
@@ -432,6 +433,69 @@ class IdeRendererStateTest {
             assertFalse(target.enabled)
             assertEquals("No target attached", target.tooltip)
         }
+    }
+
+    @Test
+    fun `workspace toolbar uses fixed icons in bounded action groups`() {
+        val model = IdeRenderer.extract(workspaceState(IdeEditorView.Empty, IdeBuildState.Idle), geometry())
+
+        assertEquals(
+            listOf(
+                IdeIconKind.Format,
+                IdeIconKind.Resolve,
+                IdeIconKind.Build,
+                IdeIconKind.Verify,
+                IdeIconKind.Deploy,
+                IdeIconKind.Run,
+                IdeIconKind.NewFile,
+                IdeIconKind.NewDirectory,
+                IdeIconKind.Rename,
+                IdeIconKind.Delete,
+            ),
+            model.icons.map { it.kind },
+        )
+        assertTrue(model.icons.all { icon -> geometry().toolbar.contains(icon.bounds) })
+        assertTrue(model.text.none { it.kind == IdeTextKind.Toolbar })
+        assertTrue(model.hitTargets.filter { it.action in WORKSPACE_ACTIONS }.all { it.tooltip != null })
+        listOf(500 to 240, 300 to 200).forEach { (width, height) ->
+            val constrained = IdeRenderGeometry.compute(width, height, 96, 64, true, true, TerminalFontProfile.DINA)
+            val constrainedModel = IdeRenderer.extract(workspaceState(IdeEditorView.Empty, IdeBuildState.Idle), constrained)
+            assertTrue(constrained.supported)
+            assertTrue(constrainedModel.icons.all { icon -> constrained.toolbar.contains(icon.bounds) })
+        }
+
+        val compiling =
+            IdeRenderer.extract(
+                workspaceState(
+                    IdeEditorView.Empty,
+                    IdeBuildState.Compiling(7, Hash256.zero(), SourceSnapshotId(Hash256.zero())),
+                ),
+                geometry(),
+            )
+        assertTrue(compiling.icons.any { it.kind == IdeIconKind.Cancel })
+        assertTrue(compiling.icons.none { it.kind == IdeIconKind.Build })
+        assertEquals("Cancel build", compiling.hitTargets.single { it.action == IdeHitAction.Cancel }.tooltip)
+    }
+
+    @Test
+    fun `hovered toolbar action renders bounded tooltip below modal precedence`() {
+        val state = workspaceState(IdeEditorView.Empty, IdeBuildState.Idle)
+        val initial = IdeRenderer.extract(state, geometry())
+        val build = initial.hitTargets.single { it.action == IdeHitAction.Build }
+        val hovered = IdeRenderer.extract(state, geometry(), pointerX = build.bounds.left + 1, pointerY = build.bounds.top + 1)
+
+        val tooltip = assertNotNull(hovered.panels.singleOrNull { it.kind == IdePanelKind.Tooltip })
+        assertTrue(geometry().panel.contains(tooltip.bounds))
+        assertEquals("Build (Ctrl+F9)", hovered.text.single { it.kind == IdeTextKind.Tooltip }.value)
+
+        val modal =
+            IdeRenderer.extract(
+                state.copy(dialog = IdeDialogState.LockUpdate("demo")),
+                geometry(),
+                pointerX = build.bounds.left + 1,
+                pointerY = build.bounds.top + 1,
+            )
+        assertTrue(modal.text.none { it.kind == IdeTextKind.Tooltip })
     }
 
     @Test
@@ -886,10 +950,29 @@ private fun IdeDrawModel.zOrdered(): Boolean {
             fills.map { it.zIndex } +
             text.map { it.zIndex } +
             scissors.map { it.zIndex } +
-            hitTargets.map { it.zIndex }
+            hitTargets.map { it.zIndex } +
+            icons.map { it.zIndex }
     return values.all { it >= 0 }
 }
 
 private fun IdeDrawModel.sourceDraw(value: String): IdeTextDraw = text.single { it.kind == IdeTextKind.Source && it.value == value }
 
 private fun IdeDrawModel.sourceStyle(value: String): IdeTextStyle = sourceDraw(value).style
+
+private fun IdeRect.contains(other: IdeRect): Boolean =
+    other.left >= left && other.top >= top && other.right <= right && other.bottom <= bottom
+
+private val WORKSPACE_ACTIONS =
+    setOf(
+        IdeHitAction.Format,
+        IdeHitAction.Resolve,
+        IdeHitAction.Build,
+        IdeHitAction.Cancel,
+        IdeHitAction.Verify,
+        IdeHitAction.Deploy,
+        IdeHitAction.Run,
+        IdeHitAction.CreateText,
+        IdeHitAction.CreateDirectory,
+        IdeHitAction.Rename,
+        IdeHitAction.Delete,
+    )

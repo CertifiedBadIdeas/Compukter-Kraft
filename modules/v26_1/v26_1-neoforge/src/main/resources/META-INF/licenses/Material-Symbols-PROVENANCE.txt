@@ -1,0 +1,20 @@
+Material Symbols toolbar icon atlas
+===================================
+
+Source: https://github.com/google/material-design-icons
+Revision: 0cbb08816df07faaae3dca060d4ebb10b66c214f
+License: Apache License 2.0 (see Material-Symbols-Apache-2.0.txt)
+
+The atlas assets/compukters/textures/gui/ide_toolbar.png contains the following
+Material Symbols Sharp 20 px icons, in order from left to right:
+
+format_paint, sync, build, close, check_circle, upload, play_arrow, note_add,
+create_new_folder, edit, delete
+
+Each source SVG was taken from:
+symbols/web/<icon>/materialsymbolssharp/<icon>_20px.svg
+
+For use in the Minecraft GUI, the SVGs were rendered as white 32 x 32 RGBA
+images with librsvg and concatenated into a 352 x 32 PNG atlas. The game renders
+each cell into a 16 x 16 logical area so higher GUI scales retain more source
+detail, and tints the white glyphs to the current enabled or disabled color.

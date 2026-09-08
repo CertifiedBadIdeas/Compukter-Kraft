@@ -344,6 +344,8 @@ val verifyPackagedCompukterFfi =
                 "META-INF/licenses/Compukters-Apache-2.0.txt",
                 "META-INF/licenses/Compukters-Textures-CC-BY-4.0.txt",
                 "META-INF/licenses/Compukters-Textures-PROVENANCE.txt",
+                "META-INF/licenses/Material-Symbols-Apache-2.0.txt",
+                "META-INF/licenses/Material-Symbols-PROVENANCE.txt",
                 "META-INF/licenses/jvm/antlr4-runtime-4.11.1-BSD-3-Clause.txt",
                 "META-INF/licenses/jvm/checker-qual-3.21.2-MIT.txt",
                 "META-INF/licenses/jvm/xz-java-1.10-0BSD.txt",
@@ -575,6 +577,7 @@ val verifyPackagedCompukterFfi =
                 "assets/compukters/textures/font/terminal/proggy_tiny.png",
                 "META-INF/licenses/Proggy-MIT.txt",
                 "META-INF/licenses/Proggy-PROVENANCE.txt",
+                "assets/compukters/textures/gui/ide_toolbar.png",
             ).forEach { required ->
                 check(required in entries) { "$required is missing from ${archive.name}" }
             }
