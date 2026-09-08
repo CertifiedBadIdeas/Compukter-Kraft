@@ -45,9 +45,9 @@ compatibility, corruption, and resume matrix.
 | --- | --- | --- | --- |
 | Wire versions, tags, scalar encodings, and bounded buffers | `ffi/src/wire.rs` unit tests and `ffi/tests/ffi_api.rs` | Decoder and malformed-wire tests in `VmSessionTest`, `WorldFileSystemStoreTest`, and terminal transport tests | Strong for currently exercised values and failure tags |
 | Opaque sessions, stores, and deployment candidates | `ffi/src/handle_table.rs`, bridge unit tests, and `ffi/tests/ffi_api.rs` | `VmSessionTest`, store tests, and real FFM integration tests | Covers invalid/stale/busy handles, conditional consumption, close order, and retry behavior |
-| Exported artifact, execution, terminal, filesystem, deployment, compilation, and redstone calls | `ffi/tests/ffi_api.rs` directly exercises 35 of 38 current exports; the three generic `resume_*` exports are covered below the export boundary by bridge/session tests | `FfmBridge.open` resolves all 38 symbols; native integration, runtime-host integration, and GameTest exercise the shipped product paths through JDK FFM | Broad behavioral coverage, but no built-library test invokes every descriptor; the generic resume exports have no direct C ABI or real FFM probe |
+| Exported artifact, execution, terminal, filesystem, deployment, compilation, and redstone calls | `ffi/tests/ffi_api.rs` directly exercises 35 of 38 current exports; the three generic `resume_*` exports are covered below the export boundary by bridge/session tests | `FfmAbiParityIntegrationTest` resolves and safely invokes the authoritative descriptors for all 38 symbols; native integration, runtime-host integration, and GameTest additionally exercise shipped workflows | Complete built-library symbol/descriptor parity, with deeper behavior assigned to the owning Rust and vertical tests |
 | Panic containment and public error classification | `ffi_api::tests::panic_is_contained_as_an_internal_status`, wire-code tests, and API invalid-input cases | Typed Kotlin mapping and malformed-result tests | Stable mappings are covered; artificial invalid addresses are outside the safe test contract, while null/length validation is covered |
-| Built dynamic library and packaged loading | Runtime-bundler smoke helper plus archive tests | `nativeIntegrationTest`, `packagedNativeIntegrationTest`, loader tests, and production archive verification | Actual loading and ABI version are covered; complete symbol/descriptor parity remains a focused gap recorded by issue #39 |
+| Built dynamic library and packaged loading | Runtime-bundler smoke helper plus archive tests | The shared `FfmAbiFunction` inventory, `FfmAbiParityIntegrationTest`, `nativeIntegrationTest`, `packagedNativeIntegrationTest`, loader tests, and production archive verification | Actual loading, ABI version, all 38 descriptors, packaged extraction, and archive composition are covered |
 
 ## Cross-layer map
 
@@ -64,7 +64,7 @@ These are vertical ownership checks, not replacements for the direct Rust tests 
 
 ## Inventory notes
 
-After issue #597, `cargo test --workspace -- --list` registers 514 Rust tests across the VM, FFI, persistence crash
+After issue #598, `cargo test --workspace -- --list` registers 514 Rust tests across the VM, FFI, persistence crash
 fixture, runtime-bundler, xtask, integrations, and doctests. Nine are intentionally ignored by the normal workspace
 run: seven hardware-specific performance or artifact-regeneration tests in the VM, one fixture regeneration test, and
 one dynamic-library smoke test that requires a separately built library. The normal semantic gates cover their
@@ -77,8 +77,5 @@ observable boundary each test exercises.
 
 ## Focused gaps
 
-1. Add one built-library contract test that resolves the complete exported symbol set and exercises every JDK FFM
-   descriptor with a safe bounded probe, including the currently indirect-only generic resume exports, so an uncalled
-   signature drift cannot hide behind bridge/session tests.
-
-This gap is deliberately separate from VM feature coverage and is tracked by issue #598.
+The issue #39 audit has no remaining focused gaps. New runtime surfaces must extend this matrix and add evidence at
+their owning direct, FFM, and vertical boundaries as applicable.
