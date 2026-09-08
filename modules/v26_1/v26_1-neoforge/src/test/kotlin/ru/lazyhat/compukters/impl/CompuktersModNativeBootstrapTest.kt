@@ -32,7 +32,7 @@ class CompuktersModNativeBootstrapTest {
         checkNotNull(CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/system/programs/kotlinc")).use { }
         checkNotNull(CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/system/programs/edit")).use { }
         checkNotNull(
-            CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/tooling/workers/k2-tooling-workers.zip.zst"),
+            CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/tooling/workers/k2-tooling-workers.zip.xz"),
         ).use { }
         checkNotNull(
             CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/tooling/workers/k2-tooling-workers.bundle"),

@@ -18,8 +18,10 @@
 
 package ru.lazyhat.compukters.compiler.runtime.worker
 
-import io.airlift.compress.v3.zstd.ZstdInputStream
-import io.airlift.compress.v3.zstd.ZstdOutputStream
+import org.tukaani.xz.LZMA2Options
+import org.tukaani.xz.XZ
+import org.tukaani.xz.XZInputStream
+import org.tukaani.xz.XZOutputStream
 import ru.lazyhat.compukters.compiler.worker.controller.WorkerPayloadManifest
 import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.worker.payload.ToolingBundleManifest
@@ -81,7 +83,7 @@ class PackagedWorkerPayloadTest {
                 "licenses/Compukters.txt",
             ).forEachIndexed { index, entry ->
                 assertFailsWith<PackagedWorkerPayloadException> {
-                    publish(manifest, zstd(zip(entry to byteArrayOf(1))), root.resolve("unsafe-$index"))
+                    publish(manifest, xz(zip(entry to byteArrayOf(1))), root.resolve("unsafe-$index"))
                 }
             }
             assertFailsWith<PackagedWorkerPayloadException> {
@@ -90,7 +92,7 @@ class PackagedWorkerPayloadTest {
             assertFailsWith<PackagedWorkerPayloadException> {
                 publish(
                     manifest,
-                    zstd(zip("worker.payload" to ByteArray(5))),
+                    xz(zip("worker.payload" to ByteArray(5))),
                     root.resolve("over-budget"),
                     PackagedWorkerPayloadLimits(entries = 1, bytes = 4),
                 )
@@ -142,7 +144,7 @@ class PackagedWorkerPayloadTest {
             val expected = WorkerPayloadManifest.fromToolingProfile(bundle.profiles.getValue("compiler"), bundle.files)
             block(
                 bundle.canonicalBundleText().encodeToByteArray(),
-                zstd(zip(files + bundle.encodedFiles())),
+                xz(zip(files + bundle.encodedFiles())),
                 root.resolve("published"),
                 expected,
             )
@@ -171,7 +173,7 @@ class PackagedWorkerPayloadTest {
     ): ByteArray {
         val output = ByteArrayOutputStream()
         ZipOutputStream(output).use { target ->
-            ZipInputStream(ZstdInputStream(ByteArrayInputStream(archive))).use { source ->
+            ZipInputStream(XZInputStream(ByteArrayInputStream(archive))).use { source ->
                 while (true) {
                     val entry = source.nextEntry ?: break
                     target.putNextEntry(ZipEntry(entry.name))
@@ -186,12 +188,12 @@ class PackagedWorkerPayloadTest {
                 target.closeEntry()
             }
         }
-        return zstd(output.toByteArray())
+        return xz(output.toByteArray())
     }
 
-    private fun zstd(bytes: ByteArray): ByteArray {
+    private fun xz(bytes: ByteArray): ByteArray {
         val output = ByteArrayOutputStream()
-        ZstdOutputStream(output).use { it.write(bytes) }
+        XZOutputStream(output, LZMA2Options(0), XZ.CHECK_CRC32).use { it.write(bytes) }
         return output.toByteArray()
     }
 
@@ -215,7 +217,7 @@ class PackagedWorkerPayloadTest {
                 index++
             }
         }
-        return zstd(bytes)
+        return xz(bytes)
     }
 
     private companion object {

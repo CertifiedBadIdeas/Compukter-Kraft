@@ -18,7 +18,9 @@
 
 package ru.lazyhat.compukters.tooling.bundle
 
-import com.github.luben.zstd.ZstdOutputStream
+import org.tukaani.xz.LZMA2Options
+import org.tukaani.xz.XZ
+import org.tukaani.xz.XZOutputStream
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.inputStream
@@ -31,11 +33,13 @@ object ToolingBundleCarrier {
     ) {
         output.parent.createDirectories()
         archive.inputStream().buffered().use { input ->
-            ZstdOutputStream(output.outputStream().buffered(), ZSTD_COMPRESSION_LEVEL)
-                .setChecksum(true)
-                .use(input::transferTo)
+            XZOutputStream(
+                output.outputStream().buffered(),
+                LZMA2Options(XZ_COMPRESSION_PRESET),
+                XZ.CHECK_CRC64,
+            ).use(input::transferTo)
         }
     }
 
-    private const val ZSTD_COMPRESSION_LEVEL = 19
+    private const val XZ_COMPRESSION_PRESET = 8
 }

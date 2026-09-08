@@ -174,7 +174,7 @@ internal class NeoForgeCompilerService private constructor(
                 "packaged compiler worker is missing: $path"
             }
 
-        private const val WORKER_RESOURCE = "/tooling/workers/k2-tooling-workers.zip.zst"
+        private const val WORKER_RESOURCE = "/tooling/workers/k2-tooling-workers.zip.xz"
         private const val WORKER_MANIFEST_RESOURCE = "/tooling/workers/k2-tooling-workers.bundle"
     }
 }

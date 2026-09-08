@@ -16,12 +16,14 @@
  * limitations under the License.
  */
 
-import io.airlift.compress.v3.zstd.ZstdOutputStream
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.tukaani.xz.LZMA2Options
+import org.tukaani.xz.XZ
+import org.tukaani.xz.XZOutputStream
 import java.io.ByteArrayOutputStream
 import java.nio.file.Path
 import java.util.zip.ZipEntry
@@ -39,7 +41,7 @@ class ArtifactSizeReportTest {
             zip(
                 temporary.resolve("mod.jar"),
                 linkedMapOf(
-                    "tooling/workers/k2-tooling-workers.zip.zst" to zstd(tooling.toFile().readBytes()),
+                    "tooling/workers/k2-tooling-workers.zip.xz" to xz(tooling.toFile().readBytes()),
                     "META-INF/jars/kotlin-stdlib-2.4.10.jar" to ByteArray(31) { 1 },
                     "META-INF/natives/linux/x86_64/libcompukter_ffi.so" to ByteArray(47) { 2 },
                     "ru/lazyhat/compukters/Main.class" to ByteArray(59) { 3 },
@@ -77,7 +79,7 @@ class ArtifactSizeReportTest {
         val invalid =
             zip(
                 temporary.resolve("invalid.jar"),
-                mapOf("tooling/workers/k2-tooling-workers.zip.zst" to zstd(tooling.toFile().readBytes())),
+                mapOf("tooling/workers/k2-tooling-workers.zip.xz" to xz(tooling.toFile().readBytes())),
             )
         assertThrows(IllegalArgumentException::class.java) { ArtifactSizeReport.classify(invalid, 1_000) }
     }
@@ -93,9 +95,9 @@ class ArtifactSizeReportTest {
         return path
     }
 
-    private fun zstd(bytes: ByteArray): ByteArray {
+    private fun xz(bytes: ByteArray): ByteArray {
         val output = ByteArrayOutputStream()
-        ZstdOutputStream(output).use { it.write(bytes) }
+        XZOutputStream(output, LZMA2Options(0), XZ.CHECK_CRC32).use { it.write(bytes) }
         return output.toByteArray()
     }
 

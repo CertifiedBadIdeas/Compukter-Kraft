@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-import io.airlift.compress.v3.zstd.ZstdInputStream
+import org.tukaani.xz.XZInputStream
 import java.io.ByteArrayInputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -63,7 +63,7 @@ data class ArtifactSizeReportModel(
 
 object ArtifactSizeReport {
     const val DEFAULT_BASELINE_BYTES = 86_077_515L
-    const val TOOLING_RESOURCE = "tooling/workers/k2-tooling-workers.zip.zst"
+    const val TOOLING_RESOURCE = "tooling/workers/k2-tooling-workers.zip.xz"
 
     fun classify(
         archive: Path,
@@ -134,7 +134,7 @@ object ArtifactSizeReport {
     private fun toolingWeights(bytes: ByteArray): Map<String, Long> {
         val weights = linkedMapOf(COMMON to 0L, COMPILER_PRIVATE to 0L, ANALYSIS_PRIVATE to 0L)
         var files = 0
-        ZipInputStream(ZstdInputStream(ByteArrayInputStream(bytes))).use { nested ->
+        ZipInputStream(XZInputStream(ByteArrayInputStream(bytes))).use { nested ->
             while (true) {
                 val entry = nested.nextEntry ?: break
                 if (!entry.isDirectory) {

@@ -18,8 +18,10 @@
 
 package ru.lazyhat.compukters.worker.payload
 
-import io.airlift.compress.v3.zstd.ZstdInputStream
-import io.airlift.compress.v3.zstd.ZstdOutputStream
+import org.tukaani.xz.LZMA2Options
+import org.tukaani.xz.XZ
+import org.tukaani.xz.XZInputStream
+import org.tukaani.xz.XZOutputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -90,7 +92,7 @@ class PackagedToolingBundleTest {
             ).forEachIndexed { index, entry ->
                 assertFailsWith<PackagedToolingBundleException> {
                     publish(
-                        ByteArrayInputStream(zstd(zip(mapOf(entry to byteArrayOf(1))))),
+                        ByteArrayInputStream(xz(zip(mapOf(entry to byteArrayOf(1))))),
                         root.resolve("unsafe-$index"),
                         manifest,
                     )
@@ -122,7 +124,7 @@ class PackagedToolingBundleTest {
                 )
             }
             assertFailsWith<PackagedToolingBundleException> {
-                publish(ByteArrayInputStream(byteArrayOf(1, 2, 3)), root.resolve("invalid-zstd"), manifest)
+                publish(ByteArrayInputStream(byteArrayOf(1, 2, 3)), root.resolve("invalid-xz"), manifest)
             }
             assertFailsWith<PackagedToolingBundleException> {
                 publish(
@@ -181,7 +183,7 @@ class PackagedToolingBundleTest {
                     put("META-INF/NOTICE.txt", "notice\n".encodeToByteArray())
                     put("META-INF/licenses/Compukters-Apache-2.0.txt", "license\n".encodeToByteArray())
                 }
-            block(zstd(zip(entries)), temporary.resolve("published"), manifest)
+            block(xz(zip(entries)), temporary.resolve("published"), manifest)
         } finally {
             temporary.toFile().deleteRecursively()
         }
@@ -190,16 +192,16 @@ class PackagedToolingBundleTest {
     private fun removeEntry(
         archive: ByteArray,
         removed: String,
-    ): ByteArray = zstd(zip(unzip(archive).filterKeys { it != removed }))
+    ): ByteArray = xz(zip(unzip(archive).filterKeys { it != removed }))
 
     private fun replaceEntry(
         archive: ByteArray,
         name: String,
         bytes: ByteArray,
-    ): ByteArray = zstd(zip(unzip(archive) + (name to bytes)))
+    ): ByteArray = xz(zip(unzip(archive) + (name to bytes)))
 
     private fun unzip(archive: ByteArray): Map<String, ByteArray> =
-        java.util.zip.ZipInputStream(ZstdInputStream(ByteArrayInputStream(archive))).use { input ->
+        java.util.zip.ZipInputStream(XZInputStream(ByteArrayInputStream(archive))).use { input ->
             buildMap {
                 while (true) {
                     val entry = input.nextEntry ?: break
@@ -221,9 +223,9 @@ class PackagedToolingBundleTest {
         return output.toByteArray()
     }
 
-    private fun zstd(bytes: ByteArray): ByteArray {
+    private fun xz(bytes: ByteArray): ByteArray {
         val output = ByteArrayOutputStream()
-        ZstdOutputStream(output).use { it.write(bytes) }
+        XZOutputStream(output, LZMA2Options(0), XZ.CHECK_CRC32).use { it.write(bytes) }
         return output.toByteArray()
     }
 
@@ -253,7 +255,7 @@ class PackagedToolingBundleTest {
                 index++
             }
         }
-        return zstd(bytes)
+        return xz(bytes)
     }
 
     private companion object {

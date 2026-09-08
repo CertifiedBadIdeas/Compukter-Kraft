@@ -637,7 +637,7 @@ internal object ProductionIdeApplicationFactory {
         return Path.of(System.getProperty("java.home"), "bin", name).toAbsolutePath().normalize()
     }
 
-    private const val TOOLING_WORKER_RESOURCE = "/tooling/workers/k2-tooling-workers.zip.zst"
+    private const val TOOLING_WORKER_RESOURCE = "/tooling/workers/k2-tooling-workers.zip.xz"
     private const val TOOLING_WORKER_MANIFEST_RESOURCE = "/tooling/workers/k2-tooling-workers.bundle"
     private const val COMPILER_HEAP_MIB = 256
     private const val COMPILER_METASPACE_MIB = 256

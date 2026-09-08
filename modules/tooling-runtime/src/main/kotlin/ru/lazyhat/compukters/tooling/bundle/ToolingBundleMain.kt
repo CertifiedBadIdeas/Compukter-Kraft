@@ -46,7 +46,7 @@ fun main(arguments: Array<String>) {
         }
 
         "compress" -> {
-            require(arguments.size == 3) { "usage: tooling-bundle compress <canonical-zip> <zstd-output>" }
+            require(arguments.size == 3) { "usage: tooling-bundle compress <canonical-zip> <xz-output>" }
             ToolingBundleCarrier.encode(Path.of(arguments[1]), Path.of(arguments[2]))
         }
 

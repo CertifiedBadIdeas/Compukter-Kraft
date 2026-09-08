@@ -18,7 +18,7 @@
 
 package ru.lazyhat.compukters.tooling.bundle
 
-import io.airlift.compress.v3.zstd.ZstdInputStream
+import org.tukaani.xz.XZInputStream
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.inputStream
 import kotlin.io.path.readBytes
@@ -33,14 +33,14 @@ class ToolingBundleCarrierTest {
         try {
             val expected = ByteArray(256 * 1024) { index -> (index % 251).toByte() }
             val input = root.resolve("input.zip").also { it.writeBytes(expected) }
-            val first = root.resolve("first.zip.zst")
-            val second = root.resolve("second.zip.zst")
+            val first = root.resolve("first.zip.xz")
+            val second = root.resolve("second.zip.xz")
 
             ToolingBundleCarrier.encode(input, first)
             ToolingBundleCarrier.encode(input, second)
 
             assertContentEquals(first.readBytes(), second.readBytes())
-            val decoded = ZstdInputStream(first.inputStream()).use { it.readAllBytes() }
+            val decoded = XZInputStream(first.inputStream()).use { it.readAllBytes() }
             assertContentEquals(expected, decoded)
         } finally {
             root.toFile().deleteRecursively()

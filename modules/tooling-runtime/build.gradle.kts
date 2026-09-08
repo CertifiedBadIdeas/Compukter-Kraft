@@ -26,10 +26,9 @@ plugins {
 }
 
 dependencies {
-    implementation(libs.aircompressor)
+    implementation(libs.xz)
     implementation(projects.workerClient)
     implementation(libs.kotlin.stdlib)
-    implementation(libs.zstd.jni)
     testImplementation(kotlin("test"))
 }
 
@@ -88,7 +87,7 @@ val canonicalToolingRuntimeBundle = tasks.register<Zip>("canonicalToolingRuntime
     isReproducibleFileOrder = true
 }
 
-val toolingRuntimeBundleFile = layout.buildDirectory.file("distributions/k2-tooling-workers.zip.zst")
+val toolingRuntimeBundleFile = layout.buildDirectory.file("distributions/k2-tooling-workers.zip.xz")
 val toolingRuntimeManifestFile = layout.buildDirectory.file("distributions/k2-tooling-workers.bundle")
 val toolingRuntimeManifest = tasks.register("toolingRuntimeManifest") {
     group = "distribution"
@@ -103,7 +102,7 @@ val toolingRuntimeManifest = tasks.register("toolingRuntimeManifest") {
 }
 val toolingRuntimeBundle = tasks.register<JavaExec>("toolingRuntimeBundle") {
     group = "distribution"
-    description = "Compresses the canonical shared K2 tooling ZIP as one Zstandard frame."
+    description = "Compresses the canonical shared K2 tooling ZIP as one checksummed XZ stream."
     dependsOn(tasks.classes, canonicalToolingRuntimeBundle)
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = application.mainClass

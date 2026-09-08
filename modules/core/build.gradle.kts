@@ -28,7 +28,7 @@ dependencies {
     implementation(libs.slf4j.api)
 
     testImplementation(kotlin("test"))
-    testImplementation(libs.aircompressor)
+    testImplementation(libs.xz)
     testImplementation(projects.platformBundle)
 }
 
@@ -43,7 +43,7 @@ val kotlincRuntimeArtifact =
 val editRuntimeArtifact =
     project(":compiler-k2").layout.buildDirectory.file("generated/system/edit.cpkt")
 val compilerWorkerPayload =
-    project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.zip.zst")
+    project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.zip.xz")
 val compilerWorkerManifest =
     project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.bundle")
 val processTerminalChildArtifact =

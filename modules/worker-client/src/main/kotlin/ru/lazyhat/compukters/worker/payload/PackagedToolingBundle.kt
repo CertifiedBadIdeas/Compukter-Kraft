@@ -18,7 +18,7 @@
 
 package ru.lazyhat.compukters.worker.payload
 
-import io.airlift.compress.v3.zstd.ZstdInputStream
+import org.tukaani.xz.XZInputStream
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -98,7 +98,7 @@ object PackagedToolingBundle {
             val extracted = cacheRoot.resolve(".packaged-${UUID.randomUUID()}")
             staging = extracted
             extracted.createDirectories()
-            ZstdInputStream(archive).use { decoded -> extract(decoded, extracted, limits) }
+            XZInputStream(archive, XZ_MEMORY_LIMIT_KIB).use { decoded -> extract(decoded, extracted, limits) }
             val manifest = loadManifest(extracted, limits.manifestBytes)
             requireExpectedManifest(manifest, expectedDocument)
             validateExtracted(extracted, manifest)
@@ -330,6 +330,7 @@ object PackagedToolingBundle {
 
     private val PROFILE_MANIFESTS = setOf("manifests/analysis.payload", "manifests/compiler.payload")
     private val NOTICE_FILES = setOf("META-INF/NOTICE.txt", "META-INF/THIRD-PARTY-NOTICES.md")
+    private const val XZ_MEMORY_LIMIT_KIB = 48 * 1024
     private val FIXED_DIRECTORIES =
         setOf(
             "common",

@@ -29,7 +29,7 @@ val bootArtifact = project(":compiler-k2").layout.buildDirectory.file("generated
 val shellArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/system/shell.cpkt")
 val kotlincArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/system/kotlinc.cpkt")
 val editArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/system/edit.cpkt")
-val toolingRuntimeBundle = project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.zip.zst")
+val toolingRuntimeBundle = project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.zip.xz")
 val toolingRuntimeManifest = project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.bundle")
 
 tasks.processResources {
@@ -59,7 +59,7 @@ tasks.processResources {
     }
     from(toolingRuntimeBundle) {
         into("tooling/workers")
-        rename { "k2-tooling-workers.zip.zst" }
+        rename { "k2-tooling-workers.zip.xz" }
     }
     from(toolingRuntimeManifest) {
         into("tooling/workers")
@@ -86,6 +86,9 @@ tasks.processResources {
         into("META-INF/licenses/jvm")
     }
     from(rootProject.layout.projectDirectory.file("licenses/jvm/checker-qual-3.21.2-MIT.txt")) {
+        into("META-INF/licenses/jvm")
+    }
+    from(rootProject.layout.projectDirectory.file("licenses/jvm/xz-java-1.10-0BSD.txt")) {
         into("META-INF/licenses/jvm")
     }
     from(rootProject.layout.projectDirectory.file("licenses/distribution-components.tsv")) {

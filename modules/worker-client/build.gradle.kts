@@ -24,9 +24,9 @@ plugins {
 }
 
 dependencies {
-    compileOnly(libs.aircompressor)
+    compileOnly(libs.xz)
     implementation(libs.kotlin.stdlib)
-    testImplementation(libs.aircompressor)
+    testImplementation(libs.xz)
     testImplementation(kotlin("test"))
 }
 
