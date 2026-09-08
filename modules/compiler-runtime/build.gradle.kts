@@ -23,5 +23,6 @@ plugins {
 dependencies {
     implementation(projects.compilerClient)
     implementation(libs.kotlin.stdlib)
+    testImplementation(libs.aircompressor)
     testImplementation(kotlin("test"))
 }
