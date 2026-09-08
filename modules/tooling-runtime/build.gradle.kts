@@ -18,6 +18,7 @@
 
 import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
+import org.gradle.api.tasks.bundling.ZipEntryCompression
 
 plugins {
     application
@@ -25,8 +26,10 @@ plugins {
 }
 
 dependencies {
+    implementation(libs.aircompressor)
     implementation(projects.workerClient)
     implementation(libs.kotlin.stdlib)
+    implementation(libs.zstd.jni)
     testImplementation(kotlin("test"))
 }
 
@@ -84,14 +87,44 @@ val toolingRuntimeBundle = tasks.register<Zip>("toolingRuntimeBundle") {
     isReproducibleFileOrder = true
 }
 
+val canonicalToolingRuntimeBundle = tasks.register<Zip>("canonicalToolingRuntimeBundle") {
+    group = "distribution"
+    description = "Packages the shared K2 tooling runtime as a canonical stored-entry ZIP."
+    dependsOn(prepareToolingRuntimeBundle)
+    from(toolingBundleDirectory)
+    archiveFileName = "k2-tooling-workers.zip"
+    destinationDirectory = layout.buildDirectory.dir("tooling-bundle/carrier")
+    entryCompression = ZipEntryCompression.STORED
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
+
+val solidToolingRuntimeBundleFile = layout.buildDirectory.file("distributions/k2-tooling-workers.zip.zst")
+val solidToolingRuntimeBundle = tasks.register<JavaExec>("solidToolingRuntimeBundle") {
+    group = "distribution"
+    description = "Compresses the canonical shared K2 tooling ZIP as one Zstandard frame."
+    dependsOn(tasks.classes, canonicalToolingRuntimeBundle)
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass = application.mainClass
+    inputs.file(canonicalToolingRuntimeBundle.flatMap { it.archiveFile })
+    outputs.file(solidToolingRuntimeBundleFile)
+    doFirst {
+        args(
+            "compress",
+            canonicalToolingRuntimeBundle.get().archiveFile.get().asFile.absolutePath,
+            solidToolingRuntimeBundleFile.get().asFile.absolutePath,
+        )
+    }
+}
+
 val verifyToolingRuntimeBundle = tasks.register<JavaExec>("verifyToolingRuntimeBundle") {
     group = "verification"
     description = "Reassembles, publishes, and verifies the shared K2 tooling runtime."
-    dependsOn(tasks.classes, toolingRuntimeBundle)
+    dependsOn(tasks.classes, solidToolingRuntimeBundle)
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = application.mainClass
     inputs.files(compilerWorkerPayloadInput, analysisWorkerPayloadInput)
-    inputs.file(toolingRuntimeBundle.flatMap { it.archiveFile })
+    inputs.file(solidToolingRuntimeBundleFile)
     val scratch = layout.buildDirectory.dir("tooling-bundle/verification")
     outputs.upToDateWhen { false }
     doFirst {
@@ -99,7 +132,7 @@ val verifyToolingRuntimeBundle = tasks.register<JavaExec>("verifyToolingRuntimeB
             "verify",
             compilerWorkerPayloadInput.singleFile.absolutePath,
             analysisWorkerPayloadInput.singleFile.absolutePath,
-            toolingRuntimeBundle.get().archiveFile.get().asFile.absolutePath,
+            solidToolingRuntimeBundleFile.get().asFile.absolutePath,
             scratch.get().asFile.absolutePath,
         )
     }

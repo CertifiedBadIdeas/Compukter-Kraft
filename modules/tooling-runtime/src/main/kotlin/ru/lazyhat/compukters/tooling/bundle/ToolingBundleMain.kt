@@ -44,8 +44,13 @@ fun main(arguments: Array<String>) {
             )
         }
 
+        "compress" -> {
+            require(arguments.size == 3) { "usage: tooling-bundle compress <canonical-zip> <zstd-output>" }
+            ToolingBundleCarrier.encode(Path.of(arguments[1]), Path.of(arguments[2]))
+        }
+
         else -> {
-            error("expected assemble or verify command")
+            error("expected assemble, compress, or verify command")
         }
     }
 }

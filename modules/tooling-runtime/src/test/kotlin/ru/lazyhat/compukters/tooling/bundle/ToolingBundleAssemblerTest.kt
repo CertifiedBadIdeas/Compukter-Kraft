@@ -21,8 +21,12 @@ package ru.lazyhat.compukters.tooling.bundle
 import ru.lazyhat.compukters.worker.payload.WorkerPayloadManifest
 import ru.lazyhat.compukters.worker.payload.WorkerPayloadPublisher
 import ru.lazyhat.compukters.worker.payload.WorkerPayloadSource
+import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import kotlin.io.path.createDirectories
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.readBytes
@@ -73,6 +77,12 @@ class ToolingBundleAssemblerTest {
             )
             firstManifest.files.forEach { file ->
                 assertContentEquals(first.resolve(file.path).readBytes(), second.resolve(file.path).readBytes())
+                ZipInputStream(first.resolve(file.path).readBytes().inputStream()).use { jar ->
+                    while (true) {
+                        val entry = jar.nextEntry ?: break
+                        assertEquals(ZipEntry.STORED, entry.method)
+                    }
+                }
             }
             val compilerClasspath = firstManifest.profiles.getValue("compiler").classpath
             val analysisClasspath = firstManifest.profiles.getValue("analysis").classpath
@@ -172,18 +182,29 @@ class ToolingBundleAssemblerTest {
         files: LinkedHashMap<String, ByteArray>,
     ): Path {
         cacheRoot.createDirectories()
+        val jars = files.mapValuesTo(linkedMapOf()) { (_, bytes) -> jar(bytes) }
         val manifest =
             WorkerPayloadManifest.create(
                 kind = kind,
                 identityProperties = mapOf("compiler" to "2.4.10"),
                 mainClass = "$kind.MainKt",
-                files = files.mapKeys { (name, _) -> "lib/$name" },
+                files = jars.mapKeys { (name, _) -> "lib/$name" },
             )
         return WorkerPayloadPublisher
             .publish(
                 manifest,
-                WorkerPayloadSource { path -> files.getValue(path.removePrefix("lib/")).inputStream() },
+                WorkerPayloadSource { path -> jars.getValue(path.removePrefix("lib/")).inputStream() },
                 cacheRoot,
             ).root
+    }
+
+    private fun jar(bytes: ByteArray): ByteArray {
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { jar ->
+            jar.putNextEntry(ZipEntry("payload.bin"))
+            jar.write(bytes)
+            jar.closeEntry()
+        }
+        return output.toByteArray()
     }
 }

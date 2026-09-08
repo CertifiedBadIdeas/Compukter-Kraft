@@ -22,10 +22,16 @@ import ru.lazyhat.compukters.worker.payload.ToolingBundleManifest
 import ru.lazyhat.compukters.worker.payload.ToolingProfileDefinition
 import ru.lazyhat.compukters.worker.payload.WorkerPayloadLoader
 import ru.lazyhat.compukters.worker.value.Sha256
+import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.time.LocalDateTime
+import java.util.zip.CRC32
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.isDirectory
@@ -83,7 +89,7 @@ object ToolingBundleAssembler {
             val filename = if (proposed in collidingNames) qualify(proposed, groupEntry.key.content.sha256) else proposed
             val directory = groupEntry.key.profile ?: COMMON
             val outputPath = "$directory/lib/$filename"
-            val bytes = group.first().source.readBytes()
+            val bytes = normalizeJar(group.first().source)
             check(outputFiles.put(outputPath, bytes) == null) { "tooling output path collision: $outputPath" }
             group.forEach { entry -> outputByInput[InputCoordinate(entry.profile, entry.inputPath)] = outputPath }
         }
@@ -126,6 +132,38 @@ object ToolingBundleAssembler {
             "intellij" in filename -> INTELLIJ_COROUTINES_ROLE
             else -> ORDINARY_COROUTINES_ROLE
         }
+
+    private fun normalizeJar(source: Path): ByteArray {
+        val output = ByteArrayOutputStream()
+        ZipFile(source.toFile()).use { jar ->
+            val entries =
+                jar
+                    .entries()
+                    .asSequence()
+                    .filterNot(ZipEntry::isDirectory)
+                    .sortedBy(ZipEntry::getName)
+                    .toList()
+            require(entries.map(ZipEntry::getName).distinct().size == entries.size) { "runtime JAR contains duplicate entries" }
+            ZipOutputStream(output).use { normalized ->
+                entries.forEach { sourceEntry ->
+                    val bytes = jar.getInputStream(sourceEntry).use { it.readAllBytes() }
+                    val checksum = CRC32().apply { update(bytes) }
+                    val targetEntry =
+                        ZipEntry(sourceEntry.name).apply {
+                            method = ZipEntry.STORED
+                            size = bytes.size.toLong()
+                            compressedSize = size
+                            crc = checksum.value
+                            setTimeLocal(FIXED_ZIP_TIME)
+                        }
+                    normalized.putNextEntry(targetEntry)
+                    normalized.write(bytes)
+                    normalized.closeEntry()
+                }
+            }
+        }
+        return output.toByteArray()
+    }
 
     private fun groupKey(
         entry: InputEntry,
@@ -239,4 +277,5 @@ object ToolingBundleAssembler {
     private const val INTELLIJ_COROUTINES_ROLE = "intellij-coroutines"
     private const val ORDINARY_COROUTINES_ROLE = "ordinary-coroutines"
     private val PROFILES = setOf(COMPILER, ANALYSIS)
+    private val FIXED_ZIP_TIME: LocalDateTime = LocalDateTime.of(1980, 1, 1, 0, 0, 2)
 }

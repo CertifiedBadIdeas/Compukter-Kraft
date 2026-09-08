@@ -37,6 +37,7 @@ caffeine-kotlin = "2.9.3"
 intellij-coroutines = "1.8.0-intellij-13"
 intellij-platform = "251.27812.49"
 aircompressor = "3.7"
+zstd-jni = "1.5.7-11"
 
 # 26.1
 minecraft-v261 = "26.1.2"
@@ -69,6 +70,7 @@ checker-qual = { module = "org.checkerframework:checker-qual", version.ref = "ch
 ktlint-rule-engine = { module = "com.pinterest.ktlint:ktlint-rule-engine", version.ref = "ktlint" }
 ktlint-ruleset-standard = { module = "com.pinterest.ktlint:ktlint-ruleset-standard", version.ref = "ktlint" }
 aircompressor = { module = "io.airlift:aircompressor-v3", version.ref = "aircompressor" }
+zstd-jni = { module = "com.github.luben:zstd-jni", version.ref = "zstd-jni" }
 
 # 26.1
 minecraft-v261 = { module = "net.minecraft:minecraft", version.ref = "minecraft-v261" }
