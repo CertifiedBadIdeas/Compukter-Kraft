@@ -25,8 +25,8 @@ import ru.lazyhat.compukters.compiler.runtime.ServerCompilerService
 import ru.lazyhat.compukters.compiler.runtime.WorkerCompilerBackend
 import ru.lazyhat.compukters.compiler.worker.controller.CompilerWorkerController
 import ru.lazyhat.compukters.compiler.worker.controller.JdkWorkerProcessFactory
-import ru.lazyhat.compukters.compiler.worker.controller.WorkerPayloadLoader
 import ru.lazyhat.compukters.compiler.worker.controller.WorkerLaunch
+import ru.lazyhat.compukters.compiler.worker.controller.WorkerPayloadLoader
 import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.compiler.worker.protocol.TrustedBundleIdentity
 import ru.lazyhat.compukters.compiler.worker.protocol.WorkerLimits
@@ -46,12 +46,12 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalModifier
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.VmArtifactVerifier
 import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
-import ru.lazyhat.compukters.worker.payload.PackagedToolingBundle
 import ru.lazyhat.compukters.lang.runtime.vm.VmRuntime
 import ru.lazyhat.compukters.lang.runtime.vm.VmSession
 import ru.lazyhat.compukters.lang.runtime.vm.VmValue
 import ru.lazyhat.compukters.platform.bundle.PackagedPlatformBundleLoader
 import ru.lazyhat.compukters.platform.bundle.PlatformBundleCodec
+import ru.lazyhat.compukters.worker.payload.PackagedToolingBundle
 import ru.lazyhat.compukters.worker.value.Sha256
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
