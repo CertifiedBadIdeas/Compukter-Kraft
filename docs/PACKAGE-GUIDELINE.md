@@ -1,3 +1,8 @@
+---
+layout: default
+title: Package guideline
+---
+
 # Package Guideline
 
 Compukters product code uses the root package `ru.lazyhat.compukters`. New code must follow the current Kotlin-artifact architecture instead of recreating any removed VM, terminal, retained-display, or generic device layer.

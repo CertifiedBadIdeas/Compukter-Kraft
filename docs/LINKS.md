@@ -1,3 +1,7 @@
+---
+layout: default
+title: Reference links
+---
 
 ### Textures
 

@@ -1,3 +1,8 @@
+---
+layout: default
+title: Verification
+---
+
 # Verification
 
 Compukters uses different verification gates for fast feedback, a complete local checkout, and a distributable
@@ -38,7 +43,7 @@ release gate.
 The commands below are minimum focused evidence. Add narrower tests for the behavior changed, including malformed,
 limit, lifetime, or failure cases when those contracts are affected.
 
-See [Native runtime test coverage](NATIVE-TEST-COVERAGE.md) for the semantic ownership matrix across direct Rust,
+See [Native runtime test coverage](https://certifiedbadideas.github.io/Compukters/NATIVE-TEST-COVERAGE/) for the semantic ownership matrix across direct Rust,
 FFI, Kotlin-to-VM conformance, runtime-host integration, and NeoForge GameTests.
 
 | Changed boundary | Focused evidence | Final evidence |

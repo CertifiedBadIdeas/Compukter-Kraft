@@ -1,3 +1,8 @@
+---
+layout: default
+title: Redstone GPIO
+---
+
 # Redstone GPIO
 
 Each computer exposes six redstone sides relative to its case: `front`, `back`,

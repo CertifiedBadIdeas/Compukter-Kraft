@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#11151d">
+    <meta name="description" content="{{ page.description | default: site.description | escape }}">
+    <title>{% if page.title %}{{ page.title | escape }} · {% endif %}{{ site.title | escape }}</title>
+    {% if page.source_links_base %}<base href="{{ page.source_links_base }}">{% endif %}
+    <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="{{ '/' | relative_url }}" aria-label="Compukters documentation home">
+        <span class="brand-mark" aria-hidden="true">&gt;_</span>
+        <span>Compukters</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="{{ '/GETTING-STARTED/' | relative_url }}">Getting started</a>
+        <a href="{{ '/KOTLIN-SUPPORT/' | relative_url }}">Kotlin support</a>
+        <a href="{{ '/REDSTONE/' | relative_url }}">Redstone</a>
+        <a href="https://github.com/{{ site.repository }}">GitHub</a>
+      </nav>
+    </header>
+    <main class="page-shell">
+      <article class="content">
+        {{ content }}
+      </article>
+    </main>
+    <footer class="site-footer">
+      <span>Compukters is open-source software licensed under Apache-2.0.</span>
+      <a href="https://github.com/{{ site.repository }}">Source and releases</a>
+    </footer>
+  </body>
+</html>

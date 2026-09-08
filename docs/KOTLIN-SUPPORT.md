@@ -1,3 +1,9 @@
+---
+layout: default
+title: Guest Kotlin support
+source_links_base: https://github.com/CertifiedBadIdeas/Compukters/blob/dev/docs/
+---
+
 # Guest Kotlin support
 
 Compukters accepts Kotlin source through a pinned K2 frontend, then lowers it

@@ -1,0 +1,17 @@
+title: Compukters
+description: Programmable computers for Minecraft with deterministic, resource-bounded Kotlin execution.
+url: https://certifiedbadideas.github.io
+baseurl: /Compukters
+repository: CertifiedBadIdeas/Compukters
+
+markdown: kramdown
+highlighter: rouge
+permalink: pretty
+theme: null
+
+plugins:
+  - jekyll-relative-links
+
+relative_links:
+  enabled: true
+  collections: true

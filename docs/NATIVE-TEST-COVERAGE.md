@@ -1,3 +1,8 @@
+---
+layout: default
+title: Native runtime test coverage
+---
+
 # Native Runtime Test Coverage
 
 This matrix records the direct test ownership of the managed Rust runtime in
