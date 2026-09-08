@@ -58,16 +58,16 @@ verifies the complete packaged JAR inventory.
 ## Kotlin formatter runtime
 
 The analysis worker privately embeds ktlint 1.8.0 and its standard ruleset for
-explicit Kotlin format-on-save. Ktlint is copyright Pinterest, Inc., Stanley
+explicit on-demand Kotlin formatting. Ktlint is copyright Pinterest, Inc., Stanley
 Shyiko, and contributors and is licensed under MIT. Its complete license is at
 `licenses/jvm/ktlint-1.8.0-MIT.txt`. The formatter uses EditorConfig Java
 (`ec4j-core`) 1.1.1, Poko annotations 0.20.1, and Kotlin Logging 7.0.13 under
 Apache-2.0.
 
-The private formatter classpath contains Kotlin compiler/runtime 2.4.10,
-`kotlin-reflect` 1.6.10, and coroutines 1.8.0 under the Kotlin and coroutines
-terms listed elsewhere in this notice. It is loaded separately from the K2
-Analysis API classpath.
+The compiler-free formatter runtime is adapted to the ordinary IntelliJ
+namespace and reuses the analysis worker's packaged Kotlin compiler/runtime
+files. Those files are loaded again in a separate child classloader rather than
+duplicated in the distribution or shared with the live K2 Analysis API state.
 
 SLF4J API 2.0.18 is copyright QOS.ch Sarl and licensed under MIT. Its complete
 license is at `licenses/jvm/slf4j-2.0.18-MIT.txt`.

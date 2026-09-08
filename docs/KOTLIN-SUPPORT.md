@@ -581,6 +581,8 @@ cannot become one merely by copying its package, name, and signature.
   saves, previews, and non-Kotlin files remain unaffected.
   Evidence:
   [`KotlinFormatterTest`](../modules/ide-kotlin-formatter/src/test/kotlin/ru/lazyhat/compukters/ide/formatter/KotlinFormatterTest.kt),
+  [`RelocatedKotlinFormatterTest`](../modules/ide-kotlin-formatter/src/test/kotlin/ru/lazyhat/compukters/ide/formatter/RelocatedKotlinFormatterTest.kt),
+  [`IsolatedKotlinFormatterTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/formatter/IsolatedKotlinFormatterTest.kt),
   [`FormatQueryTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/query/FormatQueryTest.kt),
   and
   [`IdeAnalysisFlowTest`](../modules/ide-client/src/test/kotlin/ru/lazyhat/compukters/ide/client/controller/IdeAnalysisFlowTest.kt),

@@ -55,11 +55,12 @@ and result contracts.
 
 Analysis protocol v7 also carries explicit Kotlin format requests. The request includes the exact editor text and
 UTF-16 caret captured by the Reformat Code action, so formatting does not depend on whether the semantic snapshot has
-caught up. The worker runs ktlint standard rules in a separately loaded nested classpath because ktlint's
-compiler-embeddable runtime cannot share IntelliJ classes with the standalone K2 analysis environment. Formatted text
-is bounded by the negotiated source-file limit; the client applies a current result as one undoable edit and leaves the
-document dirty for a separate save. Stale results are discarded, and formatter failures warn without changing or
-saving the source. Ctrl+S, autosave, and implicit saves do not format.
+caught up. The worker runs ktlint standard rules from a compiler-free nested runtime whose shaded IntelliJ references
+are relocated back to the ordinary namespace. Its child classloader reloads the worker's existing Kotlin compiler JAR
+files with a platform parent: the distribution stores one compiler copy, while formatter and Analysis API retain
+separate IntelliJ global state. Formatted text is bounded by the negotiated source-file limit; the client applies a
+current result as one undoable edit and leaves the document dirty for a separate save. Stale results are discarded,
+and formatter failures warn without changing or saving the source. Ctrl+S, autosave, and implicit saves do not format.
 
 ## Server compilation
 
