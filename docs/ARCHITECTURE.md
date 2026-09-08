@@ -131,7 +131,9 @@ The Rust runtime owns the guest filesystem and its persistence. Minecraft stores
 guest paths and bytes never enter block-entity NBT or a JVM-side mirror. Every computer sees an immutable packaged
 `/rom` and a private persistent `/home`. The world store lives under `<world>/compukters/filesystems`, performs bounded
 I/O on its own worker, flushes active generations on world saves, and drains, flushes, and closes before server shutdown
-completes. Removing a computer through the player destruction lifecycle closes its machine before creating a
+completes. A permanent `lock` anchor carries a process-lifetime exclusive OS file lock: a live second server is
+rejected, while orderly close or process termination releases ownership without deleting the anchor. Removing a
+computer through the player destruction lifecycle closes its machine before creating a
 recoverable tombstone; ordinary block-entity removal during chunk unload only closes the current machine and preserves
 its filesystem.
 

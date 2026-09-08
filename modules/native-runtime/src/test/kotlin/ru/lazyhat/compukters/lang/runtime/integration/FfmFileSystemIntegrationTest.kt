@@ -20,6 +20,8 @@ package ru.lazyhat.compukters.lang.runtime.integration
 
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import ru.lazyhat.compukters.lang.runtime.fs.FileSystemStoreHealth
+import ru.lazyhat.compukters.lang.runtime.fs.FileSystemStoreOpenException
+import ru.lazyhat.compukters.lang.runtime.fs.FileSystemStoreOpenFailure
 import ru.lazyhat.compukters.lang.runtime.fs.WorldFileSystemStore
 import ru.lazyhat.compukters.lang.runtime.vm.FfmBridge
 import ru.lazyhat.compukters.lang.runtime.vm.VmSession
@@ -31,6 +33,7 @@ import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class FfmFileSystemIntegrationTest {
     @Test
@@ -42,6 +45,12 @@ class FfmFileSystemIntegrationTest {
                 val id = ComputerId.fromLongs(1, 2)
                 val artifact = Files.readAllBytes(Path.of(requiredProperty("compukters.shell.artifact")))
                 assertEquals(FileSystemStoreHealth.ACTIVE, store.health())
+                assertEquals(
+                    FileSystemStoreOpenFailure.LOCKED,
+                    assertFailsWith<FileSystemStoreOpenException> {
+                        WorldFileSystemStore.open(root, bridge)
+                    }.failure,
+                )
                 VmSession
                     .openInStore(
                         artifact,
@@ -56,6 +65,10 @@ class FfmFileSystemIntegrationTest {
                 store.close()
                 store.close()
                 assertFailsWith<IllegalStateException> { store.health() }
+                WorldFileSystemStore.open(root, bridge).use { reopened ->
+                    assertEquals(FileSystemStoreHealth.ACTIVE, reopened.health())
+                }
+                assertTrue(Files.isRegularFile(root.resolve("lock")))
             }
         } finally {
             root.toFile().deleteRecursively()
