@@ -18,6 +18,7 @@
 
 package ru.lazyhat.compukters.worker.payload
 
+import io.airlift.compress.v3.zstd.ZstdInputStream
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -87,7 +88,7 @@ object PackagedToolingBundle {
         val staging = cacheRoot.resolve(".packaged-${UUID.randomUUID()}")
         staging.createDirectories()
         try {
-            extract(archive, staging, limits)
+            ZstdInputStream(archive).use { decoded -> extract(decoded, staging, limits) }
             val manifest = loadManifest(staging, limits.manifestBytes)
             validateExtracted(staging, manifest)
             val destination = cacheRoot.resolve(manifest.bundleHash.hex())

@@ -24,6 +24,7 @@ plugins {
 }
 
 dependencies {
+    implementation(libs.aircompressor)
     implementation(libs.kotlin.stdlib)
     testImplementation(kotlin("test"))
 }
@@ -32,6 +33,7 @@ val allowedWorkerClientRuntimeModules =
     setOf(
         "org.jetbrains.kotlin:kotlin-stdlib",
         "org.jetbrains:annotations",
+        "io.airlift:aircompressor-v3",
     )
 
 val verifyWorkerClientRuntimeIsolation =
