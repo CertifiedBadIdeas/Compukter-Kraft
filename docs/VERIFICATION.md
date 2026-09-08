@@ -38,6 +38,9 @@ release gate.
 The commands below are minimum focused evidence. Add narrower tests for the behavior changed, including malformed,
 limit, lifetime, or failure cases when those contracts are affected.
 
+See [Native runtime test coverage](NATIVE-TEST-COVERAGE.md) for the semantic ownership matrix across direct Rust,
+FFI, Kotlin-to-VM conformance, runtime-host integration, and NeoForge GameTests.
+
 | Changed boundary | Focused evidence | Final evidence |
 | --- | --- | --- |
 | Guest Kotlin declarations, platform metadata, K2 lowering, or IDE semantics | Owning `guest-platform`, `platform-bundle`, `platform-k2`, `compiler-k2-engine`, `compiler-k2`, and affected `ide-*` `check` tasks; `verifyKotlinVmConformance` for an execution claim | `verifyLocalFull` after a completed cross-layer feature |
