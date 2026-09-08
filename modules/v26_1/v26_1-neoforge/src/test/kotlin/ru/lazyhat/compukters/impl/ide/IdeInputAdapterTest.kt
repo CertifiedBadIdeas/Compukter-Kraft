@@ -398,6 +398,33 @@ class IdeInputAdapterTest {
     }
 
     @Test
+    fun `project choice hit target opens the indexed catalog project`() {
+        val fixture = fixture()
+        val geometry = IdeRenderGeometry.compute(960, 540, 180, 120, true, true, TerminalFontProfile.DINA)
+        val projects = listOf(IdeProjectSummary("demo", "Demo"), IdeProjectSummary("second", "Second"))
+        val choice =
+            IdeHitTarget(
+                IdeHitAction.ProjectChoice,
+                IdeRect(20, 20, 180, 38),
+                true,
+                null,
+                IdeFocusGroup.Page,
+                70,
+                choiceIndex = 1,
+            )
+
+        assertTrue(
+            fixture.adapter.pointerClicked(
+                30.0,
+                30.0,
+                0,
+                IdePointerContext(geometry, projects = projects, hitTargets = listOf(choice)),
+            ),
+        )
+        assertEquals(listOf<IdeCommand>(IdeCommand.OpenProject("second"), IdeCommand.PointerActivity), fixture.commands)
+    }
+
+    @Test
     fun `wheel scrolls project tree without sending an editor command`() {
         val fixture = fixture()
         val geometry = IdeRenderGeometry.compute(960, 540, 180, 120, true, true, TerminalFontProfile.DINA)

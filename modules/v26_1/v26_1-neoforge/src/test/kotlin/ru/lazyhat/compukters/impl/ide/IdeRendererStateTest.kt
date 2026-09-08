@@ -139,6 +139,33 @@ class IdeRendererStateTest {
     }
 
     @Test
+    fun `workspace project control opens bounded project menu`() {
+        val projects =
+            listOf(
+                IdeProjectSummary("demo", "Demo"),
+                IdeProjectSummary("second", "Second"),
+            )
+        val model =
+            IdeRenderer.extract(
+                workspaceState(IdeEditorView.Empty, IdeBuildState.Idle, projects = projects),
+                geometry(),
+                projectSwitcherOpen = true,
+            )
+
+        assertTrue(model.hitTargets.single { it.action == IdeHitAction.ProjectSwitcher }.selected)
+        val choices = model.hitTargets.filter { it.action == IdeHitAction.ProjectChoice }
+        assertEquals(listOf(0, 1), choices.map { it.choiceIndex })
+        assertTrue(choices.single { it.choiceIndex == 0 }.selected)
+        assertEquals(listOf("Demo", "Second"), model.text.filter { it.kind == IdeTextKind.ProjectChoice }.map { it.value })
+        assertTrue(model.hitTargets.any { it.action == IdeHitAction.CreateProject && it.zIndex > choices.first().zIndex - 1 })
+        assertTrue(
+            model.panels
+                .single { it.kind == IdePanelKind.ProjectSwitcher }
+                .bounds.bottom <= geometry().status.top,
+        )
+    }
+
+    @Test
     fun `workspace clips rows and gives semantic spans precedence over lexical spans`() {
         val source = "fun main()\r\nval value = 1\r\nprintln(value)"
         val secondStart = source.indexOf("val value")
@@ -765,6 +792,7 @@ class IdeRendererStateTest {
         tooling: IdeToolingState = IdeToolingState.Ready,
         computerTree: IdeComputerTreeState = IdeComputerTreeState.NoTarget,
         busy: Set<IdeBusyOperation> = emptySet(),
+        projects: List<IdeProjectSummary> = listOf(IdeProjectSummary("demo", "Demo")),
     ): IdeViewState {
         val root = createTempDirectory("compukters-renderer-tree-")
         val descriptor = ProjectCatalog.open(root).create("demo")
@@ -786,6 +814,7 @@ class IdeRendererStateTest {
                             status = status,
                             build = build,
                             computerTree = computerTree,
+                            projects = projects,
                         ),
                     ),
                 dialog = null,

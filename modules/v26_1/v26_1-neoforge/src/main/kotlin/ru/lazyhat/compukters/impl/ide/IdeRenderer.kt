@@ -56,6 +56,7 @@ enum class IdePanelKind {
     Status,
     Control,
     Dialog,
+    ProjectSwitcher,
 }
 
 enum class IdeTextKind {
@@ -74,17 +75,21 @@ enum class IdeTextKind {
     Completion,
     Hover,
     DeclarationChoice,
+    ProjectChoice,
+    ProjectAction,
 }
 
 enum class IdeTextRotation { None, Clockwise90 }
 
 enum class IdeFillKind { Background, Border, Selection, DropTarget, Caret, Splitter, HyperlinkUnderline, MutableUnderline, DialogScrim }
 
-enum class IdeScissorKind { Tree, Editor, Diagnostics, Completion, SemanticPopup }
+enum class IdeScissorKind { Tree, Editor, Diagnostics, Completion, SemanticPopup, ProjectSwitcher }
 
 enum class IdeHitAction {
     CreateProject,
     OpenProject,
+    ProjectSwitcher,
+    ProjectChoice,
     CreateText,
     CreateDirectory,
     Rename,
@@ -184,8 +189,19 @@ internal object IdeRenderer {
         terminalState: IdeTargetTerminalState = IdeTargetTerminalState.Closed,
         terminalVisible: Boolean = false,
         explorerDrag: IdeExplorerDragVisual? = null,
+        projectSwitcherOpen: Boolean = false,
     ): IdeDrawModel {
-        val output = Builder(geometry, geometry.font, treeFirstRow, selectedTreePath, terminalState, terminalVisible, explorerDrag)
+        val output =
+            Builder(
+                geometry,
+                geometry.font,
+                treeFirstRow,
+                selectedTreePath,
+                terminalState,
+                terminalVisible,
+                explorerDrag,
+                projectSwitcherOpen,
+            )
         output.base()
         if (!geometry.supported) {
             output.ui(IdeTextKind.Status, geometry.unsupportedMessage, 8, 8, IdeColors.ERROR)
@@ -212,6 +228,7 @@ internal object IdeRenderer {
         private val terminalState: IdeTargetTerminalState,
         private val terminalVisible: Boolean,
         private val explorerDrag: IdeExplorerDragVisual?,
+        private val projectSwitcherOpen: Boolean,
     ) {
         private val panels = mutableListOf<IdePanelDraw>()
         private val text = mutableListOf<IdeTextDraw>()
@@ -279,11 +296,16 @@ internal object IdeRenderer {
             busy: Set<IdeBusyOperation>,
             caretVisible: Boolean,
         ) {
+            val projectControl = projectControl(workspace.project.displayName)
+            target(IdeHitAction.ProjectSwitcher, projectControl, true, "Switch project", selected = projectSwitcherOpen)
+            val projectLabelWidth = ((projectControl.width - 18) / 6).coerceAtLeast(1)
+            val projectLabel = workspace.project.displayName.take(projectLabelWidth)
+            ui(IdeTextKind.Header, "$projectLabel ▾", projectControl.left + 5, projectControl.top + 5)
             val active = workspace.activeFile?.value ?: "No file"
             ui(
                 IdeTextKind.Header,
-                "${workspace.project.displayName} · $active · ${targetLabel(targetState)}",
-                geometry.header.left + 6,
+                "$active · ${targetLabel(targetState)}",
+                projectControl.right + 7,
                 geometry.header.top + 7,
             )
             toolbar(workspace, targetState, toolingState, busy, workspace.activeFile != null || selectedTreePath != null)
@@ -309,6 +331,56 @@ internal object IdeRenderer {
             }
             diagnostics(workspace)
             status(workspace, targetState, toolingState, busy)
+            if (projectSwitcherOpen) projectSwitcher(workspace, projectControl)
+        }
+
+        private fun projectControl(displayName: String): IdeRect {
+            val maximum = minOf(PROJECT_SWITCHER_WIDTH, (geometry.header.width / 2).coerceAtLeast(PROJECT_CONTROL_MINIMUM_WIDTH))
+            val width = (displayName.length * 6 + 22).coerceIn(PROJECT_CONTROL_MINIMUM_WIDTH, maximum)
+            return IdeRect(geometry.header.left + 4, geometry.header.top + 3, geometry.header.left + 4 + width, geometry.header.bottom - 3)
+        }
+
+        private fun projectSwitcher(
+            workspace: ru.lazyhat.compukters.ide.client.state.IdeWorkspaceView,
+            control: IdeRect,
+        ) {
+            val availableHeight = (geometry.status.top - geometry.header.bottom - 4).coerceAtLeast(PROJECT_ROW_HEIGHT)
+            val projectRows = ((availableHeight / PROJECT_ROW_HEIGHT) - 1).coerceAtLeast(0)
+            val visibleProjects = workspace.projects.take(projectRows)
+            val width = minOf(PROJECT_SWITCHER_WIDTH, geometry.panel.right - control.left - 4).coerceAtLeast(control.width)
+            val bounds =
+                IdeRect(
+                    control.left,
+                    geometry.header.bottom,
+                    control.left + width,
+                    geometry.header.bottom + (visibleProjects.size + 1) * PROJECT_ROW_HEIGHT + 2,
+                )
+            panel(IdePanelKind.ProjectSwitcher, bounds, IdeColors.PANEL_ALT, Z_PROJECT_SWITCHER)
+            scissors += IdeScissorDraw(IdeScissorKind.ProjectSwitcher, bounds, Z_PROJECT_SWITCHER)
+            visibleProjects.forEachIndexed { index, project ->
+                val row =
+                    IdeRect(
+                        bounds.left + 1,
+                        bounds.top + 1 + index * PROJECT_ROW_HEIGHT,
+                        bounds.right - 1,
+                        bounds.top + 1 + (index + 1) * PROJECT_ROW_HEIGHT,
+                    )
+                val selected = project.directoryName == workspace.project.directoryName
+                if (selected) fills += IdeFillDraw(IdeFillKind.Selection, row, IdeColors.SELECTION, Z_PROJECT_SWITCHER_SELECTION)
+                target(
+                    IdeHitAction.ProjectChoice,
+                    row,
+                    !selected,
+                    selected = selected,
+                    z = Z_PROJECT_SWITCHER_TARGET,
+                    choiceIndex = index,
+                )
+                ui(IdeTextKind.ProjectChoice, project.displayName, row.left + 6, row.top + 5, clip = bounds, z = Z_PROJECT_SWITCHER_TEXT)
+            }
+            val createTop = bounds.top + 1 + visibleProjects.size * PROJECT_ROW_HEIGHT
+            val create = IdeRect(bounds.left + 1, createTop, bounds.right - 1, createTop + PROJECT_ROW_HEIGHT)
+            target(IdeHitAction.CreateProject, create, true, z = Z_PROJECT_SWITCHER_TARGET)
+            ui(IdeTextKind.ProjectAction, "+ New Project", create.left + 6, create.top + 5, clip = bounds, z = Z_PROJECT_SWITCHER_TEXT)
         }
 
         private fun toolbar(
@@ -1061,6 +1133,7 @@ internal object IdeRenderer {
             focusGroup: IdeFocusGroup = IdeFocusGroup.Page,
             z: Int = Z_TARGET,
             selected: Boolean = false,
+            choiceIndex: Int? = null,
         ) {
             panels +=
                 IdePanelDraw(
@@ -1073,7 +1146,7 @@ internal object IdeRenderer {
                     },
                     z - CONTROL_BACKGROUND_OFFSET,
                 )
-            hitTargets += IdeHitTarget(action, bounds, enabled, tooltip, focusGroup, z, selected)
+            hitTargets += IdeHitTarget(action, bounds, enabled, tooltip, focusGroup, z, selected, choiceIndex)
         }
 
         fun build(): IdeDrawModel = IdeDrawModel(panels.toList(), text.toList(), fills.toList(), scissors.toList(), hitTargets.toList())
@@ -1268,6 +1341,9 @@ internal object IdeRenderer {
 
     private const val TAB_WIDTH = 4
     private const val UI_LINE_HEIGHT = 12
+    private const val PROJECT_CONTROL_MINIMUM_WIDTH = 80
+    private const val PROJECT_SWITCHER_WIDTH = 220
+    private const val PROJECT_ROW_HEIGHT = 18
     private const val COMPLETION_MINIMUM_WIDTH = 220
     private const val COMPLETION_HORIZONTAL_PADDING = 8
     private const val SEMANTIC_POPUP_MINIMUM_WIDTH = 180
@@ -1290,6 +1366,10 @@ internal object IdeRenderer {
     private const val Z_TARGET = 40
     private const val Z_POPUP = 50
     private const val Z_DRAG = 60
+    private const val Z_PROJECT_SWITCHER = 70
+    private const val Z_PROJECT_SWITCHER_SELECTION = 72
+    private const val Z_PROJECT_SWITCHER_TEXT = 75
+    private const val Z_PROJECT_SWITCHER_TARGET = 80
     private const val Z_POPUP_TEXT = 55
     private const val Z_DIALOG_SCRIM = 90
     private const val Z_DIALOG = 100

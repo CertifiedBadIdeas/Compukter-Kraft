@@ -272,6 +272,16 @@ class IdeInputAdapter(
                         return true
                     }
                 }
+                if (target.action == IdeHitAction.ProjectChoice) {
+                    val index = target.choiceIndex
+                    val project = index?.let(context.projects::getOrNull)
+                    if (project != null) {
+                        sink.dispatch(IdeCommand.OpenProject(project.directoryName))
+                        pointerActivity()
+                        return true
+                    }
+                    return false
+                }
                 val handled = activate(target.action, context.dialog)
                 if (handled) pointerActivity()
                 return handled
@@ -370,6 +380,7 @@ class IdeInputAdapter(
 
             IdeHitAction.CreateProject,
             IdeHitAction.OpenProject,
+            IdeHitAction.ProjectSwitcher,
             IdeHitAction.CreateText,
             IdeHitAction.CreateDirectory,
             IdeHitAction.Rename,
@@ -415,6 +426,10 @@ class IdeInputAdapter(
             }
 
             IdeHitAction.DeclarationChoice -> {
+                false
+            }
+
+            IdeHitAction.ProjectChoice -> {
                 false
             }
         }

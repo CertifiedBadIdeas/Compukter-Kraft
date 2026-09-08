@@ -103,6 +103,7 @@ internal class IdeScreen(
     private var controlDown = false
     private var pointerX: Double? = null
     private var pointerY: Double? = null
+    private var projectSwitcherOpen = false
 
     override fun setInitialFocus() = Unit
 
@@ -120,6 +121,29 @@ internal class IdeScreen(
         if (prompt.state != null || state.dialog != null) {
             input.pointerClicked(uiEvent.x(), uiEvent.y(), uiEvent.modifiers(), pointerContext(geometry), doubleClick)
             clearFocus()
+            return true
+        }
+        if (projectSwitcherOpen) {
+            val switcherContext = pointerContext(geometry)
+            val switcherAction =
+                switcherContext.hitTargets
+                    .asReversed()
+                    .firstOrNull { it.enabled && it.bounds.contains(uiEvent.x(), uiEvent.y()) }
+                    ?.action
+            val outsideSwitcher =
+                switcherAction != IdeHitAction.ProjectSwitcher &&
+                    switcherAction != IdeHitAction.ProjectChoice &&
+                    switcherAction != IdeHitAction.CreateProject
+            if (outsideSwitcher) {
+                projectSwitcherOpen = false
+                input.pointerActivity()
+                return true
+            }
+            input.pointerClicked(uiEvent.x(), uiEvent.y(), uiEvent.modifiers(), switcherContext, doubleClick)
+            if (switcherAction == IdeHitAction.ProjectChoice) projectSwitcherOpen = false
+            focusArea = IdeFocusArea.Panel
+            clearFocus()
+            terminalOverlay.focusLost()
             return true
         }
         val overlay = terminalOverlayGeometry(geometry)
@@ -150,6 +174,7 @@ internal class IdeScreen(
                 .firstOrNull { it.enabled && it.bounds.contains(uiEvent.x(), uiEvent.y()) }
                 ?.action
         if (input.pointerClicked(uiEvent.x(), uiEvent.y(), uiEvent.modifiers(), pointerContext, doubleClick)) {
+            if (hitAction == IdeHitAction.ProjectChoice) projectSwitcherOpen = false
             focusArea =
                 when {
                     hitAction == IdeHitAction.Terminal && terminalOverlay.visible -> IdeFocusArea.Terminal
@@ -262,6 +287,10 @@ internal class IdeScreen(
             }
         }
         if (application.controller.viewState().dialog != null) return input.keyPressed(event, focusState())
+        if (event.key() == GLFW.GLFW_KEY_ESCAPE && projectSwitcherOpen) {
+            projectSwitcherOpen = false
+            return true
+        }
         if (event.key() == GLFW.GLFW_KEY_ESCAPE && input.cancelExplorerDrag()) return true
         if (splitters.captured) return true
         if (focusArea == IdeFocusArea.Terminal && terminalOverlay.keyPressed(event, minecraft.keyboardHandler.clipboard)) return true
@@ -361,6 +390,7 @@ internal class IdeScreen(
                 terminalState = terminalOverlay.state(),
                 terminalVisible = terminalOverlay.visible,
                 explorerDrag = input.explorerDragVisual,
+                projectSwitcherOpen = projectSwitcherOpen && prompt.state == null && state.dialog == null,
             )
         IdeVisibleFrameEvidence.from(state, model)?.let { evidence ->
             application.visibleLatency.frameExtracted(
@@ -454,6 +484,7 @@ internal class IdeScreen(
                 terminalState = terminalOverlay.state(),
                 terminalVisible = terminalOverlay.visible,
                 explorerDrag = input.explorerDragVisual,
+                projectSwitcherOpen = projectSwitcherOpen && prompt.state == null && state.dialog == null,
             )
         return when (val page = state.page) {
             is IdePageState.Start -> {
@@ -469,6 +500,7 @@ internal class IdeScreen(
                 IdePointerContext(
                     geometry,
                     editor = page.value.editor as? IdeEditorView.Text,
+                    projects = page.value.projects,
                     tree = page.value.tree.flatten(),
                     explorer = page.value.explorerRows(),
                     treeFirstRow = treeFirstRow,
@@ -482,11 +514,17 @@ internal class IdeScreen(
     private fun activateUiAction(action: IdeHitAction): Boolean {
         when (action) {
             IdeHitAction.CreateProject -> {
+                projectSwitcherOpen = false
                 prompt.open(IdePromptKind.CreateProject)
             }
 
             IdeHitAction.OpenProject -> {
                 focusArea = IdeFocusArea.Editor
+            }
+
+            IdeHitAction.ProjectSwitcher -> {
+                projectSwitcherOpen = !projectSwitcherOpen
+                if (projectSwitcherOpen) terminalOverlay.hide()
             }
 
             IdeHitAction.CreateText -> {
