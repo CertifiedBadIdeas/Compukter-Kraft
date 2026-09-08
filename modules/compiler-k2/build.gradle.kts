@@ -77,6 +77,14 @@ val workerRuntimeClasspath = configurations.create("workerRuntimeClasspath") {
     isCanBeConsumed = false
     isCanBeResolved = true
     extendsFrom(configurations.implementation.get(), configurations.runtimeOnly.get())
+    listOf(
+        "org.jetbrains" to "annotations",
+        "org.jetbrains.kotlin" to "kotlin-build-tools-api",
+        "org.jetbrains.kotlin" to "kotlin-reflect",
+        "org.jetbrains.kotlin" to "kotlin-script-runtime",
+        "org.checkerframework" to "checker-qual",
+        "com.google.errorprone" to "error_prone_annotations",
+    ).forEach { (group, module) -> exclude(group = group, module = module) }
 }
 
 val workerPayloadDirectory = layout.buildDirectory.dir("worker-payload/content")

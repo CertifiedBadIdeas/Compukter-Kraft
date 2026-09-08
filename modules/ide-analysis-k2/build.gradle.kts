@@ -110,6 +110,20 @@ tasks.jar {
     }
 }
 
+val analysisWorkerRuntimeClasspath = configurations.create("analysisWorkerRuntimeClasspath") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    extendsFrom(configurations.implementation.get(), configurations.runtimeOnly.get())
+    listOf(
+        "org.jetbrains" to "annotations",
+        "org.jetbrains.kotlin" to "kotlin-build-tools-api",
+        "org.jetbrains.kotlin" to "kotlin-reflect",
+        "org.jetbrains.kotlin" to "kotlin-script-runtime",
+        "org.checkerframework" to "checker-qual",
+        "com.google.errorprone" to "error_prone_annotations",
+    ).forEach { (group, module) -> exclude(group = group, module = module) }
+}
+
 val analysisWorkerPayloadDirectory = layout.buildDirectory.dir("worker-payload/content")
 val analysisWorkerMainClass = "ru.lazyhat.compukters.ide.analysis.k2.server.AnalysisWorkerMainKt"
 val pinnedKotlinVersion = libs.versions.kotlin.asProvider().get()
@@ -121,7 +135,7 @@ val prepareAnalysisWorkerPayload = tasks.register<Sync>("prepareAnalysisWorkerPa
     from(tasks.jar) {
         into("lib")
     }
-    from(configurations.runtimeClasspath) {
+    from(analysisWorkerRuntimeClasspath) {
         into("lib")
     }
     from(rootProject.layout.projectDirectory.file("licenses/project/Apache-2.0.txt")) {
@@ -137,9 +151,6 @@ val prepareAnalysisWorkerPayload = tasks.register<Sync>("prepareAnalysisWorkerPa
     }
     from(rootProject.layout.projectDirectory.dir("licenses/kotlin/v2.4.10")) {
         into("META-INF/licenses/kotlin/v2.4.10")
-    }
-    from(rootProject.layout.projectDirectory.file("licenses/jvm/checker-qual-3.19.0-MIT.txt")) {
-        into("META-INF/licenses/jvm")
     }
     from(rootProject.layout.projectDirectory.file("licenses/jvm/ktlint-1.8.0-MIT.txt")) {
         into("META-INF/licenses/jvm")
@@ -225,7 +236,6 @@ val verifyAnalysisWorkerLicenses = tasks.register("verifyAnalysisWorkerLicenses"
             }
         listOf(
             "META-INF/licenses/Compukters-Apache-2.0.txt",
-            "META-INF/licenses/jvm/checker-qual-3.19.0-MIT.txt",
             "META-INF/licenses/jvm/ktlint-1.8.0-MIT.txt",
             "META-INF/licenses/jvm/slf4j-2.0.18-MIT.txt",
             "META-INF/NOTICE.txt",
