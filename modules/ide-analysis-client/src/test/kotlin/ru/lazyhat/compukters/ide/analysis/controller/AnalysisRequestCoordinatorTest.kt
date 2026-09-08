@@ -32,6 +32,23 @@ import kotlin.test.assertTrue
 
 class AnalysisRequestCoordinatorTest {
     @Test
+    fun `parameter info is immediate and a newer request cancels the prior query`() {
+        val client = RecordingAnalysisClient()
+        val coordinator = DefaultAnalysisRequestCoordinator(client, ManualAnalysisTaskScheduler(), 0, 0)
+        val snapshot = admittedSnapshot("fun main() { println(1) }")
+        coordinator.sourceChanged(snapshot, testPath())
+
+        val first = coordinator.parameterInfo(testPath(), 21)
+        val firstClientFuture = client.queryFutures.single()
+        val second = coordinator.parameterInfo(testPath(), 22)
+
+        assertEquals(listOf(21, 22), client.queries.map { assertIs<AnalysisQuery.ParameterInfo>(it).offsetUtf16 })
+        assertSame(firstClientFuture, first)
+        assertSame(client.queryFutures.last(), second)
+        assertEquals(listOf(firstClientFuture), client.cancelled)
+    }
+
+    @Test
     fun `format query carries exact source independently of the admitted snapshot text`() {
         val client = RecordingAnalysisClient()
         val coordinator = DefaultAnalysisRequestCoordinator(client, ManualAnalysisTaskScheduler(), 0, 0)

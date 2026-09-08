@@ -143,6 +143,7 @@ sealed interface IdeAnalysisState {
         val presentation: IdeAnalysisPresentation,
         val completion: IdeCompletionState?,
         val interaction: IdeSemanticInteraction = IdeSemanticInteraction.None,
+        val parameterInfo: IdeParameterInfoState? = null,
     ) : IdeAnalysisState
 
     data class Unavailable(
@@ -172,6 +173,9 @@ class IdeAnalysisCoordinator(
     private var semanticOperation = 0L
     private var pointer: PointerInteraction? = null
     private var navigationResult: CompletableFuture<IdeDeclarationOutcome>? = null
+    private var parameterInfoRequested = false
+    private var parameterInfoOperation = 0L
+    private var parameterInfoRequest: ParameterInfoRequest? = null
     private var closed = false
     private var targetProfile: TargetCompileProfile? = null
     private var targetRevision = 0L
@@ -195,12 +199,14 @@ class IdeAnalysisCoordinator(
         synchronized(lock) {
             check(!closed) { "analysis coordinator is closed" }
             invalidateSemanticLocked()
+            invalidateParameterInfoLocked(close = true)
             version = Math.incrementExact(version)
             expectedVersion = version
             session = Session(project, admittedPath, text, documentRevision, text.length, null, null)
             publishedState.set(IdeAnalysisState.Loading(admittedPath, documentRevision))
         }
         requests.cancelPointerInteraction()
+        requests.cancelParameterInfo()
         inputLoader.load(project).whenComplete { input, failure ->
             if (failure == null && input != null) {
                 acceptInput(expectedVersion, input)
@@ -223,9 +229,11 @@ class IdeAnalysisCoordinator(
         require(caretOffsetUtf16 in 0..text.length) { "analysis caret exceeds current source" }
         val trigger = insertedText?.takeIf(::triggersAutomaticCompletion) != null
         val rebuild: Rebuild?
+        val completionExpected: Boolean
         synchronized(lock) {
             check(!closed) { "analysis coordinator is closed" }
             invalidateSemanticLocked()
+            invalidateParameterInfoLocked(close = false)
             val current = session
             if (current == null || current.project !== project || current.path != path) {
                 open(project, path, text, documentRevision)
@@ -244,15 +252,18 @@ class IdeAnalysisCoordinator(
                     documentRevision = documentRevision,
                     caretOffsetUtf16 = caretOffsetUtf16,
                     snapshot = null,
-                    pendingCompletion = if (trigger) PendingCompletion.Automatic else null,
+                    pendingCompletion =
+                        if (trigger && !parameterInfoRequested) PendingCompletion.Automatic else null,
                     provisionalPresentation = presentation,
                 )
+            completionExpected = updated.pendingCompletion == PendingCompletion.Automatic
             session = updated
             publishedState.set(IdeAnalysisState.Loading(updated.path, documentRevision))
             rebuild = updated.input?.let { Rebuild(version, updated) }
         }
         requests.cancelPointerInteraction()
-        if (trigger) visibleLatency.automaticCompletionExpected(documentRevision)
+        requests.cancelParameterInfo()
+        if (completionExpected) visibleLatency.automaticCompletionExpected(documentRevision)
         rebuild?.let { pending -> rebuild(pending.version, requireNotNull(pending.session.input)) }
     }
 
@@ -263,6 +274,7 @@ class IdeAnalysisCoordinator(
             check(!closed) { "analysis coordinator is closed" }
             val current = session ?: return
             invalidateSemanticLocked()
+            invalidateParameterInfoLocked(close = true)
             version = Math.incrementExact(version)
             expectedVersion = version
             project = current.project
@@ -270,6 +282,7 @@ class IdeAnalysisCoordinator(
             publishedState.set(IdeAnalysisState.Loading(current.path, current.documentRevision))
         }
         requests.cancelPointerInteraction()
+        requests.cancelParameterInfo()
         inputLoader.load(project).whenComplete { input, failure ->
             if (failure == null && input != null) {
                 acceptInput(expectedVersion, input)
@@ -280,6 +293,7 @@ class IdeAnalysisCoordinator(
     }
 
     fun manualCompletion() {
+        dismissParameterInfo()
         val request: CompletionRequest?
         synchronized(lock) {
             check(!closed) { "analysis coordinator is closed" }
@@ -288,6 +302,48 @@ class IdeAnalysisCoordinator(
             session = current.copy(pendingCompletion = if (request == null) PendingCompletion.Manual else null)
         }
         request?.let { requests.manualCompletion(it.path, it.offsetUtf16) }
+    }
+
+    fun showParameterInfo() {
+        val request: ParameterInfoRequest?
+        synchronized(lock) {
+            check(!closed) { "analysis coordinator is closed" }
+            val current = session ?: return
+            parameterInfoRequested = true
+            invalidatePointerLocked()
+            request = current.snapshot?.let { snapshot -> beginParameterInfoLocked(current, snapshot) }
+            val active = publishedState.get() as? IdeAnalysisState.Active
+            if (active != null) publishedState.set(active.copy(completion = null, parameterInfo = null))
+        }
+        requests.cancelPointerInteraction()
+        requests.cancelParameterInfo()
+        request?.let(::dispatchParameterInfo)
+    }
+
+    fun caretMoved(offsetUtf16: Int) {
+        val request: ParameterInfoRequest?
+        synchronized(lock) {
+            val current = session ?: return
+            require(offsetUtf16 in 0..current.text.length) { "analysis caret exceeds current source" }
+            val updated = current.copy(caretOffsetUtf16 = offsetUtf16)
+            session = updated
+            request =
+                if (parameterInfoRequested) {
+                    updated.snapshot?.let { snapshot -> beginParameterInfoLocked(updated, snapshot) }
+                } else {
+                    null
+                }
+            val active = publishedState.get() as? IdeAnalysisState.Active
+            if (active != null && parameterInfoRequested) publishedState.set(active.copy(parameterInfo = null))
+        }
+        request?.let(::dispatchParameterInfo)
+    }
+
+    fun dismissParameterInfo() {
+        synchronized(lock) {
+            invalidateParameterInfoLocked(close = true)
+        }
+        requests.cancelParameterInfo()
     }
 
     fun format(
@@ -445,6 +501,7 @@ class IdeAnalysisCoordinator(
     fun focusLost() {
         dismissCompletion()
         dismissSemanticInteraction()
+        dismissParameterInfo()
     }
 
     fun dismissCompletion() = updateCompletion { null }
@@ -496,11 +553,13 @@ class IdeAnalysisCoordinator(
         synchronized(lock) {
             if (closed) return
             invalidateSemanticLocked()
+            invalidateParameterInfoLocked(close = true)
             version = Math.incrementExact(version)
             session = null
             publishedState.set(IdeAnalysisState.Idle)
         }
         requests.cancelPointerInteraction()
+        requests.cancelParameterInfo()
     }
 
     override fun publish(result: AnalysisClientResult) {
@@ -539,6 +598,7 @@ class IdeAnalysisCoordinator(
         synchronized(lock) {
             if (closed) return
             invalidateSemanticLocked()
+            invalidateParameterInfoLocked(close = true)
             closed = true
             version = Math.incrementExact(version)
             session = null
@@ -575,6 +635,7 @@ class IdeAnalysisCoordinator(
                 return
             }
         val completion: PendingCompletion?
+        val parameterInfo: ParameterInfoRequest?
         synchronized(lock) {
             val latest = session ?: return
             if (closed || version != expectedVersion || latest !== current) return
@@ -590,12 +651,14 @@ class IdeAnalysisCoordinator(
                 ),
             )
             requests.sourceChanged(snapshot, current.path)
+            parameterInfo = if (parameterInfoRequested) beginParameterInfoLocked(latest, snapshot) else null
         }
         when (completion) {
             PendingCompletion.Automatic -> requests.automaticCompletion(current.path, current.caretOffsetUtf16)
             PendingCompletion.Manual -> requests.manualCompletion(current.path, current.caretOffsetUtf16)
             null -> Unit
         }
+        parameterInfo?.let(::dispatchParameterInfo)
     }
 
     private fun publishSuccess(
@@ -620,6 +683,7 @@ class IdeAnalysisCoordinator(
                         IdeAnalysisPresentation.of(accepted.diagnostics, accepted.semanticTokens),
                         prior?.completion,
                         prior?.interaction ?: IdeSemanticInteraction.None,
+                        prior?.parameterInfo,
                     )
                 visibleLatency.analysisPublished(IdeVisibleLatencyKind.Presentation, current.documentRevision)
                 publishedState.set(next)
@@ -666,6 +730,7 @@ class IdeAnalysisCoordinator(
 
             is AnalysisResult.Declaration,
             is AnalysisResult.ExpressionInfo,
+            is AnalysisResult.ParameterInfo,
             is AnalysisResult.References,
             is AnalysisResult.Format,
             -> {}
@@ -837,6 +902,81 @@ class IdeAnalysisCoordinator(
         navigationResult = null
     }
 
+    private fun beginParameterInfoLocked(
+        current: Session,
+        snapshot: AdmittedAnalysisSnapshot,
+    ): ParameterInfoRequest =
+        ParameterInfoRequest(
+            Math.incrementExact(parameterInfoOperation),
+            snapshot,
+            current.path,
+            current.documentRevision,
+            current.caretOffsetUtf16,
+        ).also { parameterInfoRequest = it }
+
+    private fun dispatchParameterInfo(expected: ParameterInfoRequest) {
+        requests.parameterInfo(expected.path, expected.caretOffsetUtf16).whenComplete { result, failure ->
+            acceptParameterInfo(expected, result, failure)
+        }
+    }
+
+    private fun acceptParameterInfo(
+        expected: ParameterInfoRequest,
+        result: AnalysisClientResult?,
+        failure: Throwable?,
+    ) {
+        synchronized(lock) {
+            if (!currentParameterInfo(expected)) return
+            parameterInfoRequest = null
+            val active = publishedState.get() as? IdeAnalysisState.Active ?: return
+            val info =
+                if (failure == null && result is AnalysisClientResult.Success) {
+                    (result.result as? AnalysisResult.ParameterInfo)?.value
+                } else {
+                    null
+                }
+            if (
+                info == null || info.path != expected.path ||
+                expected.caretOffsetUtf16 !in info.callRange.startUtf16..info.callRange.endUtf16
+            ) {
+                parameterInfoRequested = false
+                publishedState.set(active.copy(parameterInfo = null))
+                return
+            }
+            publishedState.set(
+                active.copy(
+                    completion = null,
+                    parameterInfo =
+                        IdeParameterInfoState(
+                            expected.snapshot.identity,
+                            expected.path,
+                            expected.documentRevision,
+                            expected.caretOffsetUtf16,
+                            info.callRange,
+                            info.items,
+                            limits.parameterInfoItems,
+                        ),
+                ),
+            )
+        }
+    }
+
+    private fun currentParameterInfo(expected: ParameterInfoRequest): Boolean {
+        val current = session ?: return false
+        return !closed && parameterInfoRequested && parameterInfoRequest?.operation == expected.operation &&
+            current.snapshot === expected.snapshot && current.path == expected.path &&
+            current.documentRevision == expected.documentRevision && current.caretOffsetUtf16 == expected.caretOffsetUtf16 &&
+            current.snapshot.identity == expected.snapshot.identity
+    }
+
+    private fun invalidateParameterInfoLocked(close: Boolean) {
+        parameterInfoOperation = Math.incrementExact(parameterInfoOperation)
+        parameterInfoRequest = null
+        if (close) parameterInfoRequested = false
+        val active = publishedState.get() as? IdeAnalysisState.Active ?: return
+        publishedState.set(active.copy(parameterInfo = null))
+    }
+
     private fun invalidatePointerLocked() {
         semanticOperation = Math.incrementExact(semanticOperation)
         pointer = null
@@ -897,6 +1037,14 @@ class IdeAnalysisCoordinator(
         val snapshot: AdmittedAnalysisSnapshot?,
         val pendingCompletion: PendingCompletion? = null,
         val provisionalPresentation: IdeAnalysisPresentation = IdeAnalysisPresentation.Empty,
+    )
+
+    private data class ParameterInfoRequest(
+        val operation: Long,
+        val snapshot: AdmittedAnalysisSnapshot,
+        val path: VirtualSourcePath,
+        val documentRevision: Long,
+        val caretOffsetUtf16: Int,
     )
 
     private data class Rebuild(

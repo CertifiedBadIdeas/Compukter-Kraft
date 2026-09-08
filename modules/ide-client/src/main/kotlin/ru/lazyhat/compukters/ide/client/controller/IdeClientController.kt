@@ -391,6 +391,18 @@ class IdeClientController(
                 publishWorkspace()
             }
 
+            IdeCommand.ShowParameterInfo -> {
+                analysisCoordinator?.showParameterInfo()
+                refreshAnalysisState()
+                publishWorkspace()
+            }
+
+            IdeCommand.DismissParameterInfo -> {
+                analysisCoordinator?.dismissParameterInfo()
+                refreshAnalysisState()
+                publishWorkspace()
+            }
+
             is IdeCommand.SourcePointer -> {
                 sourcePointer(command.offsetUtf16, command.controlDown)
             }
@@ -767,6 +779,7 @@ class IdeClientController(
             input is IdeEditorInput.SetCaret || input is IdeEditorInput.Move || input is IdeEditorInput.MoveWord ||
             input is IdeEditorInput.Page || input is IdeEditorInput.SelectToken || input is IdeEditorInput.Type
         ) {
+            analysisCoordinator?.caretMoved(active.document.caretOffset)
             analysisCoordinator?.dismissCompletion()
             refreshAnalysisState()
         }

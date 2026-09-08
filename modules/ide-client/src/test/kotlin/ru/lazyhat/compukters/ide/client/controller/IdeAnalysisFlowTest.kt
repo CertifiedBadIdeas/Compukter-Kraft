@@ -33,6 +33,8 @@ import ru.lazyhat.compukters.ide.analysis.CompletionKind
 import ru.lazyhat.compukters.ide.analysis.CompletionSymbol
 import ru.lazyhat.compukters.ide.analysis.CompletionTextEdit
 import ru.lazyhat.compukters.ide.analysis.DeclarationOrigin
+import ru.lazyhat.compukters.ide.analysis.EditorParameterInfo
+import ru.lazyhat.compukters.ide.analysis.ParameterInfoItem
 import ru.lazyhat.compukters.ide.analysis.SourceSnapshotIdentity
 import ru.lazyhat.compukters.ide.analysis.controller.AdmittedAnalysisSnapshot
 import ru.lazyhat.compukters.ide.analysis.controller.AnalysisClientResult
@@ -63,10 +65,62 @@ import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class IdeAnalysisFlowTest {
+    @Test
+    fun `parameter info follows the caret rejects stale results and dismisses explicitly`() {
+        val requests = FlowAnalysisRequests()
+        val fixture =
+            ControllerFixture(preferences("demo", "src/main.kt"), analysisCoordinatorFactory = { workspace ->
+                coordinator(workspace, requests)
+            })
+        fixture.startAndTick()
+        val source = "fun main() { println(\"x\") }"
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SelectAll))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type(source)))
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SetCaret(source.indexOf("x") + 1, false)))
+
+        fixture.controller.dispatch(IdeCommand.ShowParameterInfo)
+        fixture.controller.dispatch(
+            IdeCommand.Edit(
+                IdeEditorInput.Move(ru.lazyhat.compukters.ide.client.state.IdeMoveDirection.Left, false),
+            ),
+        )
+
+        assertEquals(2, requests.parameterInfoRequests.size)
+        requests.completeParameterInfo(0, source)
+        fixture.controller.tick()
+        assertNull((fixture.textEditor().analysis as IdeAnalysisState.Active).parameterInfo)
+
+        requests.completeParameterInfo(1, source)
+        fixture.controller.tick()
+        val info = assertNotNull((fixture.textEditor().analysis as IdeAnalysisState.Active).parameterInfo)
+        assertEquals(source.indexOf("x"), info.caretOffsetUtf16)
+        assertEquals("value: Any?", info.items.single().activeText())
+
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type("y")))
+        val edited = source.replace("\"x\"", "\"yx\"")
+        assertEquals(3, requests.parameterInfoRequests.size)
+        assertTrue(requests.automaticOffsets.isEmpty())
+        requests.completeParameterInfo(2, edited)
+        fixture.controller.tick()
+        assertNotNull((fixture.textEditor().analysis as IdeAnalysisState.Active).parameterInfo)
+
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SetCaret(0, false)))
+        assertEquals(4, requests.parameterInfoRequests.size)
+        requests.completeNoParameterInfo(3, edited)
+        fixture.controller.tick()
+        assertNull((fixture.textEditor().analysis as IdeAnalysisState.Active).parameterInfo)
+
+        fixture.controller.dispatch(IdeCommand.ShowParameterInfo)
+        fixture.controller.dispatch(IdeCommand.DismissParameterInfo)
+        assertNull((fixture.textEditor().analysis as IdeAnalysisState.Active).parameterInfo)
+        fixture.controller.close()
+    }
+
     @Test
     fun `explicit format changes Kotlin atomically and leaves saving separate`() {
         val requests = FlowAnalysisRequests()
@@ -416,6 +470,7 @@ private class FlowAnalysisRequests : AnalysisRequestCoordinator {
     val automaticOffsets = mutableListOf<Int>()
     val manualOffsets = mutableListOf<Int>()
     val formatRequests = mutableListOf<FlowFormatRequest>()
+    val parameterInfoRequests = mutableListOf<FlowParameterInfoRequest>()
     private var snapshot: AdmittedAnalysisSnapshot? = null
     private var formatFuture: CompletableFuture<AnalysisClientResult>? = null
 
@@ -453,6 +508,50 @@ private class FlowAnalysisRequests : AnalysisRequestCoordinator {
         return CompletableFuture<AnalysisClientResult>().also { formatFuture = it }
     }
 
+    override fun parameterInfo(
+        path: VirtualSourcePath,
+        offsetUtf16: Int,
+    ): CompletableFuture<AnalysisClientResult> {
+        val future = CompletableFuture<AnalysisClientResult>()
+        parameterInfoRequests += FlowParameterInfoRequest(checkNotNull(snapshot).identity, path, offsetUtf16, future)
+        return future
+    }
+
+    fun completeParameterInfo(
+        index: Int,
+        source: String,
+    ) {
+        val request = parameterInfoRequests[index]
+        val callStart = source.indexOf("println")
+        val callEnd = source.indexOf(')', callStart) + 1
+        val signature = "println(value: Any?): Unit"
+        request.future.complete(
+            AnalysisClientResult.Success(
+                AnalysisResult.ParameterInfo.create(
+                    request.identity,
+                    EditorParameterInfo(
+                        request.path,
+                        EditorRange(callStart, callEnd),
+                        listOf(ParameterInfoItem(signature, EditorRange(8, 19), true)),
+                    ),
+                    mapOf(request.path to source.length),
+                ),
+            ),
+        )
+    }
+
+    fun completeNoParameterInfo(
+        index: Int,
+        source: String,
+    ) {
+        val request = parameterInfoRequests[index]
+        request.future.complete(
+            AnalysisClientResult.Success(
+                AnalysisResult.ParameterInfo.create(request.identity, null, mapOf(request.path to source.length)),
+            ),
+        )
+    }
+
     fun completeFormat(
         source: String,
         caretOffsetUtf16: Int,
@@ -476,6 +575,16 @@ private data class FlowFormatRequest(
     val source: String,
     val caretOffsetUtf16: Int,
 )
+
+private data class FlowParameterInfoRequest(
+    val identity: AnalysisSnapshotIdentity,
+    val path: VirtualSourcePath,
+    val offsetUtf16: Int,
+    val future: CompletableFuture<AnalysisClientResult>,
+)
+
+private fun ParameterInfoItem.activeText(): String? =
+    activeParameter?.let { range -> signature.substring(range.startUtf16, range.endUtf16) }
 
 private fun analysisSnapshot(
     original: ProjectSnapshot,

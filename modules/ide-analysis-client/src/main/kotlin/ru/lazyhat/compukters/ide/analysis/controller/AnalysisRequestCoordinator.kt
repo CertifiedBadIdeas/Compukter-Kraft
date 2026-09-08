@@ -61,7 +61,14 @@ interface AnalysisRequestCoordinator : AutoCloseable {
         caretOffsetUtf16: Int,
     ): CompletableFuture<AnalysisClientResult> = unsupportedInteractiveRequest()
 
+    fun parameterInfo(
+        path: VirtualSourcePath,
+        offsetUtf16: Int,
+    ): CompletableFuture<AnalysisClientResult> = unsupportedInteractiveRequest()
+
     fun cancelPointerInteraction() = Unit
+
+    fun cancelParameterInfo() = Unit
 }
 
 private fun unsupportedInteractiveRequest(): CompletableFuture<AnalysisClientResult> =
@@ -91,6 +98,7 @@ class DefaultAnalysisRequestCoordinator(
     private var pointerResult: CompletableFuture<AnalysisClientResult>? = null
     private var navigationFuture: CompletableFuture<AnalysisClientResult>? = null
     private var navigationResult: CompletableFuture<AnalysisClientResult>? = null
+    private var parameterInfoFuture: CompletableFuture<AnalysisClientResult>? = null
     private var closed = false
 
     init {
@@ -107,6 +115,7 @@ class DefaultAnalysisRequestCoordinator(
         val oldCompletion: CompletableFuture<AnalysisClientResult>?
         val oldPointer: CompletableFuture<AnalysisClientResult>?
         val oldNavigation: CompletableFuture<AnalysisClientResult>?
+        val oldParameterInfo: CompletableFuture<AnalysisClientResult>?
         synchronized(lock) {
             check(!closed) { "analysis request coordinator is closed" }
             this.snapshot = snapshot
@@ -117,6 +126,7 @@ class DefaultAnalysisRequestCoordinator(
             oldCompletion = completionFuture
             oldPointer = pointerFuture
             oldNavigation = navigationFuture
+            oldParameterInfo = parameterInfoFuture
             pointerResult?.cancel(false)
             navigationResult?.cancel(false)
             presentationFuture = null
@@ -126,6 +136,7 @@ class DefaultAnalysisRequestCoordinator(
             pointerResult = null
             navigationFuture = null
             navigationResult = null
+            parameterInfoFuture = null
             completionTrigger = null
             completionTask = null
             presentationTask =
@@ -137,6 +148,7 @@ class DefaultAnalysisRequestCoordinator(
         oldCompletion?.let(client::cancel)
         oldPointer?.let(client::cancel)
         oldNavigation?.let(client::cancel)
+        oldParameterInfo?.let(client::cancel)
     }
 
     override fun automaticCompletion(
@@ -258,6 +270,34 @@ class DefaultAnalysisRequestCoordinator(
         oldPointer?.let(client::cancel)
     }
 
+    override fun parameterInfo(
+        path: VirtualSourcePath,
+        offsetUtf16: Int,
+    ): CompletableFuture<AnalysisClientResult> {
+        val expected: AdmittedAnalysisSnapshot
+        val previous: CompletableFuture<AnalysisClientResult>?
+        val future: CompletableFuture<AnalysisClientResult>
+        synchronized(lock) {
+            check(!closed) { "analysis request coordinator is closed" }
+            expected = checkNotNull(snapshot) { "analysis snapshot is not open" }
+            previous = parameterInfoFuture
+            future = client.query(expected, AnalysisQuery.ParameterInfo(expected.identity, path, offsetUtf16))
+            parameterInfoFuture = future
+        }
+        previous?.let(client::cancel)
+        future.whenComplete { _, _ ->
+            synchronized(lock) {
+                if (parameterInfoFuture === future) parameterInfoFuture = null
+            }
+        }
+        return future
+    }
+
+    override fun cancelParameterInfo() {
+        val previous = synchronized(lock) { parameterInfoFuture.also { parameterInfoFuture = null } }
+        previous?.let(client::cancel)
+    }
+
     override fun close() {
         val futures: List<CompletableFuture<AnalysisClientResult>>
         synchronized(lock) {
@@ -270,7 +310,7 @@ class DefaultAnalysisRequestCoordinator(
             completionTask = null
             pointerResult?.cancel(false)
             navigationResult?.cancel(false)
-            futures = listOfNotNull(presentationFuture, completionFuture, pointerFuture, navigationFuture)
+            futures = listOfNotNull(presentationFuture, completionFuture, pointerFuture, navigationFuture, parameterInfoFuture)
             presentationFuture = null
             completionFuture = null
             pointerTask = null
@@ -278,6 +318,7 @@ class DefaultAnalysisRequestCoordinator(
             pointerResult = null
             navigationFuture = null
             navigationResult = null
+            parameterInfoFuture = null
             completionTrigger = null
             snapshot = null
         }

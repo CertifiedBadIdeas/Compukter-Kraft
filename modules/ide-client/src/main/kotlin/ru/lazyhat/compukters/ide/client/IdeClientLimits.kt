@@ -30,6 +30,7 @@ data class IdeClientLimits(
     val statusUtf8Bytes: Int = 4 * 1024,
     val dialogUtf8Bytes: Int = 16 * 1024,
     val declarationChoices: Int = 64,
+    val parameterInfoItems: Int = 32,
     val navigationHistory: Int = 128,
 ) {
     init {
@@ -44,6 +45,7 @@ data class IdeClientLimits(
         require(statusUtf8Bytes >= 0) { "status byte limit must be non-negative" }
         require(dialogUtf8Bytes >= 0) { "dialog byte limit must be non-negative" }
         require(declarationChoices > 0) { "declaration choice limit must be positive" }
+        require(parameterInfoItems > 0) { "parameter-info item limit must be positive" }
         require(navigationHistory > 0) { "navigation history limit must be positive" }
     }
 }
