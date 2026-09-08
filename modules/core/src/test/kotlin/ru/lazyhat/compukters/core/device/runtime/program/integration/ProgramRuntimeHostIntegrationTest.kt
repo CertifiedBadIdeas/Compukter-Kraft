@@ -23,9 +23,9 @@ import ru.lazyhat.compukters.compiler.cache.PersistentCompilationCache
 import ru.lazyhat.compukters.compiler.runtime.CompilerServiceConfiguration
 import ru.lazyhat.compukters.compiler.runtime.ServerCompilerService
 import ru.lazyhat.compukters.compiler.runtime.WorkerCompilerBackend
-import ru.lazyhat.compukters.compiler.runtime.worker.PackagedWorkerPayload
 import ru.lazyhat.compukters.compiler.worker.controller.CompilerWorkerController
 import ru.lazyhat.compukters.compiler.worker.controller.JdkWorkerProcessFactory
+import ru.lazyhat.compukters.compiler.worker.controller.WorkerPayloadLoader
 import ru.lazyhat.compukters.compiler.worker.controller.WorkerLaunch
 import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.compiler.worker.protocol.TrustedBundleIdentity
@@ -46,6 +46,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalModifier
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.VmArtifactVerifier
 import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
+import ru.lazyhat.compukters.worker.payload.PackagedToolingBundle
 import ru.lazyhat.compukters.lang.runtime.vm.VmRuntime
 import ru.lazyhat.compukters.lang.runtime.vm.VmSession
 import ru.lazyhat.compukters.lang.runtime.vm.VmValue
@@ -400,10 +401,11 @@ class ProgramRuntimeHostIntegrationTest {
                 root: Path,
                 archive: Path,
             ): TestCompilerService {
-                val payload =
+                val bundle =
                     Files.newInputStream(archive).use { input ->
-                        PackagedWorkerPayload.publish(input, root.resolve("payload"))
+                        PackagedToolingBundle.publish(input, root.resolve("payload"))
                     }
+                val payload = WorkerPayloadLoader.loadToolingProfile(bundle.root)
                 val limits = WorkerLimits()
                 val temporary = root.resolve("temporary")
                 Files.createDirectories(temporary)

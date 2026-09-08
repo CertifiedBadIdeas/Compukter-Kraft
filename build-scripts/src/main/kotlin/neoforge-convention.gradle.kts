@@ -77,6 +77,7 @@ dependencies {
     neoForgeImplementation(libs.findLibrary("tomlj").get())
     neoForgeImplementation(libs.findLibrary("antlr4-runtime").get())
     neoForgeImplementation(libs.findLibrary("checker-qual").get())
+    neoForgeImplementation(libs.findLibrary("aircompressor").get())
 }
 
 tasks.named<Jar>("jar") {

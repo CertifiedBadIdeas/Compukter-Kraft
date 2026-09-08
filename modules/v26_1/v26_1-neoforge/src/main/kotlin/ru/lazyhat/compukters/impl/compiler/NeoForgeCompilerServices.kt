@@ -167,7 +167,7 @@ internal class NeoForgeCompilerService private constructor(
             return Path.of(System.getProperty("java.home"), "bin", name).toAbsolutePath().normalize()
         }
 
-        private const val WORKER_RESOURCE = "/tooling/workers/k2-tooling-workers.zip"
+        private const val WORKER_RESOURCE = "/tooling/workers/k2-tooling-workers.zip.zst"
     }
 }
 

@@ -13,6 +13,14 @@ media inventory are documented in [MEDIA-LICENSES.md](MEDIA-LICENSES.md).
 `licenses/distribution-components.tsv` is the machine-readable inventory used
 by archive verification. Dependency version changes must update both files.
 
+## Zstandard decompression
+
+The outer mod archive contains Aircompressor 3.7 for pure-Java streaming
+decompression of the packaged K2 tooling bundle. Aircompressor is copyright
+Airlift contributors and licensed under Apache-2.0:
+<https://github.com/airlift/aircompressor>. The zstd-jni encoder used by the
+build is not distributed in the mod.
+
 ## Kotlin compiler and libraries
 
 The compiler worker contains JetBrains Kotlin compiler and runtime artifacts

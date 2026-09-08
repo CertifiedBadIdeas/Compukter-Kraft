@@ -31,7 +31,9 @@ class CompuktersModNativeBootstrapTest {
         checkNotNull(CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/system/programs/shell")).use { }
         checkNotNull(CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/system/programs/kotlinc")).use { }
         checkNotNull(CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/system/programs/edit")).use { }
-        checkNotNull(CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/tooling/workers/k2-tooling-workers.zip")).use { }
+        checkNotNull(
+            CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/tooling/workers/k2-tooling-workers.zip.zst"),
+        ).use { }
         check(CompuktersModNativeBootstrapTest::class.java.getResource("/compiler/worker/compiler-k2-worker.zip") == null)
         check(CompuktersModNativeBootstrapTest::class.java.getResource("/analysis/worker/ide-analysis-k2-worker.zip") == null)
 

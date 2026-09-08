@@ -16,8 +16,8 @@
  * limitations under the License.
  */
 
+import java.nio.file.Files
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 import org.gradle.api.tasks.bundling.ZipEntryCompression
 
 plugins {
@@ -76,17 +76,6 @@ val prepareToolingRuntimeBundle = tasks.register<JavaExec>("prepareToolingRuntim
     }
 }
 
-val toolingRuntimeBundle = tasks.register<Zip>("toolingRuntimeBundle") {
-    group = "distribution"
-    description = "Packages the shared K2 tooling runtime."
-    dependsOn(prepareToolingRuntimeBundle)
-    from(toolingBundleDirectory)
-    archiveFileName = "k2-tooling-workers.zip"
-    destinationDirectory = layout.buildDirectory.dir("distributions")
-    isPreserveFileTimestamps = false
-    isReproducibleFileOrder = true
-}
-
 val canonicalToolingRuntimeBundle = tasks.register<Zip>("canonicalToolingRuntimeBundle") {
     group = "distribution"
     description = "Packages the shared K2 tooling runtime as a canonical stored-entry ZIP."
@@ -99,20 +88,20 @@ val canonicalToolingRuntimeBundle = tasks.register<Zip>("canonicalToolingRuntime
     isReproducibleFileOrder = true
 }
 
-val solidToolingRuntimeBundleFile = layout.buildDirectory.file("distributions/k2-tooling-workers.zip.zst")
-val solidToolingRuntimeBundle = tasks.register<JavaExec>("solidToolingRuntimeBundle") {
+val toolingRuntimeBundleFile = layout.buildDirectory.file("distributions/k2-tooling-workers.zip.zst")
+val toolingRuntimeBundle = tasks.register<JavaExec>("toolingRuntimeBundle") {
     group = "distribution"
     description = "Compresses the canonical shared K2 tooling ZIP as one Zstandard frame."
     dependsOn(tasks.classes, canonicalToolingRuntimeBundle)
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = application.mainClass
     inputs.file(canonicalToolingRuntimeBundle.flatMap { it.archiveFile })
-    outputs.file(solidToolingRuntimeBundleFile)
+    outputs.file(toolingRuntimeBundleFile)
     doFirst {
         args(
             "compress",
             canonicalToolingRuntimeBundle.get().archiveFile.get().asFile.absolutePath,
-            solidToolingRuntimeBundleFile.get().asFile.absolutePath,
+            toolingRuntimeBundleFile.get().asFile.absolutePath,
         )
     }
 }
@@ -120,11 +109,11 @@ val solidToolingRuntimeBundle = tasks.register<JavaExec>("solidToolingRuntimeBun
 val verifyToolingRuntimeBundle = tasks.register<JavaExec>("verifyToolingRuntimeBundle") {
     group = "verification"
     description = "Reassembles, publishes, and verifies the shared K2 tooling runtime."
-    dependsOn(tasks.classes, solidToolingRuntimeBundle)
+    dependsOn(tasks.classes, toolingRuntimeBundle)
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = application.mainClass
     inputs.files(compilerWorkerPayloadInput, analysisWorkerPayloadInput)
-    inputs.file(solidToolingRuntimeBundleFile)
+    inputs.file(toolingRuntimeBundleFile)
     val scratch = layout.buildDirectory.dir("tooling-bundle/verification")
     outputs.upToDateWhen { false }
     doFirst {
@@ -132,7 +121,7 @@ val verifyToolingRuntimeBundle = tasks.register<JavaExec>("verifyToolingRuntimeB
             "verify",
             compilerWorkerPayloadInput.singleFile.absolutePath,
             analysisWorkerPayloadInput.singleFile.absolutePath,
-            solidToolingRuntimeBundleFile.get().asFile.absolutePath,
+            toolingRuntimeBundleFile.get().asFile.absolutePath,
             scratch.get().asFile.absolutePath,
         )
     }
@@ -143,13 +132,18 @@ val verifyToolingRuntimeLicenses =
         group = "verification"
         description = "Checks shared tooling licenses and its exact external JVM inventory."
         dependsOn(toolingRuntimeBundle, ":ide-kotlin-formatter:verifyRelocatedFormatterRuntime")
-        inputs.file(toolingRuntimeBundle.flatMap { it.archiveFile })
+        inputs.dir(toolingBundleDirectory)
+        inputs.file(toolingRuntimeBundleFile)
         inputs.file(rootProject.layout.projectDirectory.file("licenses/distribution-components.tsv"))
         doLast {
-            val archive = toolingRuntimeBundle.get().archiveFile.get().asFile
+            val archive = toolingRuntimeBundleFile.get().asFile
+            val content = toolingBundleDirectory.get().asFile.toPath()
             val entries =
-                ZipFile(archive).use { zip ->
-                    zip.entries().asSequence().filterNot { it.isDirectory }.map { it.name }.toList()
+                Files.walk(content).use { paths ->
+                    paths
+                        .filter(Files::isRegularFile)
+                        .map { content.relativize(it).joinToString("/") }
+                        .toList()
                 }
             listOf(
                 "tooling.bundle",
@@ -206,22 +200,20 @@ val verifyToolingRuntimeLicenses =
                 "embeddable or scripting compiler distribution leaked into ${archive.name}"
             }
             val actualFormatter =
-                ZipFile(archive).use { tooling ->
-                    val analysisJar =
-                        tooling.entries().asSequence().single {
-                            it.name.startsWith("analysis/lib/ide-analysis-k2-") && it.name.endsWith(".jar")
+                entries
+                    .single { it.startsWith("analysis/lib/ide-analysis-k2-") && it.endsWith(".jar") }
+                    .let(content::resolve)
+                    .let { analysisJar ->
+                        ZipFile(analysisJar.toFile()).use { analysis ->
+                            analysis
+                                .entries()
+                                .asSequence()
+                                .filter {
+                                    it.name.startsWith("META-INF/compukters/kotlin-formatter/") && it.name.endsWith(".jar")
+                                }.map { it.name.substringAfterLast('/') }
+                                .toList()
                         }
-                    ZipInputStream(tooling.getInputStream(analysisJar)).use { nested ->
-                        buildList {
-                            while (true) {
-                                val entry = nested.nextEntry ?: break
-                                if (entry.name.startsWith("META-INF/compukters/kotlin-formatter/") && entry.name.endsWith(".jar")) {
-                                    add(entry.name.substringAfterLast('/'))
-                                }
-                            }
-                        }
-                    }
-                }.sorted()
+                    }.sorted()
             check(
                 actualFormatter.size == 1 &&
                     actualFormatter.single().startsWith("ide-kotlin-formatter-") &&

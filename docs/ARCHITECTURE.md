@@ -20,9 +20,12 @@ codec, module graph, and default imports; `platform-k2` exposes that metadata to
 implementation part of the platform format.
 
 Compiler and analysis workers are pinned, isolated JVM processes. Their payloads are assembled into one bounded
-`k2-tooling-workers.zip`; Kotlin compiler and Analysis API internals stay inside those workers and do not enter the mod
-runtime classpath. `worker-client` owns the generic payload publication, process, framing, deadline, and immutable-byte
-machinery shared by both worker clients.
+`k2-tooling-workers.zip.zst`: nested runtime JARs and the carrier ZIP use canonical stored entries, then the complete
+ZIP is compressed as one checksummed Zstandard frame. The outer runtime uses Aircompressor's pure-Java streaming
+decoder and feeds the decoded ZIP directly into bounded, hash-verified, atomic publication; zstd-jni is build-only.
+Kotlin compiler and Analysis API internals stay inside the workers and do not enter the mod runtime classpath.
+`worker-client` owns the generic payload publication, process, framing, deadline, and immutable-byte machinery shared
+by both worker clients.
 
 The two execution-producing paths are:
 

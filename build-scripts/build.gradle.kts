@@ -36,6 +36,7 @@ dependencies {
     implementation(plugin(libs.plugins.architectury.plugin))
     implementation(plugin(libs.plugins.shadow))
     implementation("org.apache.commons:commons-compress:1.28.0")
+    implementation("io.airlift:aircompressor-v3:3.7")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.1")

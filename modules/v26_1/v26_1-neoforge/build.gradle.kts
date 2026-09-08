@@ -19,6 +19,7 @@
 @file:Suppress("PropertyName")
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import io.airlift.compress.v3.zstd.ZstdInputStream
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import java.net.URLClassLoader
@@ -357,7 +358,7 @@ val verifyPackagedCompukterFfi =
                 val worker = checkNotNull(zip.getEntry(ArtifactSizeReport.TOOLING_RESOURCE)) {
                     "shared tooling bundle is missing from ${archive.name}"
                 }
-                ZipInputStream(zip.getInputStream(worker)).use { nested ->
+                ZipInputStream(ZstdInputStream(zip.getInputStream(worker))).use { nested ->
                     while (true) {
                         val entry = nested.nextEntry ?: break
                         if (!entry.isDirectory) {
