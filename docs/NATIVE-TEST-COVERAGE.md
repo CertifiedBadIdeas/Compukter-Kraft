@@ -31,8 +31,8 @@ coverage.
 | Host requests, capabilities, suspension, and batching | `requests_tests.rs`, `session_tests.rs`, and the vertical tests in `computer.rs` | Bounded request storage, task/request identity, LWW reduction, out-of-order completion, capability admission, wait/resume atomicity, string transport, and host-failure classification | Multi-task scheduling is future work tracked separately from transport coverage |
 | Terminal, stdio, and redstone devices | `tests/terminal_device.rs`, unit tests in `src/stdio.rs` and `src/redstone.rs`, plus `computer.rs` vertical tests | Grid mutation, replication/resync, bounded input, canonical/raw ownership, Unicode handling, redstone packets, waits, and output merging | Minecraft block-direction mapping belongs to GameTest |
 | In-memory filesystem, paths, authority, ROM, and quota | `tests/filesystem_memory.rs`, `filesystem_namespace.rs`, `filesystem_path.rs`, and `filesystem_rom.rs` | Path canonicality, rights narrowing, isolated mounts, atomic mutations, generations, handles, logical quota, immutable ROM, and admission bounds | Host persistence is covered by the store/recovery rows below |
-| Persistence codecs and logical recovery | `tests/filesystem_recovery.rs` | Exact journal/checkpoint codecs, bounded recovery, confirmed generations, torn unconfirmed tails, gaps, identity mismatch, and corruption rejection | It constructs recovery inputs and does not terminate a writer at each physical durability cut point |
-| World store, worker, object collection, and ownership | `tests/filesystem_store.rs`, `filesystem_store_lock.rs`, and worker unit tests | Durable reopen, ordered mutation replay, backpressure, I/O fault degradation, tombstones, object validation/collection, close ordering, live exclusivity, and stale-lock recovery after process death | A systematic subprocess crash-point matrix is still missing; see the follow-up recorded by issue #39 |
+| Persistence codecs and logical recovery | `tests/filesystem_recovery.rs` | Exact journal/checkpoint codecs, bounded recovery, confirmed generations, torn unconfirmed tails, gaps, identity mismatch, and corruption rejection | Checkpoint emission is not implemented; a future writer must add physical crash-point coverage before shipping |
+| World store, worker, object collection, and ownership | `tests/filesystem_store.rs`, `filesystem_store_lock.rs`, worker unit tests, and the `persistence-crash-fixture` subprocess matrix | Durable reopen, ordered mutation replay, backpressure, I/O fault degradation, tombstones, object validation/collection, close ordering, live exclusivity, stale-lock recovery, and all 24 current mutation/tombstone/collection process-exit points | Process exit does not simulate storage-device loss of unsynchronized writes |
 | Process, compilation, and deployment integration | `tests/process_contract.rs`, `tests/computer_machine.rs`, and `computer.rs` vertical tests | Bounded arguments/diagnostics, child completion, compiler transaction atomicity, candidate identity and retry, executable revisions, and boot behavior | End-to-end compiler and host orchestration belongs to conformance and runtime-host integration |
 
 There is no persisted VM execution snapshot format in the current Rust runtime. Filesystem recovery state and terminal
@@ -64,12 +64,12 @@ These are vertical ownership checks, not replacements for the direct Rust tests 
 
 ## Inventory notes
 
-At the issue #39 audit revision, `cargo test --workspace -- --list` registers 509 Rust tests across the VM, FFI,
-runtime-bundler, xtask, integrations, and doctests. Nine are intentionally ignored by the normal workspace run: seven
-hardware-specific performance or artifact-regeneration tests in the VM, one fixture regeneration test, and one
-dynamic-library smoke test that requires a separately built library. The normal semantic gates cover their contracts
-through committed fixtures, JVM packaged-native integration, and non-timing assertions; performance baselines remain
-explicit opt-in evidence.
+After issue #597, `cargo test --workspace -- --list` registers 514 Rust tests across the VM, FFI, persistence crash
+fixture, runtime-bundler, xtask, integrations, and doctests. Nine are intentionally ignored by the normal workspace
+run: seven hardware-specific performance or artifact-regeneration tests in the VM, one fixture regeneration test, and
+one dynamic-library smoke test that requires a separately built library. The normal semantic gates cover their
+contracts through committed fixtures, JVM packaged-native integration, and non-timing assertions; performance
+baselines remain explicit opt-in evidence.
 
 `cargo llvm-cov` is not installed in the repository toolchain, so this audit makes no line- or branch-percentage claim.
 The matrix is derived from registered test targets, test names, owning source modules, Gradle task graphs, and the
@@ -77,10 +77,8 @@ observable boundary each test exercises.
 
 ## Focused gaps
 
-1. Add deterministic subprocess fault injection around physical filesystem durability cut points and verify reopen at
-   the last confirmed generation, safe discard of unconfirmed state, or explicit corruption failure.
-2. Add one built-library contract test that resolves the complete exported symbol set and exercises every JDK FFM
+1. Add one built-library contract test that resolves the complete exported symbol set and exercises every JDK FFM
    descriptor with a safe bounded probe, including the currently indirect-only generic resume exports, so an uncalled
    signature drift cannot hide behind bridge/session tests.
 
-These gaps are deliberately separate from VM feature coverage and should be implemented as focused follow-up issues.
+This gap is deliberately separate from VM feature coverage and is tracked by issue #598.
