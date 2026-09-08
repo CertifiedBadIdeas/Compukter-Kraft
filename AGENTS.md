@@ -72,6 +72,24 @@ After each verified implementation stage, create a focused commit unless the use
 Commit frequently enough that a clean, build, or tooling failure cannot destroy a large body of uncommitted work.
 Stage only files that belong to the current task, and never include unrelated user changes in an agent commit.
 
+### Semantic history per issue
+
+For work started after this policy was adopted, keep a clean semantic history for each issue rather than blindly
+squashing the whole issue into one commit. Record the starting commit before the first task commit. Checkpoint commits
+remain encouraged during implementation, but before declaring the issue complete, clean only the unpublished commits
+created for that issue:
+
+- fold small corrections, formatting-only follow-ups, and missing test adjustments into the commit they belong to,
+  preferably with `fixup` and autosquash;
+- squash superseded or abandoned intermediate implementations;
+- reword the remaining commit messages to be concise, imperative Conventional Commit messages;
+- retain one or more genuinely atomic, independently reviewable semantic commits when the issue contains distinct
+  stages or concerns.
+
+Do not rewrite existing `dev` history, commits that predate the current issue, commits belonging to another task, or
+history that has already been pushed or shared unless the user explicitly authorizes that rewrite. If unrelated or
+shared commits make the issue range unsafe to rewrite, preserve the history and report the constraint instead.
+
 ## Agent-Specific Instructions
 
 Respect user changes in the worktree. Prefer focused edits, run the narrowest useful verification, and update docs or
