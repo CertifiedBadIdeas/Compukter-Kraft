@@ -69,6 +69,7 @@ data class IdeWorkspaceView(
     val build: IdeBuildState,
     val computerTree: IdeComputerTreeState = IdeComputerTreeState.NoTarget,
     val computerTransfer: IdeComputerTransferState = IdeComputerTransferState.Idle,
+    val projects: List<IdeProjectSummary> = emptyList(),
 )
 
 sealed interface IdePageState {

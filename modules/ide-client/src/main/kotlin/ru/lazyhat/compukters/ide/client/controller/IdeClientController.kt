@@ -45,6 +45,7 @@ import ru.lazyhat.compukters.ide.client.navigation.IdeNavigationPosition
 import ru.lazyhat.compukters.ide.client.navigation.IdeNavigationSource
 import ru.lazyhat.compukters.ide.client.preferences.IdePreferences
 import ru.lazyhat.compukters.ide.client.preferences.IdePreferencesStore
+import ru.lazyhat.compukters.ide.client.preferences.IdeProjectEditorState
 import ru.lazyhat.compukters.ide.client.state.BoundedIdeEventQueue
 import ru.lazyhat.compukters.ide.client.state.IdeBuildAction
 import ru.lazyhat.compukters.ide.client.state.IdeBusyOperation
@@ -165,11 +166,11 @@ class IdeClientController(
     private var pendingProjectDirectory: String? = null
     private var pendingSave = false
     private var pendingFormat = false
-    private var rememberedFile: ProjectPath? = null
+    private var restoreEditorState: IdeProjectEditorState? = null
     private var closeRequested = false
     private var closeReady = false
     private var admittedDelete: AdmittedProjectDelete? = null
-    private var restorePreferences: IdePreferences? = null
+    private var preferencesSnapshot = IdePreferences.empty(DEFAULT_TREE_WIDTH, DEFAULT_DIAGNOSTICS_HEIGHT, true)
     private val eventOverflow = AtomicBoolean()
     private var buildState: IdeBuildState = IdeBuildState.Idle
     private var pendingBuildAction: PendingBuildAction? = null
@@ -202,8 +203,7 @@ class IdeClientController(
         if (started) return
         started = true
         val remembered = runCatching(preferences::load).getOrNull()
-        restorePreferences = remembered
-        rememberedFile = remembered?.lastFile
+        if (remembered != null) preferencesSnapshot = remembered
         state = state.copy(busy = setOf(IdeBusyOperation.Catalog))
         val requestGeneration = generation
         workspace.projects().whenComplete { projects, failure ->
@@ -542,6 +542,7 @@ class IdeClientController(
         navigationHistory.clear()
         cancelComputerTransfer()
         project?.let { persistPreferences(editor?.path ?: binary?.path) }
+        restoreEditorState = preferencesSnapshot.projectState(directoryName)
         cancelBuildJobs()
         pendingBuildAction = null
         pendingSave = false
@@ -579,6 +580,7 @@ class IdeClientController(
         closeAttachedSourcePreview()
         val operationId = nextOperationId++
         latestProjectOperation = operationId
+        restoreEditorState = null
         pendingFile = ProjectPath.file("src/main.kt")
         state = state.copy(generation = generation, busy = setOf(IdeBusyOperation.Project), dialog = null)
         val requestGeneration = generation
@@ -1245,7 +1247,7 @@ class IdeClientController(
         catalog = event.projects
         val summaries = catalog.take(limits.projectRows).map(::summary)
         state = IdeViewState(generation, IdePageState.Start(summaries, null), null, emptySet(), state.target, state.tooling)
-        val remembered = restorePreferences?.lastProjectDirectory
+        val remembered = preferencesSnapshot.lastProjectDirectory
         if (remembered != null && catalog.any { it.directoryName == remembered }) openProject(remembered)
     }
 
@@ -1358,11 +1360,14 @@ class IdeClientController(
         tree = event.tree
         state = state.copy(busy = state.busy - IdeBusyOperation.Project)
         publishWorkspace()
-        val restore = rememberedFile ?: pendingFile
-        rememberedFile = null
+        val restore = restoreEditorState?.file ?: pendingFile
         pendingFile = null
-        if (restore != null && event.tree.flatten().any { it.path == restore }) openFile(restore)
-        persistPreferences(restore)
+        if (restore != null && event.tree.flatten().any { it.path == restore }) {
+            openFile(restore)
+        } else {
+            restoreEditorState = null
+            persistPreferences(null)
+        }
     }
 
     private fun acceptFile(event: IdeEvent.FileOpened) {
@@ -1377,10 +1382,10 @@ class IdeClientController(
             is ProjectFileOpenResult.Text -> {
                 val document = EditorDocument(result.snapshot.text)
                 val session = EditorSession(event.path, document, result.snapshot.revision)
-                val remembered = restorePreferences
-                restorePreferences = null
+                val remembered = restoreEditorState
+                restoreEditorState = null
                 remembered
-                    ?.takeIf { it.lastProjectDirectory == project?.directoryName && it.lastFile == event.path }
+                    ?.takeIf { it.file == event.path }
                     ?.let { remembered ->
                         restoreCaret(document, remembered.caretUtf16)
                         session.firstVisibleLine = remembered.firstVisibleLine
@@ -1862,6 +1867,7 @@ class IdeClientController(
                             buildState,
                             computerFiles?.state() ?: IdeComputerTreeState.NoTarget,
                             computerFiles?.transfer() ?: IdeComputerTransferState.Idle,
+                            catalog.take(limits.projectRows).map(::summary),
                         ),
                     ),
             )
@@ -2510,18 +2516,15 @@ class IdeClientController(
     private fun persistPreferences(file: ProjectPath?) {
         val selected = project ?: return
         val active = editor
-        val admitted =
-            IdePreferences.admit(
+        preferencesSnapshot =
+            preferencesSnapshot.remember(
                 selected.directoryName,
                 file?.value,
                 active?.document?.caretOffset ?: 0,
                 active?.firstVisibleLine ?: 0,
                 active?.firstVisibleColumn ?: 0,
-                DEFAULT_TREE_WIDTH,
-                DEFAULT_DIAGNOSTICS_HEIGHT,
-                true,
             )
-        runCatching { preferences.save(admitted) }
+        runCatching { preferences.save(preferencesSnapshot) }
     }
 
     private fun recoverToStart(message: String) {

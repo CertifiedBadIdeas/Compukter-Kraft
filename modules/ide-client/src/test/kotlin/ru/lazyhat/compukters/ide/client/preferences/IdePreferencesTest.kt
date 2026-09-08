@@ -41,4 +41,30 @@ class IdePreferencesTest {
         assertEquals(0, invalid.firstVisibleLine)
         assertEquals(0, invalid.firstVisibleColumn)
     }
+
+    @Test
+    fun `preferences retain independent bounded editor state per project`() {
+        val preferences =
+            IdePreferences.admit(
+                lastProjectDirectory = "second",
+                projectStates =
+                    linkedMapOf(
+                        "first" to IdeProjectEditorState.admit("src/first.kt", 11, 2, 3),
+                        "second" to IdeProjectEditorState.admit("src/second.kt", 22, 4, 5),
+                    ),
+                treeWidth = 240,
+                diagnosticsHeight = 160,
+                diagnosticsExpanded = true,
+            )
+
+        assertEquals("src/first.kt", preferences.projectState("first")?.file?.value)
+        assertEquals(11, preferences.projectState("first")?.caretUtf16)
+        assertEquals("src/second.kt", preferences.lastFile?.value)
+        assertEquals(22, preferences.caretUtf16)
+
+        val returned = preferences.remember("first", "src/returned.kt", 33, 6, 7)
+        assertEquals("first", returned.lastProjectDirectory)
+        assertEquals("src/returned.kt", returned.lastFile?.value)
+        assertEquals("src/second.kt", returned.projectState("second")?.file?.value)
+    }
 }

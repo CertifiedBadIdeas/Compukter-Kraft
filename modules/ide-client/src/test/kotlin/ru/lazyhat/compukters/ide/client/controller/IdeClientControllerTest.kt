@@ -51,6 +51,7 @@ import ru.lazyhat.compukters.ide.client.analysis.IdeVisibleLatencyTrace
 import ru.lazyhat.compukters.ide.client.build.IdeBuildCoordinator
 import ru.lazyhat.compukters.ide.client.preferences.IdePreferences
 import ru.lazyhat.compukters.ide.client.preferences.IdePreferencesStore
+import ru.lazyhat.compukters.ide.client.preferences.IdeProjectEditorState
 import ru.lazyhat.compukters.ide.client.state.BoundedIdeEventQueue
 import ru.lazyhat.compukters.ide.client.state.IdeCommand
 import ru.lazyhat.compukters.ide.client.state.IdeConflictAction
@@ -132,6 +133,71 @@ class IdeClientControllerTest {
 
         val start = assertIs<IdePageState.Start>(fixture.controller.viewState().page)
         assertEquals(listOf("demo"), start.projects.map { it.directoryName })
+    }
+
+    @Test
+    fun `workspace exposes catalog and restores editor state independently per project`() {
+        val remembered =
+            IdePreferences.admit(
+                "demo",
+                linkedMapOf(
+                    "demo" to IdeProjectEditorState.admit("src/main.kt", 1, 0, 0),
+                    "second" to IdeProjectEditorState.admit("src/main.kt", 2, 0, 0),
+                ),
+                240,
+                160,
+                true,
+            )
+        val fixture = ControllerFixture(preferences = remembered, additionalProject = true)
+
+        fixture.startAndTick()
+        assertEquals(listOf("demo", "second"), fixture.workspaceView().projects.map { it.directoryName })
+        assertEquals(1, fixture.textEditor().caretUtf16)
+
+        fixture.controller.dispatch(IdeCommand.OpenProject("second"))
+        fixture.controller.tick()
+        fixture.controller.tick()
+        assertEquals("second", fixture.workspaceView().project.directoryName)
+        assertEquals(2, fixture.textEditor().caretUtf16)
+        fixture.controller.dispatch(IdeCommand.Edit(IdeEditorInput.SetCaret(4, extendSelection = false)))
+
+        fixture.controller.dispatch(IdeCommand.OpenProject("demo"))
+        fixture.controller.tick()
+        fixture.controller.tick()
+        assertEquals("demo", fixture.workspaceView().project.directoryName)
+        assertEquals(1, fixture.textEditor().caretUtf16)
+        assertEquals(
+            4,
+            fixture.preferences
+                .current()!!
+                .projectState("second")
+                ?.caretUtf16,
+        )
+    }
+
+    @Test
+    fun `dirty project switch saves before leaving and conflict keeps current project`() {
+        val saved = ControllerFixture(preferences = preferences("demo", "src/main.kt"), additionalProject = true)
+        saved.startAndTick()
+        saved.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type("local")))
+        saved.controller.dispatch(IdeCommand.OpenProject("second"))
+        assertEquals("demo", saved.workspaceView().project.directoryName)
+        assertEquals(1, saved.workspace.saveRequests.size)
+
+        saved.workspace.completeSave()
+        saved.controller.tick()
+        saved.controller.tick()
+        assertEquals("second", saved.workspaceView().project.directoryName)
+
+        val conflicted = ControllerFixture(preferences = preferences("demo", "src/main.kt"), additionalProject = true)
+        conflicted.startAndTick()
+        conflicted.controller.dispatch(IdeCommand.Edit(IdeEditorInput.Type("local")))
+        conflicted.controller.dispatch(IdeCommand.OpenProject("second"))
+        conflicted.workspace.completeSaveConflict()
+        conflicted.controller.tick()
+
+        assertEquals("demo", conflicted.workspaceView().project.directoryName)
+        assertIs<IdeDialogState.FileConflict>(conflicted.controller.viewState().dialog)
     }
 
     @Test
@@ -670,6 +736,7 @@ class IdeClientControllerTest {
 
 internal class ControllerFixture(
     preferences: IdePreferences? = null,
+    additionalProject: Boolean = false,
     analysisCoordinatorFactory: ((ControlledWorkspace) -> ru.lazyhat.compukters.ide.client.analysis.IdeAnalysisCoordinator)? = null,
     targetCoordinatorFactory: ((MutableClock) -> ru.lazyhat.compukters.ide.client.target.IdeTargetCoordinator)? = null,
     tooling: CompletableFuture<IdeClientTooling>? = null,
@@ -679,7 +746,7 @@ internal class ControllerFixture(
 ) {
     val clock = MutableClock()
     val preferences = MemoryPreferences(preferences)
-    val workspace = ControlledWorkspace()
+    val workspace = ControlledWorkspace(additionalProject)
     val buildCoordinator = buildCoordinatorFactory?.invoke(workspace, clock)
     val analysisCoordinator = analysisCoordinatorFactory?.invoke(workspace)
     val targetCoordinator = targetCoordinatorFactory?.invoke(clock)
@@ -724,11 +791,16 @@ internal class MemoryPreferences(
     override fun save(preferences: IdePreferences) {
         value = preferences
     }
+
+    fun current(): IdePreferences? = value
 }
 
-internal class ControlledWorkspace : IdeWorkspace {
+internal class ControlledWorkspace(
+    additionalProject: Boolean = false,
+) : IdeWorkspace {
     private val root = createTempDirectory("compukters-controller-")
     val descriptor = ProjectCatalog.open(root).create("demo")
+    private val additionalDescriptor = if (additionalProject) ProjectCatalog.open(root).create("second") else null
     private val main = ProjectPath.file("src/main.kt")
     private val notes = ProjectPath.file("notes.txt")
     private val other = ProjectPath.file("src/other.kt")
@@ -752,7 +824,7 @@ internal class ControlledWorkspace : IdeWorkspace {
         openResults[other] = ProjectFileOpenResult.Text(store.open(other))
     }
 
-    override fun projects(): CompletableFuture<List<ProjectDescriptor>> = completed(listOf(descriptor))
+    override fun projects(): CompletableFuture<List<ProjectDescriptor>> = completed(listOfNotNull(descriptor, additionalDescriptor))
 
     override fun createProject(name: String): CompletableFuture<ProjectDescriptor> = completeCall { ProjectCatalog.open(root).create(name) }
 

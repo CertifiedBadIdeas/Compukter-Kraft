@@ -20,6 +20,7 @@ package ru.lazyhat.compukters.impl.ide
 
 import ru.lazyhat.compukters.ide.client.preferences.IdePreferences
 import ru.lazyhat.compukters.ide.client.preferences.IdePreferencesStore
+import ru.lazyhat.compukters.ide.client.preferences.IdeProjectEditorState
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
@@ -114,13 +115,24 @@ internal class IdeClientPreferences(
         val bytes = Files.readAllBytes(file)
         val text = decodeStrict(bytes)
         val lines = text.takeIf { it.endsWith('\n') && '\r' !in it }?.dropLast(1)?.split('\n') ?: return null
-        if (lines.size != 6 || lines[0] != "format=1") return null
+        val currentLayout = layout.load()
+        return when (lines.firstOrNull()) {
+            "format=1" -> decodeFormatOne(lines, currentLayout)
+            "format=2" -> decodeFormatTwo(lines, currentLayout)
+            else -> null
+        }
+    }
+
+    private fun decodeFormatOne(
+        lines: List<String>,
+        currentLayout: IdeLayoutSettings,
+    ): IdePreferences? {
+        if (lines.size != 6) return null
         val project = decodeNullable(lines[1], "project") ?: return null
         val path = decodeNullable(lines[2], "file") ?: return null
         val caret = integer(lines[3], "caret") ?: return null
         val firstLine = integer(lines[4], "line") ?: return null
         val firstColumn = integer(lines[5], "column") ?: return null
-        val currentLayout = layout.load()
         return IdePreferences.admit(
             project.takeUnless { it == NULL_VALUE },
             path.takeUnless { it == NULL_VALUE },
@@ -133,15 +145,63 @@ internal class IdeClientPreferences(
         )
     }
 
-    private fun encode(preferences: IdePreferences): String =
-        buildString {
-            appendLine("format=1")
-            appendLine("project=${encodeNullable(preferences.lastProjectDirectory)}")
-            appendLine("file=${encodeNullable(preferences.lastFile?.value)}")
-            appendLine("caret=${preferences.caretUtf16}")
-            appendLine("line=${preferences.firstVisibleLine}")
-            appendLine("column=${preferences.firstVisibleColumn}")
+    private fun decodeFormatTwo(
+        lines: List<String>,
+        currentLayout: IdeLayoutSettings,
+    ): IdePreferences? {
+        if (lines.size !in 2..(IdePreferences.MAX_PROJECT_STATES + 2)) return null
+        val active = decodeNullable(lines[1], "active") ?: return null
+        val states = linkedMapOf<String, IdeProjectEditorState>()
+        for (line in lines.drop(2)) {
+            if (!line.startsWith("state=")) return null
+            val fields = line.removePrefix("state=").split('|')
+            if (fields.size != 5) return null
+            val directoryName = decodeValue(fields[0]) ?: return null
+            val file = decodeFieldNullable(fields[1]) ?: return null
+            val caret = fields[2].toIntOrNull()?.takeIf { it >= 0 } ?: return null
+            val firstLine = fields[3].toIntOrNull()?.takeIf { it >= 0 } ?: return null
+            val firstColumn = fields[4].toIntOrNull()?.takeIf { it >= 0 } ?: return null
+            if (directoryName in states) return null
+            val state =
+                IdeProjectEditorState.admit(
+                    file.takeUnless { it == NULL_VALUE },
+                    caret,
+                    firstLine,
+                    firstColumn,
+                )
+            if (file != NULL_VALUE && state.file == null) return null
+            states[directoryName] = state
         }
+        val activeProject = active.takeUnless { it == NULL_VALUE }
+        if (activeProject != null && activeProject !in states) return null
+        val preferences =
+            IdePreferences.admit(
+                activeProject,
+                states,
+                currentLayout.treeWidth,
+                currentLayout.diagnosticsHeight,
+                currentLayout.diagnosticsExpanded,
+            )
+        if (preferences.projectStates.size != states.size) return null
+        return preferences
+    }
+
+    private fun encode(preferences: IdePreferences): String {
+        val header = "format=2\nactive=${encodeNullable(preferences.lastProjectDirectory)}\n"
+        val result = StringBuilder(header)
+        val ordered =
+            preferences.projectStates.entries.sortedByDescending {
+                it.key == preferences.lastProjectDirectory
+            }
+        for ((directoryName, state) in ordered) {
+            val line =
+                "state=${encodeValue(directoryName)}|${encodeNullable(state.file?.value)}|" +
+                    "${state.caretUtf16}|${state.firstVisibleLine}|${state.firstVisibleColumn}\n"
+            if ((result.toString() + line).encodeToByteArray().size > MAXIMUM_FILE_BYTES) break
+            result.append(line)
+        }
+        return result.toString()
+    }
 
     private fun decodeNullable(
         line: String,
@@ -154,6 +214,10 @@ internal class IdeClientPreferences(
         return runCatching { decodeStrict(Base64.getUrlDecoder().decode(value)) }.getOrNull()
     }
 
+    private fun decodeFieldNullable(value: String): String? = if (value == NULL_VALUE) NULL_VALUE else decodeValue(value)
+
+    private fun decodeValue(value: String): String? = runCatching { decodeStrict(Base64.getUrlDecoder().decode(value)) }.getOrNull()
+
     private fun integer(
         line: String,
         name: String,
@@ -163,8 +227,9 @@ internal class IdeClientPreferences(
         return line.removePrefix(prefix).toIntOrNull()?.takeIf { it >= 0 }
     }
 
-    private fun encodeNullable(value: String?): String =
-        value?.let { Base64.getUrlEncoder().withoutPadding().encodeToString(it.encodeToByteArray()) } ?: NULL_VALUE
+    private fun encodeNullable(value: String?): String = value?.let(::encodeValue) ?: NULL_VALUE
+
+    private fun encodeValue(value: String): String = Base64.getUrlEncoder().withoutPadding().encodeToString(value.encodeToByteArray())
 
     private fun decodeStrict(bytes: ByteArray): String =
         StandardCharsets.UTF_8

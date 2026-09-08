@@ -19,6 +19,8 @@
 package ru.lazyhat.compukters.impl.ide
 
 import ru.lazyhat.compukters.ide.client.preferences.IdePreferences
+import ru.lazyhat.compukters.ide.client.preferences.IdeProjectEditorState
+import java.util.Base64
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
@@ -48,6 +50,44 @@ class IdeClientPreferencesTest {
 
             preferences.saveLayout(IdeLayoutSettings.admit(233, 151, false))
             assertEquals(listOf(IdeLayoutSettings.admit(233, 151, false)), layout.saves)
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `multiple project states round trip and format one migrates`() {
+        val root = createTempDirectory("compukters-ide-preferences-projects-").toAbsolutePath().normalize()
+        try {
+            val file = root.resolve("session.preferences")
+            val preferences = IdeClientPreferences(file, RecordingIdeLayoutStore(IdeLayoutSettings.defaults()))
+            preferences.save(
+                IdePreferences.admit(
+                    "second",
+                    linkedMapOf(
+                        "first" to IdeProjectEditorState.admit("src/first.kt", 11, 2, 3),
+                        "second" to IdeProjectEditorState.admit("src/second.kt", 22, 4, 5),
+                    ),
+                    240,
+                    160,
+                    true,
+                ),
+            )
+
+            val restored = preferences.load()!!
+            assertEquals("second", restored.lastProjectDirectory)
+            assertEquals("src/first.kt", restored.projectState("first")?.file?.value)
+            assertEquals(11, restored.projectState("first")?.caretUtf16)
+            assertEquals("src/second.kt", restored.projectState("second")?.file?.value)
+
+            val encodedProject = Base64.getUrlEncoder().withoutPadding().encodeToString("legacy".encodeToByteArray())
+            val encodedFile = Base64.getUrlEncoder().withoutPadding().encodeToString("src/main.kt".encodeToByteArray())
+            file.writeText("format=1\nproject=$encodedProject\nfile=$encodedFile\ncaret=12\nline=4\ncolumn=5\n")
+
+            val migrated = preferences.load()!!
+            assertEquals("legacy", migrated.lastProjectDirectory)
+            assertEquals("src/main.kt", migrated.projectState("legacy")?.file?.value)
+            assertEquals(12, migrated.projectState("legacy")?.caretUtf16)
         } finally {
             root.toFile().deleteRecursively()
         }
