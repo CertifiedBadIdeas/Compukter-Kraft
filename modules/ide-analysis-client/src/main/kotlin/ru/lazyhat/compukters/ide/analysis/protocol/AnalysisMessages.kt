@@ -36,7 +36,7 @@ import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.util.Collections
 
-const val ANALYSIS_PROTOCOL_VERSION: UInt = 7u
+const val ANALYSIS_PROTOCOL_VERSION: UInt = 8u
 
 data class AnalysisWorkerIdentity(
     val compilerVersion: String,
@@ -53,6 +53,7 @@ data class AnalysisWorkerIdentity(
 enum class AnalysisFeature {
     Presentation,
     Completion,
+    ParameterInfo,
     ExpressionInfo,
     Declaration,
     References,

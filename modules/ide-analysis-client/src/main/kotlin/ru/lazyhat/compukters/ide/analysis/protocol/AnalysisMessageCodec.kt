@@ -41,7 +41,9 @@ import ru.lazyhat.compukters.ide.analysis.DeclarationOrigin
 import ru.lazyhat.compukters.ide.analysis.EditorDiagnostic
 import ru.lazyhat.compukters.ide.analysis.EditorDiagnosticSeverity
 import ru.lazyhat.compukters.ide.analysis.EditorExpressionInfo
+import ru.lazyhat.compukters.ide.analysis.EditorParameterInfo
 import ru.lazyhat.compukters.ide.analysis.EditorPresentationLimits
+import ru.lazyhat.compukters.ide.analysis.ParameterInfoItem
 import ru.lazyhat.compukters.ide.analysis.SemanticCategory
 import ru.lazyhat.compukters.ide.analysis.SemanticToken
 import ru.lazyhat.compukters.ide.analysis.SnapshotPresentation
@@ -387,6 +389,10 @@ private fun validateQuery(
             context.validate(query.path, query.offsetUtf16)
         }
 
+        is AnalysisQuery.ParameterInfo -> {
+            context.validate(query.path, query.offsetUtf16)
+        }
+
         is AnalysisQuery.Declaration -> {
             context.validate(query.path, query.offsetUtf16)
         }
@@ -450,6 +456,11 @@ private fun validateResult(
             AnalysisResult.ExpressionInfo.create(result.identity, result.value, sourceLengths, limits.resultLimits())
         }
 
+        is AnalysisResult.ParameterInfo -> {
+            require(query is AnalysisQuery.ParameterInfo) { "analysis result kind does not match its query" }
+            AnalysisResult.ParameterInfo.create(result.identity, result.value, sourceLengths, limits.resultLimits())
+        }
+
         is AnalysisResult.Declaration -> {
             require(query is AnalysisQuery.Declaration) { "analysis result kind does not match its query" }
             AnalysisResult.Declaration.create(
@@ -477,7 +488,14 @@ private fun AnalysisLimits.presentationLimits() =
     EditorPresentationLimits(diagnostics, diagnosticTextBytes, semanticTokens, declarationLocations)
 
 private fun AnalysisLimits.resultLimits() =
-    AnalysisResultLimits(completionItems, declarationLocations, references, detailTextBytes, sourceFileBytes)
+    AnalysisResultLimits(
+        maxCompletionItems = completionItems,
+        maxParameterInfoItems = parameterInfoItems,
+        maxDeclarationLocations = declarationLocations,
+        maxReferences = references,
+        maxDetailUtf8Bytes = detailTextBytes,
+        maxSourceFileUtf8Bytes = sourceFileBytes,
+    )
 
 private class MessageSink {
     private val output = ByteArrayOutputStream()
@@ -535,6 +553,7 @@ private class MessageSink {
         u32(value.diagnosticTextBytes)
         u32(value.semanticTokens)
         u32(value.completionItems)
+        u32(value.parameterInfoItems)
         u32(value.declarationLocations)
         u32(value.references)
         u32(value.detailTextBytes)
@@ -572,6 +591,7 @@ private class MessageSink {
                 is AnalysisQuery.Presentation -> QueryKind.Presentation
                 is AnalysisQuery.Completion -> QueryKind.Completion
                 is AnalysisQuery.ExpressionInfo -> QueryKind.ExpressionInfo
+                is AnalysisQuery.ParameterInfo -> QueryKind.ParameterInfo
                 is AnalysisQuery.Declaration -> QueryKind.Declaration
                 is AnalysisQuery.References -> QueryKind.References
                 is AnalysisQuery.Format -> QueryKind.Format
@@ -590,6 +610,10 @@ private class MessageSink {
             }
 
             is AnalysisQuery.ExpressionInfo -> {
+                cursor(value.path, value.offsetUtf16)
+            }
+
+            is AnalysisQuery.ParameterInfo -> {
                 cursor(value.path, value.offsetUtf16)
             }
 
@@ -615,6 +639,7 @@ private class MessageSink {
                 is AnalysisResult.Presentation -> ResultKind.Presentation
                 is AnalysisResult.Completion -> ResultKind.Completion
                 is AnalysisResult.ExpressionInfo -> ResultKind.ExpressionInfo
+                is AnalysisResult.ParameterInfo -> ResultKind.ParameterInfo
                 is AnalysisResult.Declaration -> ResultKind.Declaration
                 is AnalysisResult.References -> ResultKind.References
                 is AnalysisResult.Format -> ResultKind.Format
@@ -634,6 +659,10 @@ private class MessageSink {
 
             is AnalysisResult.ExpressionInfo -> {
                 nullableExpressionInfo(value.value)
+            }
+
+            is AnalysisResult.ParameterInfo -> {
+                nullableParameterInfo(value.value)
             }
 
             is AnalysisResult.Declaration -> {
@@ -705,6 +734,20 @@ private class MessageSink {
             string(info.renderedType)
             nullableString(info.signature)
             nullableOrigin(info.origin)
+        }
+    }
+
+    fun nullableParameterInfo(value: EditorParameterInfo?) {
+        u8(if (value == null) 0 else 1)
+        value?.let { info ->
+            string(info.path.value)
+            range(info.callRange)
+            u32(info.items.size)
+            info.items.forEach { item ->
+                string(item.signature)
+                nullableRange(item.activeParameter)
+                boolean(item.bestCandidate)
+            }
         }
     }
 
@@ -875,6 +918,7 @@ private class MessageSource(
             diagnosticTextBytes = u32(),
             semanticTokens = u32(),
             completionItems = u32(),
+            parameterInfoItems = u32(),
             declarationLocations = u32(),
             references = u32(),
             detailTextBytes = u32(),
@@ -971,6 +1015,10 @@ private class MessageSource(
                 cursor(identity, AnalysisQuery::ExpressionInfo)
             }
 
+            QueryKind.ParameterInfo -> {
+                cursor(identity, AnalysisQuery::ParameterInfo)
+            }
+
             QueryKind.Declaration -> {
                 cursor(identity, AnalysisQuery::Declaration)
             }
@@ -1007,6 +1055,10 @@ private class MessageSource(
 
             ResultKind.ExpressionInfo -> {
                 AnalysisResult.ExpressionInfo.create(identity, nullableExpressionInfo(), sourceLengths, context.limits.resultLimits())
+            }
+
+            ResultKind.ParameterInfo -> {
+                AnalysisResult.ParameterInfo.create(identity, nullableParameterInfo(), sourceLengths, context.limits.resultLimits())
             }
 
             ResultKind.Declaration -> {
@@ -1096,6 +1148,21 @@ private class MessageSource(
             )
         }
 
+    fun nullableParameterInfo(): EditorParameterInfo? =
+        optional {
+            EditorParameterInfo(
+                kotlinPath(),
+                range(),
+                List(boundedCount(context.limits.parameterInfoItems, "parameter-info item")) {
+                    ParameterInfoItem(
+                        string(context.limits.detailTextBytes),
+                        nullableRange(),
+                        boolean(),
+                    )
+                },
+            )
+        }
+
     fun locations(maximum: Int): List<DeclarationLocation> =
         List(boundedCount(maximum, "location")) {
             when (enumValue<LocationKind>()) {
@@ -1180,9 +1247,9 @@ private class MessageSource(
     }
 }
 
-private enum class QueryKind { Presentation, Completion, ExpressionInfo, Declaration, References, Format }
+private enum class QueryKind { Presentation, Completion, ExpressionInfo, ParameterInfo, Declaration, References, Format }
 
-private enum class ResultKind { Presentation, Completion, ExpressionInfo, Declaration, References, Format }
+private enum class ResultKind { Presentation, Completion, ExpressionInfo, ParameterInfo, Declaration, References, Format }
 
 private enum class OriginKind { Project, Platform }
 

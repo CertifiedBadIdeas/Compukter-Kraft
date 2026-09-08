@@ -42,6 +42,7 @@ internal class K2AnalysisQueryHandler(
         is AnalysisQuery.Presentation,
         is AnalysisQuery.Completion,
         is AnalysisQuery.ExpressionInfo,
+        is AnalysisQuery.ParameterInfo,
         is AnalysisQuery.Declaration,
         is AnalysisQuery.References,
         -> {

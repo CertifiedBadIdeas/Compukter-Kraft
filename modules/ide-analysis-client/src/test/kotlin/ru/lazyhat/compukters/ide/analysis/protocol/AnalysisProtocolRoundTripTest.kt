@@ -40,7 +40,9 @@ import ru.lazyhat.compukters.ide.analysis.DeclarationOrigin
 import ru.lazyhat.compukters.ide.analysis.EditorDiagnostic
 import ru.lazyhat.compukters.ide.analysis.EditorDiagnosticSeverity
 import ru.lazyhat.compukters.ide.analysis.EditorExpressionInfo
+import ru.lazyhat.compukters.ide.analysis.EditorParameterInfo
 import ru.lazyhat.compukters.ide.analysis.EditorPresentationLimits
+import ru.lazyhat.compukters.ide.analysis.ParameterInfoItem
 import ru.lazyhat.compukters.ide.analysis.SemanticCategory
 import ru.lazyhat.compukters.ide.analysis.SemanticToken
 import ru.lazyhat.compukters.ide.analysis.SnapshotPresentation
@@ -95,6 +97,7 @@ class AnalysisProtocolRoundTripTest {
                     AnalysisQuery.Completion(identity, path(), 3, CompletionTrigger.Automatic),
                 ),
                 AnalysisQueryRequest(requestId, AnalysisQuery.ExpressionInfo(identity, path(), 4)),
+                AnalysisQueryRequest(requestId, AnalysisQuery.ParameterInfo(identity, path(), 5)),
                 AnalysisQueryRequest(requestId, AnalysisQuery.Declaration(identity, path(), 5)),
                 AnalysisQueryRequest(requestId, AnalysisQuery.References(identity, path(), 6)),
                 AnalysisQueryRequest(requestId, AnalysisQuery.Format(identity, path(), "fun main(){}", 11)),
@@ -162,6 +165,16 @@ class AnalysisProtocolRoundTripTest {
                     AnalysisResult.ExpressionInfo.create(
                         identity,
                         EditorExpressionInfo(path(), EditorRange(4, 10), "kotlin.Int", "val answer: kotlin.Int", origin),
+                        sourceLengths(),
+                    ),
+                AnalysisQuery.ParameterInfo(identity, path(), 6) to
+                    AnalysisResult.ParameterInfo.create(
+                        identity,
+                        EditorParameterInfo(
+                            path(),
+                            EditorRange(4, 12),
+                            listOf(ParameterInfoItem("answer(value: Int): Unit", EditorRange(7, 17), true)),
+                        ),
                         sourceLengths(),
                     ),
                 AnalysisQuery.Declaration(identity, path(), 6) to

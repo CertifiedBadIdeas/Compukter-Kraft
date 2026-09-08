@@ -30,7 +30,9 @@ import ru.lazyhat.compukters.ide.analysis.AnalysisQuery
 import ru.lazyhat.compukters.ide.analysis.AnalysisResult
 import ru.lazyhat.compukters.ide.analysis.AnalysisSnapshotIdentity
 import ru.lazyhat.compukters.ide.analysis.CompletionTrigger
+import ru.lazyhat.compukters.ide.analysis.EditorParameterInfo
 import ru.lazyhat.compukters.ide.analysis.EditorPresentationLimits
+import ru.lazyhat.compukters.ide.analysis.ParameterInfoItem
 import ru.lazyhat.compukters.ide.analysis.SemanticCategory
 import ru.lazyhat.compukters.ide.analysis.SemanticToken
 import ru.lazyhat.compukters.ide.analysis.SnapshotPresentation
@@ -253,6 +255,49 @@ class AnalysisProtocolHostileInputTest {
     }
 
     @Test
+    fun `parameter info obeys correlated source and candidate limits`() {
+        val query = AnalysisQuery.ParameterInfo(identity, VirtualSourcePath.kotlin("main.kt"), 6)
+        val item = ParameterInfoItem("value(argument: Int): Unit", EditorRange(6, 19), true)
+        val excessiveCount =
+            AnalysisMessageCodec.encode(
+                AnalysisQuerySuccess(
+                    RequestId.of(2uL),
+                    AnalysisResult.ParameterInfo.create(
+                        identity,
+                        EditorParameterInfo(VirtualSourcePath.kotlin("main.kt"), EditorRange(4, 12), listOf(item, item)),
+                        mapOf(VirtualSourcePath.kotlin("main.kt") to 20),
+                    ),
+                ),
+                AnalysisProtocolContext.unchecked(),
+            )
+        val countFailure =
+            assertFailsWith<AnalysisProtocolException> {
+                AnalysisMessageCodec.decode(
+                    excessiveCount,
+                    AnalysisProtocolContext.of(snapshot, AnalysisLimits(parameterInfoItems = 1)).forQuery(query),
+                )
+            }
+        assertEquals(AnalysisProtocolError.CountLimit, countFailure.error)
+
+        val excessiveRange =
+            AnalysisMessageCodec.encode(
+                AnalysisQuerySuccess(
+                    RequestId.of(3uL),
+                    AnalysisResult.ParameterInfo.create(
+                        identity,
+                        EditorParameterInfo(VirtualSourcePath.kotlin("main.kt"), EditorRange(4, 20), listOf(item)),
+                        mapOf(VirtualSourcePath.kotlin("main.kt") to 20),
+                    ),
+                ),
+                AnalysisProtocolContext.unchecked(),
+            )
+        assertEquals(
+            AnalysisProtocolError.InvalidRange,
+            messageFailure(excessiveRange, context.forQuery(query)).error,
+        )
+    }
+
+    @Test
     fun `decoder rejects traversal out of source positions and hostile counts`() {
         val query =
             AnalysisQueryRequest(
@@ -287,15 +332,18 @@ class AnalysisProtocolHostileInputTest {
             openFrame.copy(
                 payload =
                     openFrame.payload.copyOf().also { bytes ->
-                        bytes[120] = 65
-                        bytes[121] = 0
-                        bytes[122] = 0
-                        bytes[123] = 0
+                        bytes[124] = 65
+                        bytes[125] = 0
+                        bytes[126] = 0
+                        bytes[127] = 0
                     },
             )
         assertEquals(AnalysisProtocolError.CountLimit, messageFailure(hostileSourceCount).error)
 
         assertFailsWith<IllegalArgumentException> { AnalysisLimits(completionItems = ProtocolLimits.MAX_COMPLETION_ITEMS + 1) }
+        assertFailsWith<IllegalArgumentException> {
+            AnalysisLimits(parameterInfoItems = ProtocolLimits.MAX_PARAMETER_INFO_ITEMS + 1)
+        }
         assertFailsWith<IllegalArgumentException> {
             AdmittedAnalysisProfile(
                 identity.profile,

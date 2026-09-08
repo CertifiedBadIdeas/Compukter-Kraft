@@ -24,6 +24,7 @@ import java.util.Collections
 
 data class AnalysisResultLimits(
     val maxCompletionItems: Int = 256,
+    val maxParameterInfoItems: Int = 32,
     val maxDeclarationLocations: Int = 64,
     val maxReferences: Int = 4 * 1024,
     val maxDetailUtf8Bytes: Int = 64 * 1024,
@@ -31,6 +32,7 @@ data class AnalysisResultLimits(
 ) {
     init {
         require(maxCompletionItems >= 0) { "completion-item limit must be non-negative" }
+        require(maxParameterInfoItems >= 0) { "parameter-info item limit must be non-negative" }
         require(maxDeclarationLocations >= 0) { "declaration-location limit must be non-negative" }
         require(maxReferences >= 0) { "reference limit must be non-negative" }
         require(maxDetailUtf8Bytes >= 0) { "analysis detail limit must be non-negative" }
@@ -129,6 +131,33 @@ sealed interface AnalysisResult {
                     }
                 }
                 return ExpressionInfo(identity, value)
+            }
+        }
+    }
+
+    @ConsistentCopyVisibility
+    data class ParameterInfo private constructor(
+        override val identity: AnalysisSnapshotIdentity,
+        val value: EditorParameterInfo?,
+    ) : AnalysisResult {
+        companion object {
+            fun create(
+                identity: AnalysisSnapshotIdentity,
+                value: EditorParameterInfo?,
+                sourceLengthsUtf16: Map<VirtualSourcePath, Int>,
+                limits: AnalysisResultLimits = AnalysisResultLimits(),
+            ): ParameterInfo {
+                val sourceLengths = validateSourceLengths(sourceLengthsUtf16)
+                value?.let { info ->
+                    validateSourceRange(sourceLengths, info.path, info.callRange)
+                    require(info.items.size <= limits.maxParameterInfoItems) { "parameter-info item count exceeds limit" }
+                    info.items.forEach { item ->
+                        require(strictUtf8Size(item.signature) <= limits.maxDetailUtf8Bytes) {
+                            "parameter-info signature exceeds limit"
+                        }
+                    }
+                }
+                return ParameterInfo(identity, value)
             }
         }
     }

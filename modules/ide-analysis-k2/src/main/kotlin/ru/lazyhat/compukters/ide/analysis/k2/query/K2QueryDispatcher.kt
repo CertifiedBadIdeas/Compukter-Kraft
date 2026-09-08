@@ -39,6 +39,7 @@ internal object K2QueryDispatcher {
                 is AnalysisQuery.Presentation -> presentation(query, snapshot, limits)
                 is AnalysisQuery.Completion -> CompletionQuery.execute(query, snapshot, limits)
                 is AnalysisQuery.ExpressionInfo -> ExpressionInfoQuery.execute(query, snapshot, limits)
+                is AnalysisQuery.ParameterInfo -> ParameterInfoQuery.execute(query, snapshot, limits)
                 is AnalysisQuery.Declaration -> DeclarationQuery.execute(query, snapshot, limits)
                 is AnalysisQuery.References -> ReferenceQuery.execute(query, snapshot, limits)
                 is AnalysisQuery.Format -> error("format queries execute outside K2 read actions")

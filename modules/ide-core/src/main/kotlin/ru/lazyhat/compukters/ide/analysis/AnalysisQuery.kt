@@ -63,6 +63,16 @@ sealed interface AnalysisQuery {
         }
     }
 
+    data class ParameterInfo(
+        override val identity: AnalysisSnapshotIdentity,
+        val path: VirtualSourcePath,
+        val offsetUtf16: Int,
+    ) : AnalysisQuery {
+        init {
+            validateCursor(path, offsetUtf16)
+        }
+    }
+
     data class Declaration(
         override val identity: AnalysisSnapshotIdentity,
         val path: VirtualSourcePath,

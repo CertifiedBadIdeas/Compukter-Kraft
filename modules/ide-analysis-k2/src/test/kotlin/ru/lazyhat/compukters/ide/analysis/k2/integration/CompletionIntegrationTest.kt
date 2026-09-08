@@ -50,6 +50,43 @@ import kotlin.test.assertIs
 
 class CompletionIntegrationTest {
     @Test
+    fun `forked worker returns parameter information`() {
+        val source = "fun greet(name: String, count: Int) = Unit\nfun main() { greet(\"Ada\", 2) }"
+        val path = VirtualSourcePath.kotlin("main.kt")
+        val sources =
+            ProjectSnapshot.of(
+                listOf(ProjectSource(path, BinaryValue.of(source.encodeToByteArray()))),
+                WorkerLimits(),
+            )
+        val profile = AnalysisProfileIdentity(Hash256.of(ByteArray(32) { 9 }))
+        val identity = AnalysisSnapshotIdentity(SourceSnapshotIdentity.of(sources), profile)
+        val admitted =
+            AdmittedAnalysisSnapshot(
+                identity,
+                sources,
+                AdmittedAnalysisProfile(
+                    profile,
+                    ru.lazyhat.compukters.ide.analysis.k2
+                        .testAdmittedPlatform(),
+                ),
+                AnalysisLimits(),
+            )
+
+        withController { controller ->
+            assertEquals(SnapshotOpenResult.Opened(identity), controller.open(admitted).get(90, TimeUnit.SECONDS))
+            val parameterInfo =
+                assertIs<AnalysisClientResult.Success>(
+                    controller
+                        .query(admitted, AnalysisQuery.ParameterInfo(identity, path, source.lastIndexOf("2)")))
+                        .get(90, TimeUnit.SECONDS),
+                ).result as AnalysisResult.ParameterInfo
+
+            val item = assertIs<ru.lazyhat.compukters.ide.analysis.EditorParameterInfo>(parameterInfo.value).items.single()
+            assertEquals("count: Int", item.activeParameter?.let { item.signature.substring(it.startUtf16, it.endUtf16) })
+        }
+    }
+
+    @Test
     fun `forked worker returns semantic completion`() {
         val source = "fun candidate() = Unit\nfun main() { can }"
         val path = VirtualSourcePath.kotlin("main.kt")

@@ -27,6 +27,7 @@ object ProtocolLimits {
     const val MAX_DIAGNOSTICS = 4 * 1024
     const val MAX_SEMANTIC_TOKENS = 64 * 1024
     const val MAX_COMPLETION_ITEMS = 256
+    const val MAX_PARAMETER_INFO_ITEMS = 64
     const val MAX_DECLARATION_LOCATIONS = 1024
     const val MAX_REFERENCES = 64 * 1024
     const val MAX_TEXT_BYTES = 256 * 1024
@@ -43,6 +44,7 @@ data class AnalysisLimits(
     val diagnosticTextBytes: Int = 64 * 1024,
     val semanticTokens: Int = 16 * 1024,
     val completionItems: Int = ProtocolLimits.MAX_COMPLETION_ITEMS,
+    val parameterInfoItems: Int = 32,
     val declarationLocations: Int = 64,
     val references: Int = 4 * 1024,
     val detailTextBytes: Int = 64 * 1024,
@@ -57,6 +59,7 @@ data class AnalysisLimits(
         requireBounded("diagnostic text bytes", diagnosticTextBytes, ProtocolLimits.MAX_TEXT_BYTES)
         requireBounded("semantic token count", semanticTokens, ProtocolLimits.MAX_SEMANTIC_TOKENS)
         requireBounded("completion-item count", completionItems, ProtocolLimits.MAX_COMPLETION_ITEMS)
+        requireBounded("parameter-info item count", parameterInfoItems, ProtocolLimits.MAX_PARAMETER_INFO_ITEMS)
         requireBounded("declaration-location count", declarationLocations, ProtocolLimits.MAX_DECLARATION_LOCATIONS)
         requireBounded("reference count", references, ProtocolLimits.MAX_REFERENCES)
         requireBounded("detail text bytes", detailTextBytes, ProtocolLimits.MAX_TEXT_BYTES)
@@ -72,6 +75,7 @@ data class AnalysisLimits(
             diagnosticTextBytes >= requested.diagnosticTextBytes &&
             semanticTokens >= requested.semanticTokens &&
             completionItems >= requested.completionItems &&
+            parameterInfoItems >= requested.parameterInfoItems &&
             declarationLocations >= requested.declarationLocations &&
             references >= requested.references &&
             detailTextBytes >= requested.detailTextBytes

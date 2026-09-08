@@ -59,7 +59,10 @@ workspace and answers diagnostics, completion, symbol, reference, expression, an
 and analysis use the same resolved platform bundle and source-snapshot identities, but have separate worker sessions
 and result contracts.
 
-Analysis protocol v7 also carries explicit Kotlin format requests. The request includes the exact editor text and
+Analysis protocol v8 also carries explicit Kotlin format and parameter-information requests. Parameter information
+resolves the innermost call at a UTF-16 caret into a bounded, deterministically ordered set of K2-substituted callable
+signatures with active-parameter spans; client-side snapshot, revision, path, caret, and call-range checks reject stale
+popup results. The format request includes the exact editor text and
 UTF-16 caret captured by the Reformat Code action, so formatting does not depend on whether the semantic snapshot has
 caught up. The worker runs ktlint standard rules from a compiler-free nested runtime whose shaded IntelliJ references
 are relocated back to the ordinary namespace. Its child classloader reloads the worker's existing Kotlin compiler JAR
