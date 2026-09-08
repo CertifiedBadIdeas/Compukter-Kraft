@@ -491,10 +491,18 @@ internal class IdeScreen(
     private fun focusState(): IdeFocusState {
         val state = application.controller.viewState()
         val editor = ((state.page as? IdePageState.Workspace)?.value?.editor as? IdeEditorView.Text)
-        val completion = (editor?.analysis as? IdeAnalysisState.Active)?.completion != null
+        val analysis = editor?.analysis as? IdeAnalysisState.Active
+        val completion = analysis?.completion != null
         val chooser =
-            ((editor?.analysis as? IdeAnalysisState.Active)?.interaction as? IdeSemanticInteraction.Chooser) != null
-        return IdeFocusState(focusArea, completion, chooser, state.dialog, geometry().codeRows.coerceAtLeast(1))
+            (analysis?.interaction as? IdeSemanticInteraction.Chooser) != null
+        return IdeFocusState(
+            focusArea,
+            completion,
+            chooser,
+            state.dialog,
+            geometry().codeRows.coerceAtLeast(1),
+            analysis?.parameterInfo != null,
+        )
     }
 
     private fun pointerContext(geometry: IdeRenderGeometry): IdePointerContext {

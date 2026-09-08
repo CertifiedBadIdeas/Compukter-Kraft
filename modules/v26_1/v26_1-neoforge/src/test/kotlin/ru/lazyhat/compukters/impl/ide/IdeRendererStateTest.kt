@@ -31,6 +31,7 @@ import ru.lazyhat.compukters.ide.analysis.DeclarationOrigin
 import ru.lazyhat.compukters.ide.analysis.EditorDiagnostic
 import ru.lazyhat.compukters.ide.analysis.EditorDiagnosticSeverity
 import ru.lazyhat.compukters.ide.analysis.EditorExpressionInfo
+import ru.lazyhat.compukters.ide.analysis.ParameterInfoItem
 import ru.lazyhat.compukters.ide.analysis.SemanticCategory
 import ru.lazyhat.compukters.ide.analysis.SemanticToken
 import ru.lazyhat.compukters.ide.analysis.SourceSnapshotId
@@ -40,6 +41,7 @@ import ru.lazyhat.compukters.ide.client.analysis.IdeCompletionEntry
 import ru.lazyhat.compukters.ide.client.analysis.IdeCompletionModuleRequirement
 import ru.lazyhat.compukters.ide.client.analysis.IdeCompletionState
 import ru.lazyhat.compukters.ide.client.analysis.IdeDeclarationTarget
+import ru.lazyhat.compukters.ide.client.analysis.IdeParameterInfoState
 import ru.lazyhat.compukters.ide.client.analysis.IdeSemanticAnchor
 import ru.lazyhat.compukters.ide.client.analysis.IdeSemanticInteraction
 import ru.lazyhat.compukters.ide.client.build.IdeBuildState
@@ -687,6 +689,64 @@ class IdeRendererStateTest {
         assertTrue(model.text.any { it.kind == IdeTextKind.Completion && it.value == "$label · function" })
         assertTrue(popup.width > 220, popup.toString())
         assertTrue(popup.width <= geometry.editor.width, popup.toString())
+    }
+
+    @Test
+    fun `parameter info renders at the caret and accents only the active parameter`() {
+        val source = "fun main() { println(42) }"
+        val document = EditorDocument(source)
+        document.setCaret(source.indexOf("42") + 1)
+        val lexical = IncrementalKotlinHighlighter(document).use { it.snapshot() }
+        val identity = AnalysisSnapshotIdentity(SourceSnapshotId(Hash256.zero()), AnalysisProfileIdentity(Hash256.zero()))
+        val path = ProjectPath.file("src/main.kt")
+        val virtualPath = VirtualSourcePath.kotlin(path.value)
+        val signature = "println(value: Any?): Unit"
+        val parameterInfo =
+            IdeParameterInfoState(
+                identity,
+                virtualPath,
+                0,
+                document.caretOffset,
+                EditorRange(source.indexOf("println"), source.lastIndexOf(')') + 1),
+                listOf(ParameterInfoItem(signature, EditorRange(8, 19), true)),
+                32,
+            )
+        val editor =
+            IdeEditorView.Text(
+                path = path,
+                visibleLines = listOf(source),
+                visibleLineStartsUtf16 = listOf(0),
+                firstVisibleLine = 0,
+                firstVisibleColumn = 0,
+                totalLines = 1,
+                caretUtf16 = document.caretOffset,
+                selectionStartUtf16 = null,
+                selectionEndUtf16 = null,
+                contentRevision = 0,
+                persistedContentRevision = 0,
+                dirty = false,
+                conflict = false,
+                lexical = lexical,
+                analysis =
+                    IdeAnalysisState.Active(
+                        identity,
+                        virtualPath,
+                        0,
+                        IdeAnalysisPresentation.Empty,
+                        completion = null,
+                        parameterInfo = parameterInfo,
+                    ),
+            )
+
+        val geometry = geometry()
+        val model = IdeRenderer.extract(workspaceState(editor, IdeBuildState.Idle), geometry)
+        val runs = model.text.filter { it.kind == IdeTextKind.ParameterInfo }
+        val popup = model.panels.single { it.kind == IdePanelKind.Dialog }.bounds
+
+        assertEquals(listOf("println(", "value: Any?", "): Unit"), runs.map { it.value })
+        assertEquals(listOf(IdeColors.TEXT, IdeColors.ACCENT, IdeColors.TEXT), runs.map { it.color })
+        assertTrue(geometry.editor.contains(popup))
+        assertTrue(model.scissors.any { it.kind == IdeScissorKind.SemanticPopup && it.bounds == popup })
     }
 
     @Test

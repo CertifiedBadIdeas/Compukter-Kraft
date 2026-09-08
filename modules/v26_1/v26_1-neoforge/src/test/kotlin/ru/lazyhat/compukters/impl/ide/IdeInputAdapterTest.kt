@@ -68,6 +68,7 @@ class IdeInputAdapterTest {
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_S, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_L, GLFW.GLFW_MOD_CONTROL or GLFW.GLFW_MOD_ALT), IdeFocusState.Editor)
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_B, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_P, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_F9, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_SPACE, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
         fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_Z, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
@@ -81,6 +82,7 @@ class IdeInputAdapterTest {
                 IdeCommand.Save,
                 IdeCommand.Format,
                 IdeCommand.GoToDeclaration(),
+                IdeCommand.ShowParameterInfo,
                 IdeCommand.Build,
                 IdeCommand.ManualCompletion,
                 IdeCommand.Edit(IdeEditorInput.Undo),
@@ -275,6 +277,16 @@ class IdeInputAdapterTest {
             ),
             fixture.commands,
         )
+    }
+
+    @Test
+    fun `escape dismisses parameter info before completion`() {
+        val fixture = fixture()
+        val focus = IdeFocusState(IdeFocusArea.Editor, completionVisible = true, parameterInfoVisible = true)
+
+        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_ESCAPE), focus)
+
+        assertEquals(listOf<IdeCommand>(IdeCommand.DismissParameterInfo), fixture.commands)
     }
 
     @Test

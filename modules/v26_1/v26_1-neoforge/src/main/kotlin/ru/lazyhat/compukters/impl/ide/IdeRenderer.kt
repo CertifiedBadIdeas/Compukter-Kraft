@@ -24,6 +24,7 @@ import ru.lazyhat.compukters.ide.analysis.EditorDiagnosticSeverity
 import ru.lazyhat.compukters.ide.analysis.SemanticCategory
 import ru.lazyhat.compukters.ide.client.analysis.IdeAnalysisState
 import ru.lazyhat.compukters.ide.client.analysis.IdeDeclarationTarget
+import ru.lazyhat.compukters.ide.client.analysis.IdeParameterInfoState
 import ru.lazyhat.compukters.ide.client.analysis.IdeSemanticAnchor
 import ru.lazyhat.compukters.ide.client.analysis.IdeSemanticInteraction
 import ru.lazyhat.compukters.ide.client.build.IdeBuildState
@@ -74,6 +75,7 @@ enum class IdeTextKind {
     Binary,
     Dialog,
     Completion,
+    ParameterInfo,
     Hover,
     DeclarationChoice,
     ProjectChoice,
@@ -678,8 +680,13 @@ internal object IdeRenderer {
                 }
 
                 else -> {
-                    completion(editor, codeLeft)
-                    if (active?.completion == null && interaction is IdeSemanticInteraction.Hover) {
+                    val parameterInfo = active?.parameterInfo
+                    if (parameterInfo != null) {
+                        parameterInfo(editor, codeLeft, parameterInfo)
+                    } else {
+                        completion(editor, codeLeft)
+                    }
+                    if (active?.completion == null && active?.parameterInfo == null && interaction is IdeSemanticInteraction.Hover) {
                         semanticHover(editor, codeLeft, interaction)
                     }
                 }
@@ -948,17 +955,7 @@ internal object IdeRenderer {
             codeLeft: Int,
         ) {
             val completion = (editor.analysis as? IdeAnalysisState.Active)?.completion ?: return
-            val visibleIndex = editor.visibleLineStartsUtf16.indexOfLast { it <= editor.caretUtf16 }
-            if (visibleIndex !in editor.visibleLines.indices) return
-            val line = editor.visibleLines[visibleIndex]
-            val local = (editor.caretUtf16 - editor.visibleLineStartsUtf16[visibleIndex]).coerceIn(0, line.length)
-            val caret =
-                IdeRect(
-                    codeLeft + (visualColumns(line.substring(0, local)) - editor.firstVisibleColumn) * font.cellWidth,
-                    geometry.editor.top + visibleIndex * font.cellHeight,
-                    codeLeft + (visualColumns(line.substring(0, local)) - editor.firstVisibleColumn) * font.cellWidth + font.cellWidth,
-                    geometry.editor.top + (visibleIndex + 1) * font.cellHeight,
-                )
+            val caret = caretBounds(editor, codeLeft) ?: return
             val visibleItems = completion.visibleEntries
             val rows = visibleItems.map(::completionRow)
             val contentWidth = rows.maxOf(::visualColumns) * font.cellWidth + COMPLETION_HORIZONTAL_PADDING
@@ -981,6 +978,63 @@ internal object IdeRenderer {
                     Z_POPUP_TEXT,
                 )
             }
+        }
+
+        private fun parameterInfo(
+            editor: IdeEditorView.Text,
+            codeLeft: Int,
+            info: IdeParameterInfoState,
+        ) {
+            val caret = caretBounds(editor, codeLeft) ?: return
+            val visibleItems = info.items.take(PARAMETER_INFO_VISIBLE_ROWS)
+            val contentWidth = visibleItems.maxOf { visualColumns(it.signature) } * font.cellWidth + POPUP_HORIZONTAL_PADDING
+            val popup =
+                geometry.anchoredPopup(
+                    caret,
+                    maxOf(SEMANTIC_POPUP_MINIMUM_WIDTH, contentWidth),
+                    visibleItems.size * UI_LINE_HEIGHT + POPUP_VERTICAL_PADDING,
+                )
+            semanticPopupPanel(popup.bounds)
+            visibleItems.forEachIndexed { index, item ->
+                val y = popup.bounds.top + 3 + index * UI_LINE_HEIGHT
+                val x = popup.bounds.left + 4
+                val activeParameter = item.activeParameter
+                if (activeParameter == null) {
+                    ui(IdeTextKind.ParameterInfo, item.signature, x, y, IdeColors.TEXT, popup.bounds, Z_POPUP_TEXT)
+                } else {
+                    val prefix = item.signature.substring(0, activeParameter.startUtf16)
+                    val active = item.signature.substring(activeParameter.startUtf16, activeParameter.endUtf16)
+                    val suffix = item.signature.substring(activeParameter.endUtf16)
+                    ui(IdeTextKind.ParameterInfo, prefix, x, y, IdeColors.TEXT, popup.bounds, Z_POPUP_TEXT)
+                    val activeX = x + visualColumns(prefix) * font.cellWidth
+                    ui(IdeTextKind.ParameterInfo, active, activeX, y, IdeColors.ACCENT, popup.bounds, Z_POPUP_TEXT)
+                    ui(
+                        IdeTextKind.ParameterInfo,
+                        suffix,
+                        activeX + visualColumns(active) * font.cellWidth,
+                        y,
+                        IdeColors.TEXT,
+                        popup.bounds,
+                        Z_POPUP_TEXT,
+                    )
+                }
+            }
+        }
+
+        private fun caretBounds(
+            editor: IdeEditorView.Text,
+            codeLeft: Int,
+        ): IdeRect? {
+            val visibleIndex = editor.visibleLineStartsUtf16.indexOfLast { it <= editor.caretUtf16 }
+            if (visibleIndex !in editor.visibleLines.indices) return null
+            val line = editor.visibleLines[visibleIndex]
+            val local = (editor.caretUtf16 - editor.visibleLineStartsUtf16[visibleIndex]).coerceIn(0, line.length)
+            return IdeRect(
+                codeLeft + (visualColumns(line.substring(0, local)) - editor.firstVisibleColumn) * font.cellWidth,
+                geometry.editor.top + visibleIndex * font.cellHeight,
+                codeLeft + (visualColumns(line.substring(0, local)) - editor.firstVisibleColumn) * font.cellWidth + font.cellWidth,
+                geometry.editor.top + (visibleIndex + 1) * font.cellHeight,
+            )
         }
 
         private fun completionRow(entry: ru.lazyhat.compukters.ide.client.analysis.IdeCompletionEntry): String =
@@ -1431,6 +1485,7 @@ internal object IdeRenderer {
     private const val POPUP_HORIZONTAL_PADDING = 8
     private const val POPUP_VERTICAL_PADDING = 4
     private const val DECLARATION_VISIBLE_ROWS = 8
+    private const val PARAMETER_INFO_VISIBLE_ROWS = 6
     private const val NO_TARGET = "No target attached"
     private const val TERMINAL_UNAVAILABLE = "Target terminal is unavailable"
     private const val TERMINAL_TOOL_HEIGHT = 72

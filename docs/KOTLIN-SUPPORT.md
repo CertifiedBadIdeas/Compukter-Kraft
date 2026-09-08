@@ -636,6 +636,19 @@ cannot become one merely by copying its package, name, and signature.
   `expression query renders a resolved callable signature`, and
   `expression query reports a smart cast type`.
 
+- [x] **Parameter information** — Ctrl+P opens a caret-anchored popup for the
+  innermost call, lists bounded and deterministic K2-resolved overload
+  signatures, and highlights the active positional, named, or vararg
+  parameter. The popup follows edits and caret movement, rejects stale
+  snapshot results, and closes on Escape, focus loss, file changes, or when
+  the caret leaves a call. Evidence:
+  [`ParameterInfoQueryTest`](../modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/query/ParameterInfoQueryTest.kt),
+  [`AnalysisRequestCoordinatorTest`](../modules/ide-analysis-client/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/controller/AnalysisRequestCoordinatorTest.kt),
+  [`IdeAnalysisFlowTest`](../modules/ide-client/src/test/kotlin/ru/lazyhat/compukters/ide/client/controller/IdeAnalysisFlowTest.kt),
+  [`IdeInputAdapterTest`](../modules/v26_1/v26_1-neoforge/src/test/kotlin/ru/lazyhat/compukters/impl/ide/IdeInputAdapterTest.kt),
+  and
+  [`IdeRendererStateTest`](../modules/v26_1/v26_1-neoforge/src/test/kotlin/ru/lazyhat/compukters/impl/ide/IdeRendererStateTest.kt).
+
 - [x] **Navigation and project references** — declarations, selected platform
   APIs, builtins such as `intArrayOf`, and exact project references resolve to
   their attached sources without matching unrelated same-spelling symbols.

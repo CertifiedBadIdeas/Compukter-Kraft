@@ -61,6 +61,7 @@ data class IdeFocusState(
     val declarationChooserVisible: Boolean = false,
     val dialog: IdeDialogState? = null,
     val editorPageRows: Int = 1,
+    val parameterInfoVisible: Boolean = false,
 ) {
     companion object {
         val Initial = IdeFocusState(IdeFocusArea.Editor)
@@ -122,6 +123,9 @@ class IdeInputAdapter(
     ): Boolean {
         focus.dialog?.let { return dialogKey(event, it) }
         if (focus.declarationChooserVisible) chooserKey(event)?.let { return dispatch(it) }
+        if (focus.parameterInfoVisible && event.key() == GLFW.GLFW_KEY_ESCAPE) {
+            return dispatch(IdeCommand.DismissParameterInfo)
+        }
         if (focus.completionVisible) completionKey(event)?.let { return dispatch(it) }
         if (focus.area != IdeFocusArea.Editor) return false
         if (event.isPaste) return dispatchType(boundedClipboard(clipboard.text()))
@@ -136,6 +140,7 @@ class IdeInputAdapter(
                     GLFW.GLFW_KEY_S -> IdeCommand.Save
                     GLFW.GLFW_KEY_L -> if (alt && !shift) IdeCommand.Format else null
                     GLFW.GLFW_KEY_B -> IdeCommand.GoToDeclaration()
+                    GLFW.GLFW_KEY_P -> IdeCommand.ShowParameterInfo
                     GLFW.GLFW_KEY_F9 -> IdeCommand.Build
                     GLFW.GLFW_KEY_SPACE -> IdeCommand.ManualCompletion
                     GLFW.GLFW_KEY_Z -> IdeCommand.Edit(IdeEditorInput.Undo)
