@@ -72,7 +72,9 @@ class PackagedToolingBundleException(
 ) : IllegalStateException(message, cause)
 
 object PackagedToolingBundle {
+    @Synchronized
     fun publish(
+        bundleManifest: InputStream,
         archive: InputStream,
         cacheRoot: Path,
         limits: PackagedToolingBundleLimits = PackagedToolingBundleLimits(),
@@ -85,20 +87,28 @@ object PackagedToolingBundle {
         if (!Files.isDirectory(cacheRoot, LinkOption.NOFOLLOW_LINKS)) {
             throw PackagedToolingBundleException("packaged tooling cache root is not a regular directory")
         }
-        val staging = cacheRoot.resolve(".packaged-${UUID.randomUUID()}")
-        staging.createDirectories()
+        var staging: Path? = null
         try {
-            ZstdInputStream(archive).use { decoded -> extract(decoded, staging, limits) }
-            val manifest = loadManifest(staging, limits.manifestBytes)
-            validateExtracted(staging, manifest)
-            val destination = cacheRoot.resolve(manifest.bundleHash.hex())
+            val expectedDocument = readBounded(bundleManifest, limits.manifestBytes)
+            val expectedIdentity = ToolingBundleManifestCodec.decodeIdentity(expectedDocument)
+            val destination = cacheRoot.resolve(expectedIdentity.bundleHash.hex())
             if (destination.exists()) {
-                deleteTree(staging)
-                return validatePublished(destination, manifest, limits.manifestBytes)
+                validateCached(destination, expectedDocument, limits.manifestBytes)?.let { return it }
             }
-            forceDirectory(staging)
-            movePublished(staging, destination)
-            return validatePublished(destination, manifest, limits.manifestBytes)
+            val extracted = cacheRoot.resolve(".packaged-${UUID.randomUUID()}")
+            staging = extracted
+            extracted.createDirectories()
+            ZstdInputStream(archive).use { decoded -> extract(decoded, extracted, limits) }
+            val manifest = loadManifest(extracted, limits.manifestBytes)
+            requireExpectedManifest(manifest, expectedDocument)
+            validateExtracted(extracted, manifest)
+            if (destination.exists()) {
+                validateCached(destination, expectedDocument, limits.manifestBytes)?.let { return it }
+                deleteTree(destination)
+            }
+            forceDirectory(extracted)
+            movePublished(extracted, destination)
+            return validatePublished(destination, expectedDocument, limits.manifestBytes)
         } catch (exception: PackagedToolingBundleException) {
             throw exception
         } catch (exception: ToolingBundleException) {
@@ -106,7 +116,7 @@ object PackagedToolingBundle {
         } catch (exception: Exception) {
             throw PackagedToolingBundleException("packaged tooling publication failed", exception)
         } finally {
-            deleteTree(staging)
+            staging?.let(::deleteTree)
         }
     }
 
@@ -208,16 +218,36 @@ object PackagedToolingBundle {
 
     private fun validatePublished(
         root: Path,
-        expected: ToolingBundleManifest,
+        expectedDocument: ByteArray,
         maximumManifestBytes: Int,
     ): PublishedToolingBundle {
         if (Files.isSymbolicLink(root) || !Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
             throw PackagedToolingBundleException("published tooling root is invalid")
         }
         val loaded = loadManifest(root, maximumManifestBytes)
-        if (loaded != expected) throw PackagedToolingBundleException("published tooling manifest does not match the package")
+        requireExpectedManifest(loaded, expectedDocument)
         validateExtracted(root, loaded)
         return PublishedToolingBundle(root, loaded)
+    }
+
+    private fun validateCached(
+        root: Path,
+        expectedDocument: ByteArray,
+        maximumManifestBytes: Int,
+    ): PublishedToolingBundle? =
+        try {
+            validatePublished(root, expectedDocument, maximumManifestBytes)
+        } catch (_: Exception) {
+            null
+        }
+
+    private fun requireExpectedManifest(
+        manifest: ToolingBundleManifest,
+        expectedDocument: ByteArray,
+    ) {
+        if (!manifest.canonicalBundleText().encodeToByteArray().contentEquals(expectedDocument)) {
+            throw PackagedToolingBundleException("published tooling manifest does not match the package")
+        }
     }
 
     private fun validateFile(
@@ -255,6 +285,16 @@ object PackagedToolingBundle {
         }
         if (path.fileSize() > maximumBytes) throw PackagedToolingBundleException("packaged tooling manifest exceeds its byte limit")
         return Files.readAllBytes(path)
+    }
+
+    private fun readBounded(
+        input: InputStream,
+        maximumBytes: Int,
+    ): ByteArray {
+        val bytes = input.readNBytes(maximumBytes)
+        if (input.read() >= 0) throw PackagedToolingBundleException("packaged tooling manifest exceeds its byte limit")
+        if (bytes.isEmpty()) throw PackagedToolingBundleException("packaged tooling manifest is empty")
+        return bytes
     }
 
     private fun validateEntryName(

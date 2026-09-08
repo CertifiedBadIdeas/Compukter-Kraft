@@ -33,14 +33,15 @@ fun main(arguments: Array<String>) {
         }
 
         "verify" -> {
-            require(arguments.size == 5) {
-                "usage: tooling-bundle verify <compiler-payload> <analysis-payload> <archive> <scratch>"
+            require(arguments.size == 6) {
+                "usage: tooling-bundle verify <compiler-payload> <analysis-payload> <manifest> <archive> <scratch>"
             }
             verify(
                 compilerRoot = Path.of(arguments[1]),
                 analysisRoot = Path.of(arguments[2]),
-                archive = Path.of(arguments[3]),
-                scratch = Path.of(arguments[4]),
+                bundleManifest = Path.of(arguments[3]),
+                archive = Path.of(arguments[4]),
+                scratch = Path.of(arguments[5]),
             )
         }
 
@@ -58,6 +59,7 @@ fun main(arguments: Array<String>) {
 private fun verify(
     compilerRoot: Path,
     analysisRoot: Path,
+    bundleManifest: Path,
     archive: Path,
     scratch: Path,
 ) {
@@ -74,6 +76,7 @@ private fun verify(
         val published =
             archive.inputStream().use { input ->
                 PackagedToolingBundle.publish(
+                    bundleManifest.inputStream(),
                     input,
                     scratch.resolve("cache").toAbsolutePath(),
                 )

@@ -22,6 +22,7 @@ import io.airlift.compress.v3.zstd.ZstdInputStream
 import io.airlift.compress.v3.zstd.ZstdOutputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.Callable
@@ -46,7 +47,7 @@ class PackagedToolingBundleTest {
                     executor
                         .invokeAll(
                             List(2) {
-                                Callable { PackagedToolingBundle.publish(ByteArrayInputStream(archive), root) }
+                                Callable { publish(ByteArrayInputStream(archive), root, manifest) }
                             },
                         ).map { it.get() }
                 } finally {
@@ -78,7 +79,7 @@ class PackagedToolingBundleTest {
 
     @Test
     fun `rejects unsafe duplicate missing corrupt and over-budget archives`() =
-        withPackage { archive, root, _ ->
+        withPackage { archive, root, manifest ->
             listOf(
                 "../escape.jar",
                 "/absolute.jar",
@@ -88,67 +89,81 @@ class PackagedToolingBundleTest {
                 "META-INF/arbitrary.txt",
             ).forEachIndexed { index, entry ->
                 assertFailsWith<PackagedToolingBundleException> {
-                    PackagedToolingBundle.publish(
+                    publish(
                         ByteArrayInputStream(zstd(zip(mapOf(entry to byteArrayOf(1))))),
                         root.resolve("unsafe-$index"),
+                        manifest,
                     )
                 }
             }
             assertFailsWith<PackagedToolingBundleException> {
-                PackagedToolingBundle.publish(ByteArrayInputStream(duplicateZip()), root.resolve("duplicate"))
+                publish(ByteArrayInputStream(duplicateZip()), root.resolve("duplicate"), manifest)
             }
             assertFailsWith<PackagedToolingBundleException> {
-                PackagedToolingBundle.publish(
+                publish(
                     ByteArrayInputStream(removeEntry(archive, "analysis/lib/analysis.jar")),
                     root.resolve("missing"),
+                    manifest,
                 )
             }
             assertFailsWith<PackagedToolingBundleException> {
-                PackagedToolingBundle.publish(
+                publish(
                     ByteArrayInputStream(replaceEntry(archive, "compiler/lib/compiler.jar", byteArrayOf(9))),
                     root.resolve("corrupt"),
+                    manifest,
                 )
             }
             assertFailsWith<PackagedToolingBundleException> {
-                PackagedToolingBundle.publish(
+                publish(
                     ByteArrayInputStream(archive),
                     root.resolve("entry-limit"),
+                    manifest,
                     PackagedToolingBundleLimits(entries = 1, bytes = 1024),
                 )
             }
             assertFailsWith<PackagedToolingBundleException> {
-                PackagedToolingBundle.publish(ByteArrayInputStream(byteArrayOf(1, 2, 3)), root.resolve("invalid-zstd"))
+                publish(ByteArrayInputStream(byteArrayOf(1, 2, 3)), root.resolve("invalid-zstd"), manifest)
             }
             assertFailsWith<PackagedToolingBundleException> {
-                PackagedToolingBundle.publish(
+                publish(
                     ByteArrayInputStream(archive),
                     root.resolve("byte-limit"),
+                    manifest,
                     PackagedToolingBundleLimits(entries = 32, bytes = 1),
                 )
             }
             assertFailsWith<PackagedToolingBundleException> {
-                PackagedToolingBundle.publish(
+                publish(
                     ByteArrayInputStream(archive),
                     root.resolve("manifest-limit"),
+                    manifest,
                     PackagedToolingBundleLimits(entries = 32, bytes = 1024, manifestBytes = 1),
                 )
             }
         }
 
     @Test
-    fun `rejects symbolic roots and corrupt reused publications`() =
-        withPackage { archive, root, _ ->
-            val published = PackagedToolingBundle.publish(ByteArrayInputStream(archive), root)
-            published.root.resolve("common/lib/kotlin-compiler.jar").writeBytes(byteArrayOf(9))
+    fun `reuses valid cache without reading carrier and repairs corrupt publications`() =
+        withPackage { archive, root, manifest ->
+            val published = publish(ByteArrayInputStream(archive), root, manifest)
+            val reused = publish(FailOnReadInputStream(), root, manifest)
+            assertEquals(published.root, reused.root)
+
+            val compilerJar = published.root.resolve("common/lib/kotlin-compiler.jar")
+            compilerJar.writeBytes(byteArrayOf(9))
             assertFailsWith<PackagedToolingBundleException> {
-                PackagedToolingBundle.publish(ByteArrayInputStream(archive), root)
+                publish(ByteArrayInputStream(byteArrayOf(1, 2, 3)), root, manifest)
             }
+            assertContentEquals(byteArrayOf(9), compilerJar.readBytes())
+
+            val repaired = publish(ByteArrayInputStream(archive), root, manifest)
+            assertContentEquals(COMMON_BYTES, repaired.root.resolve("common/lib/kotlin-compiler.jar").readBytes())
 
             val link = root.resolveSibling("tooling-link")
             runCatching { Files.createSymbolicLink(link, root) }.getOrElse { return@withPackage }
             try {
                 assertFailsWith<PackagedToolingBundleException> {
-                    PackagedToolingBundle.publish(ByteArrayInputStream(archive), link)
+                    publish(ByteArrayInputStream(archive), link, manifest)
                 }
             } finally {
                 Files.deleteIfExists(link)
@@ -212,6 +227,19 @@ class PackagedToolingBundleTest {
         return output.toByteArray()
     }
 
+    private fun publish(
+        archive: InputStream,
+        root: Path,
+        manifest: ToolingBundleManifest,
+        limits: PackagedToolingBundleLimits = PackagedToolingBundleLimits(),
+    ): PublishedToolingBundle =
+        PackagedToolingBundle.publish(
+            manifest.canonicalBundleText().byteInputStream(),
+            archive,
+            root,
+            limits,
+        )
+
     private fun duplicateZip(): ByteArray {
         val bytes = zip(linkedMapOf("common/lib/a.jar" to byteArrayOf(1), "common/lib/b.jar" to byteArrayOf(2)))
         val original = "common/lib/b.jar".encodeToByteArray()
@@ -229,6 +257,10 @@ class PackagedToolingBundleTest {
     }
 
     private companion object {
+        class FailOnReadInputStream : InputStream() {
+            override fun read(): Int = error("cached tooling publication must not read the carrier")
+        }
+
         val COMMON_BYTES = byteArrayOf(1)
         val COMPILER_BYTES = byteArrayOf(2)
         val ANALYSIS_BYTES = byteArrayOf(3)

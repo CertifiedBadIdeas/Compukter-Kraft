@@ -249,7 +249,12 @@ internal object ProductionIdeApplicationFactory {
         check(Runtime.version().feature() >= 25) { "Compukters IDE workers require JDK 25" }
         val workerLimits = WorkerLimits()
         val analysisLimits = AnalysisLimits()
-        val bundle = resource(TOOLING_WORKER_RESOURCE).use { archive -> PackagedToolingBundle.publish(archive, paths.toolingWorkers) }
+        val bundle =
+            resource(TOOLING_WORKER_MANIFEST_RESOURCE).use { manifest ->
+                resource(TOOLING_WORKER_RESOURCE).use { archive ->
+                    PackagedToolingBundle.publish(manifest, archive, paths.toolingWorkers)
+                }
+            }
         val compilerProfile = bundle.profile("compiler")
         val compilerPayload =
             ru.lazyhat.compukters.compiler.worker.controller.PublishedWorkerPayload(
@@ -633,6 +638,7 @@ internal object ProductionIdeApplicationFactory {
     }
 
     private const val TOOLING_WORKER_RESOURCE = "/tooling/workers/k2-tooling-workers.zip.zst"
+    private const val TOOLING_WORKER_MANIFEST_RESOURCE = "/tooling/workers/k2-tooling-workers.bundle"
     private const val COMPILER_HEAP_MIB = 256
     private const val COMPILER_METASPACE_MIB = 256
     private const val ANALYSIS_HEAP_MIB = 384

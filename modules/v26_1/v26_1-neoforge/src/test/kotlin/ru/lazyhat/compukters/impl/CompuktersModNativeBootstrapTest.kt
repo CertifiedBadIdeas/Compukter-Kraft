@@ -34,6 +34,9 @@ class CompuktersModNativeBootstrapTest {
         checkNotNull(
             CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/tooling/workers/k2-tooling-workers.zip.zst"),
         ).use { }
+        checkNotNull(
+            CompuktersModNativeBootstrapTest::class.java.getResourceAsStream("/tooling/workers/k2-tooling-workers.bundle"),
+        ).use { }
         check(CompuktersModNativeBootstrapTest::class.java.getResource("/compiler/worker/compiler-k2-worker.zip") == null)
         check(CompuktersModNativeBootstrapTest::class.java.getResource("/analysis/worker/ide-analysis-k2-worker.zip") == null)
 

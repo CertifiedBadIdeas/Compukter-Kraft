@@ -60,6 +60,10 @@ class ToolingBundleManifestTest {
         )
         assertEquals(first.canonicalBundleText(), second.canonicalBundleText())
         assertEquals(
+            ToolingBundleIdentity(first.format, first.bundleHash),
+            ToolingBundleManifestCodec.decodeIdentity(first.canonicalBundleText().encodeToByteArray()),
+        )
+        assertEquals(
             first.profiles.getValue("analysis").canonicalText(),
             second.profiles.getValue("analysis").canonicalText(),
         )
@@ -136,6 +140,16 @@ class ToolingBundleManifestTest {
     fun `codec rejects noncanonical and forged manifests`() {
         val manifest = ToolingBundleManifest.create(files(), profiles())
         val encoded = manifest.encodedFiles()
+        listOf(
+            "format=01\nbundleSha256=${manifest.bundleHash.hex()}\n",
+            "format=2\nbundleSha256=${manifest.bundleHash.hex()}\n",
+            "format=1\nbundleSha256=invalid\n",
+            "bundleSha256=${manifest.bundleHash.hex()}\nformat=1\n",
+        ).forEach { document ->
+            assertFailsWith<ToolingBundleException> {
+                ToolingBundleManifestCodec.decodeIdentity(document.encodeToByteArray())
+            }
+        }
         assertFailsWith<ToolingBundleException> {
             ToolingBundleManifestCodec.decode(encoded + ("unexpected" to byteArrayOf(1)))
         }

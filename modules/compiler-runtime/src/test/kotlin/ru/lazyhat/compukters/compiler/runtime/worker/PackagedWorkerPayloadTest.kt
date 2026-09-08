@@ -41,9 +41,9 @@ import kotlin.test.assertFailsWith
 class PackagedWorkerPayloadTest {
     @Test
     fun `validated package is published once and reused by content hash`() =
-        withPackage { archive, root, expected ->
-            val first = PackagedWorkerPayload.publish(ByteArrayInputStream(archive), root)
-            val second = PackagedWorkerPayload.publish(ByteArrayInputStream(archive), root)
+        withPackage { manifest, archive, root, expected ->
+            val first = publish(manifest, archive, root)
+            val second = publish(manifest, archive, root)
 
             assertEquals(first.root, second.root)
             assertEquals(expected.identity, first.manifest.identity)
@@ -52,7 +52,7 @@ class PackagedWorkerPayloadTest {
 
     @Test
     fun `package accepts bounded license metadata without adding it to the worker classpath`() =
-        withPackage { archive, root, expected ->
+        withPackage { manifest, archive, root, expected ->
             val licensed =
                 appendZipEntries(
                     archive,
@@ -62,16 +62,15 @@ class PackagedWorkerPayloadTest {
                     "META-INF/THIRD-PARTY-NOTICES.md" to "Third-party notices".toByteArray(),
                 )
 
-            val published = PackagedWorkerPayload.publish(ByteArrayInputStream(licensed), root)
+            val published = publish(manifest, licensed, root)
 
             assertEquals(expected.identity, published.manifest.identity)
             assertContentEquals(WORKER_BYTES, published.classpath.single().readBytes())
         }
 
     @Test
-    fun `package rejects unsafe duplicate and over-budget entries`() {
-        val root = createTempDirectory("compukters-packaged-worker-reject-").toAbsolutePath().normalize()
-        try {
+    fun `package rejects unsafe duplicate and over-budget entries`() =
+        withPackage { manifest, _, root, _ ->
             listOf(
                 "../escape.jar",
                 "/absolute.jar",
@@ -80,41 +79,35 @@ class PackagedWorkerPayloadTest {
                 "META-INF/arbitrary.txt",
                 "META-INF/licenses/../escape.txt",
                 "licenses/Compukters.txt",
-            ).forEach { entry ->
+            ).forEachIndexed { index, entry ->
                 assertFailsWith<PackagedWorkerPayloadException> {
-                    PackagedWorkerPayload.publish(ByteArrayInputStream(zstd(zip(entry to byteArrayOf(1)))), root)
+                    publish(manifest, zstd(zip(entry to byteArrayOf(1))), root.resolve("unsafe-$index"))
                 }
             }
             assertFailsWith<PackagedWorkerPayloadException> {
-                PackagedWorkerPayload.publish(
-                    ByteArrayInputStream(duplicateZip()),
-                    root,
-                )
+                publish(manifest, duplicateZip(), root.resolve("duplicate"))
             }
             assertFailsWith<PackagedWorkerPayloadException> {
-                PackagedWorkerPayload.publish(
-                    ByteArrayInputStream(zstd(zip("worker.payload" to ByteArray(5)))),
-                    root,
+                publish(
+                    manifest,
+                    zstd(zip("worker.payload" to ByteArray(5))),
+                    root.resolve("over-budget"),
                     PackagedWorkerPayloadLimits(entries = 1, bytes = 4),
                 )
             }
-        } finally {
-            root.toFile().deleteRecursively()
         }
-    }
 
     @Test
-    fun `package and reused publication reject corrupt payload bytes`() =
-        withPackage { archive, root, _ ->
-            val published = PackagedWorkerPayload.publish(ByteArrayInputStream(archive), root)
+    fun `package repairs a corrupt reused publication`() =
+        withPackage { manifest, archive, root, _ ->
+            val published = publish(manifest, archive, root)
             published.classpath.single().writeBytes(byteArrayOf(9, 9, 9))
 
-            assertFailsWith<PackagedWorkerPayloadException> {
-                PackagedWorkerPayload.publish(ByteArrayInputStream(archive), root)
-            }
+            val repaired = publish(manifest, archive, root)
+            assertContentEquals(WORKER_BYTES, repaired.classpath.single().readBytes())
         }
 
-    private fun withPackage(block: (ByteArray, Path, WorkerPayloadManifest) -> Unit) {
+    private fun withPackage(block: (ByteArray, ByteArray, Path, WorkerPayloadManifest) -> Unit) {
         val root = createTempDirectory("compukters-packaged-worker-").toAbsolutePath().normalize()
         try {
             val files =
@@ -147,7 +140,12 @@ class PackagedWorkerPayloadTest {
                     ),
                 )
             val expected = WorkerPayloadManifest.fromToolingProfile(bundle.profiles.getValue("compiler"), bundle.files)
-            block(zstd(zip(files + bundle.encodedFiles())), root.resolve("published"), expected)
+            block(
+                bundle.canonicalBundleText().encodeToByteArray(),
+                zstd(zip(files + bundle.encodedFiles())),
+                root.resolve("published"),
+                expected,
+            )
         } finally {
             root.toFile().deleteRecursively()
         }
@@ -196,6 +194,13 @@ class PackagedWorkerPayloadTest {
         ZstdOutputStream(output).use { it.write(bytes) }
         return output.toByteArray()
     }
+
+    private fun publish(
+        manifest: ByteArray,
+        archive: ByteArray,
+        root: Path,
+        limits: PackagedWorkerPayloadLimits = PackagedWorkerPayloadLimits(),
+    ) = PackagedWorkerPayload.publish(ByteArrayInputStream(manifest), ByteArrayInputStream(archive), root, limits)
 
     private fun duplicateZip(): ByteArray {
         val bytes = zip("lib/a.jar" to byteArrayOf(1), "lib/b.jar" to byteArrayOf(2))

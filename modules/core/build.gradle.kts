@@ -44,6 +44,8 @@ val editRuntimeArtifact =
     project(":compiler-k2").layout.buildDirectory.file("generated/system/edit.cpkt")
 val compilerWorkerPayload =
     project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.zip.zst")
+val compilerWorkerManifest =
+    project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.bundle")
 val processTerminalChildArtifact =
     rootProject.layout.projectDirectory.file("host/compukter-vm/tests/fixtures/process-terminal-child.cpkt")
 val processInstallRomExecutableArtifact =
@@ -63,6 +65,7 @@ val programRuntimeIntegrationTest =
             ":compiler-k2:generateShellArtifact",
             ":compiler-k2:generateEditArtifact",
             ":tooling-runtime:toolingRuntimeBundle",
+            ":tooling-runtime:toolingRuntimeManifest",
             rootProject.tasks.named("cargoBuildCompukterFfi"),
         )
         useJUnitPlatform()
@@ -76,6 +79,7 @@ val programRuntimeIntegrationTest =
         inputs.file(kotlincRuntimeArtifact)
         inputs.file(editRuntimeArtifact)
         inputs.file(compilerWorkerPayload)
+        inputs.file(compilerWorkerManifest)
         inputs.file(processTerminalChildArtifact)
         inputs.file(processInstallRomExecutableArtifact)
         doFirst {
@@ -85,6 +89,7 @@ val programRuntimeIntegrationTest =
             systemProperty("compukters.kotlincRuntime.artifact", kotlincRuntimeArtifact.get().asFile.absolutePath)
             systemProperty("compukters.editRuntime.artifact", editRuntimeArtifact.get().asFile.absolutePath)
             systemProperty("compukters.compilerWorker.payload", compilerWorkerPayload.get().asFile.absolutePath)
+            systemProperty("compukters.compilerWorker.manifest", compilerWorkerManifest.get().asFile.absolutePath)
             systemProperty("compukters.processTerminalChild.artifact", processTerminalChildArtifact.asFile.absolutePath)
             systemProperty(
                 "compukters.processInstallRomExecutable.artifact",

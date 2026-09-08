@@ -42,6 +42,7 @@ class PackagedWorkerPayloadException(
 
 object PackagedWorkerPayload {
     fun publish(
+        bundleManifest: InputStream,
         archive: InputStream,
         cacheRoot: Path,
         limits: PackagedWorkerPayloadLimits = PackagedWorkerPayloadLimits(),
@@ -49,6 +50,7 @@ object PackagedWorkerPayload {
         try {
             val bundle =
                 ru.lazyhat.compukters.worker.payload.PackagedToolingBundle.publish(
+                    bundleManifest,
                     archive,
                     cacheRoot,
                     limits =

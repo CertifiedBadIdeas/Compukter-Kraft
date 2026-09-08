@@ -106,9 +106,11 @@ internal class NeoForgeCompilerService private constructor(
             val paths = CompilerServicePaths.at(worldRoot)
             Files.createDirectories(paths.temporaryRoot)
             val packaged =
-                checkNotNull(NeoForgeCompilerService::class.java.getResourceAsStream(WORKER_RESOURCE)) {
-                    "packaged compiler worker is missing: $WORKER_RESOURCE"
-                }.use { archive -> PackagedWorkerPayload.publish(archive, paths.payloadRoot) }
+                resource(WORKER_MANIFEST_RESOURCE).use { manifest ->
+                    resource(WORKER_RESOURCE).use { archive ->
+                        PackagedWorkerPayload.publish(manifest, archive, paths.payloadRoot)
+                    }
+                }
             val compilerIdentity = packaged.manifest.identity
             val platform =
                 PackagedPlatformBundleLoader.load(
@@ -167,7 +169,13 @@ internal class NeoForgeCompilerService private constructor(
             return Path.of(System.getProperty("java.home"), "bin", name).toAbsolutePath().normalize()
         }
 
+        private fun resource(path: String) =
+            checkNotNull(NeoForgeCompilerService::class.java.getResourceAsStream(path)) {
+                "packaged compiler worker is missing: $path"
+            }
+
         private const val WORKER_RESOURCE = "/tooling/workers/k2-tooling-workers.zip.zst"
+        private const val WORKER_MANIFEST_RESOURCE = "/tooling/workers/k2-tooling-workers.bundle"
     }
 }
 

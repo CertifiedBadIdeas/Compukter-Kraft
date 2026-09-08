@@ -89,6 +89,18 @@ val canonicalToolingRuntimeBundle = tasks.register<Zip>("canonicalToolingRuntime
 }
 
 val toolingRuntimeBundleFile = layout.buildDirectory.file("distributions/k2-tooling-workers.zip.zst")
+val toolingRuntimeManifestFile = layout.buildDirectory.file("distributions/k2-tooling-workers.bundle")
+val toolingRuntimeManifest = tasks.register("toolingRuntimeManifest") {
+    group = "distribution"
+    description = "Publishes the external identity manifest for tooling cache admission."
+    dependsOn(prepareToolingRuntimeBundle)
+    val source = toolingBundleDirectory.map { it.file("tooling.bundle") }
+    inputs.file(source)
+    outputs.file(toolingRuntimeManifestFile)
+    doLast {
+        source.get().asFile.copyTo(toolingRuntimeManifestFile.get().asFile, overwrite = true)
+    }
+}
 val toolingRuntimeBundle = tasks.register<JavaExec>("toolingRuntimeBundle") {
     group = "distribution"
     description = "Compresses the canonical shared K2 tooling ZIP as one Zstandard frame."
@@ -109,11 +121,12 @@ val toolingRuntimeBundle = tasks.register<JavaExec>("toolingRuntimeBundle") {
 val verifyToolingRuntimeBundle = tasks.register<JavaExec>("verifyToolingRuntimeBundle") {
     group = "verification"
     description = "Reassembles, publishes, and verifies the shared K2 tooling runtime."
-    dependsOn(tasks.classes, toolingRuntimeBundle)
+    dependsOn(tasks.classes, toolingRuntimeBundle, toolingRuntimeManifest)
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = application.mainClass
     inputs.files(compilerWorkerPayloadInput, analysisWorkerPayloadInput)
     inputs.file(toolingRuntimeBundleFile)
+    inputs.file(toolingRuntimeManifestFile)
     val scratch = layout.buildDirectory.dir("tooling-bundle/verification")
     outputs.upToDateWhen { false }
     doFirst {
@@ -121,6 +134,7 @@ val verifyToolingRuntimeBundle = tasks.register<JavaExec>("verifyToolingRuntimeB
             "verify",
             compilerWorkerPayloadInput.singleFile.absolutePath,
             analysisWorkerPayloadInput.singleFile.absolutePath,
+            toolingRuntimeManifestFile.get().asFile.absolutePath,
             toolingRuntimeBundleFile.get().asFile.absolutePath,
             scratch.get().asFile.absolutePath,
         )

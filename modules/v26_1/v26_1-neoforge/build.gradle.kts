@@ -327,7 +327,8 @@ val verifyPackagedCompukterFfi =
                 "expected exactly one META-INF/neoforge.mods.toml in ${archive.name}"
             }
             val toolingResources = entries.filter { it.startsWith("tooling/workers/") }.sorted()
-            val expectedToolingResources = listOf(ArtifactSizeReport.TOOLING_RESOURCE)
+            val toolingManifestResource = "tooling/workers/k2-tooling-workers.bundle"
+            val expectedToolingResources = listOf(ArtifactSizeReport.TOOLING_RESOURCE, toolingManifestResource).sorted()
             check(toolingResources == expectedToolingResources) {
                 "expected exactly $expectedToolingResources in ${archive.name}, found $toolingResources"
             }
@@ -354,7 +355,10 @@ val verifyPackagedCompukterFfi =
             }
             val nestedToolingEntries = linkedSetOf<String>()
             var toolingManifestBytes: ByteArray? = null
+            var externalToolingManifestBytes: ByteArray? = null
             ZipFile(archive).use { zip ->
+                externalToolingManifestBytes =
+                    zip.getInputStream(checkNotNull(zip.getEntry(toolingManifestResource))).use { it.readBytes() }
                 val worker = checkNotNull(zip.getEntry(ArtifactSizeReport.TOOLING_RESOURCE)) {
                     "shared tooling bundle is missing from ${archive.name}"
                 }
@@ -370,6 +374,9 @@ val verifyPackagedCompukterFfi =
                         nested.closeEntry()
                     }
                 }
+            }
+            check(checkNotNull(toolingManifestBytes).contentEquals(checkNotNull(externalToolingManifestBytes))) {
+                "external tooling manifest does not match the solid carrier"
             }
             listOf(
                 "META-INF/licenses/Compukters-Apache-2.0.txt",

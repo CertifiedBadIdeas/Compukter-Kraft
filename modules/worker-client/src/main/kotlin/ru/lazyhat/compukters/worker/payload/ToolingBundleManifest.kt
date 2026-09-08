@@ -124,7 +124,25 @@ class ToolingBundleException(
     cause: Throwable? = null,
 ) : IllegalStateException(message, cause)
 
+data class ToolingBundleIdentity(
+    val format: UInt,
+    val bundleHash: Sha256,
+)
+
 object ToolingBundleManifestCodec {
+    fun decodeIdentity(bundleDocument: ByteArray): ToolingBundleIdentity =
+        try {
+            val lines = canonicalLines(decodeText(bundleDocument))
+            val format = canonicalUInt(property(lines, 0, "format"))
+            val bundleHash = decodeHash(property(lines, 1, "bundleSha256"))
+            require(format == ToolingBundleManifest.FORMAT) { "unsupported tooling bundle format" }
+            ToolingBundleIdentity(format, bundleHash)
+        } catch (exception: ToolingBundleException) {
+            throw exception
+        } catch (exception: Exception) {
+            throw ToolingBundleException("tooling bundle identity is invalid", exception)
+        }
+
     fun decode(documents: Map<String, ByteArray>): ToolingBundleManifest =
         try {
             decodeChecked(documents)
@@ -285,6 +303,17 @@ object ToolingBundleManifestCodec {
     private fun decodeHash(value: String): Sha256 {
         if (value.length != 64 || value.any { it !in '0'..'9' && it !in 'a'..'f' }) invalid("tooling SHA-256 is invalid")
         return Sha256.of(ByteArray(32) { index -> value.substring(index * 2, index * 2 + 2).toInt(16).toByte() })
+    }
+
+    private fun property(
+        lines: List<String>,
+        index: Int,
+        name: String,
+    ): String {
+        val prefix = "$name="
+        val line = lines.getOrNull(index) ?: invalid("tooling bundle property is missing: $name")
+        if (!line.startsWith(prefix)) invalid("tooling bundle property is noncanonical: $name")
+        return line.removePrefix(prefix)
     }
 
     private fun invalid(message: String): Nothing = throw ToolingBundleException(message)

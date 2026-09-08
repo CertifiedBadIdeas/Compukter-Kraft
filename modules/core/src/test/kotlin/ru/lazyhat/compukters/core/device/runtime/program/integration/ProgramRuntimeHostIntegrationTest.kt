@@ -82,6 +82,7 @@ class ProgramRuntimeHostIntegrationTest {
             TestCompilerService
                 .open(
                     root.resolve("compiler"),
+                    Path.of(requiredProperty("compukters.compilerWorker.manifest")),
                     Path.of(requiredProperty("compukters.compilerWorker.payload")),
                 ).use { compiler ->
                     WorldFileSystemStore.open(root).use { store ->
@@ -399,11 +400,14 @@ class ProgramRuntimeHostIntegrationTest {
         companion object {
             fun open(
                 root: Path,
+                bundleManifest: Path,
                 archive: Path,
             ): TestCompilerService {
                 val bundle =
-                    Files.newInputStream(archive).use { input ->
-                        PackagedToolingBundle.publish(input, root.resolve("payload"))
+                    Files.newInputStream(bundleManifest).use { manifest ->
+                        Files.newInputStream(archive).use { input ->
+                            PackagedToolingBundle.publish(manifest, input, root.resolve("payload"))
+                        }
                     }
                 val payload = WorkerPayloadLoader.loadToolingProfile(bundle.root)
                 val limits = WorkerLimits()
