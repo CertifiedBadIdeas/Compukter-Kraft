@@ -18,6 +18,7 @@
 
 package ru.lazyhat.compukters.ide.analysis.k2.formatter
 
+import java.io.File
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.net.URLClassLoader
@@ -49,6 +50,8 @@ internal class IsolatedKotlinFormatter private constructor(
 
     internal fun implementationClassLoader(): ClassLoader = formatMethod.declaringClass.classLoader
 
+    internal fun dependencyClassLoader(className: String): ClassLoader? = loader.loadClass(className).classLoader
+
     override fun close() {
         loader.close()
         temporaryRoot?.let(::deleteTree)
@@ -63,7 +66,7 @@ internal class IsolatedKotlinFormatter private constructor(
             require(container.isRegularFile()) { "analysis worker formatter container is not a JAR" }
             val temporaryRoot = createTempDirectory("compukters-kotlin-formatter-")
             return try {
-                val paths = extractClasspath(container, temporaryRoot)
+                val paths = extractClasspath(container, temporaryRoot) + workerClasspath()
                 open(paths, temporaryRoot)
             } catch (exception: Exception) {
                 deleteTree(temporaryRoot)
@@ -79,7 +82,14 @@ internal class IsolatedKotlinFormatter private constructor(
         ): IsolatedKotlinFormatter {
             require(classpath.isNotEmpty()) { "Kotlin formatter classpath is empty" }
             require(classpath.all(Path::isRegularFile)) { "Kotlin formatter classpath contains a missing file" }
-            val loader = URLClassLoader(classpath.map { it.toUri().toURL() }.toTypedArray(), ClassLoader.getPlatformClassLoader())
+            val loader =
+                URLClassLoader(
+                    classpath
+                        .distinct()
+                        .map { it.toUri().toURL() }
+                        .toTypedArray(),
+                    ClassLoader.getPlatformClassLoader(),
+                )
             return try {
                 val formatter = Class.forName(FORMATTER_CLASS, true, loader)
                 val method = formatter.getMethod("format", String::class.java, String::class.java)
@@ -116,6 +126,12 @@ internal class IsolatedKotlinFormatter private constructor(
                 }
             }
         }
+
+        private fun workerClasspath(): List<Path> =
+            requireNotNull(System.getProperty("java.class.path")) { "analysis worker classpath is unavailable" }
+                .split(File.pathSeparator)
+                .map { Path.of(it).toAbsolutePath().normalize() }
+                .filter(Path::isRegularFile)
 
         private fun deleteTree(root: Path) {
             if (!Files.exists(root)) return

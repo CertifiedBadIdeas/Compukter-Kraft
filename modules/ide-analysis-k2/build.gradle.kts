@@ -79,7 +79,12 @@ val kotlinFormatterRuntime = configurations.create("kotlinFormatterRuntime") {
 }
 
 dependencies {
-    add(kotlinFormatterRuntime.name, project(":ide-kotlin-formatter"))
+    add(
+        kotlinFormatterRuntime.name,
+        project(path = ":ide-kotlin-formatter", configuration = "relocatedFormatterRuntimeElements"),
+    ) {
+        isTransitive = false
+    }
 }
 
 val guestPlatformSources = configurations.create("guestPlatformSources") {
@@ -209,7 +214,7 @@ val analysisWorkerPayload = tasks.register<Zip>("analysisWorkerPayload") {
 val verifyAnalysisWorkerLicenses = tasks.register("verifyAnalysisWorkerLicenses") {
     description = "Checks licenses and the exact library inventory in the packaged K2 analysis worker."
     group = "verification"
-    dependsOn(analysisWorkerPayload)
+    dependsOn(analysisWorkerPayload, ":ide-kotlin-formatter:verifyRelocatedFormatterRuntime")
     inputs.file(analysisWorkerPayload.flatMap { it.archiveFile })
     inputs.file(rootProject.layout.projectDirectory.file("licenses/distribution-components.tsv"))
     doLast {
@@ -266,16 +271,6 @@ val verifyAnalysisWorkerLicenses = tasks.register("verifyAnalysisWorkerLicenses"
             "formatter compiler leaked onto the analysis worker launch classpath"
         }
 
-        val expectedFormatter =
-            rootProject
-                .file("licenses/distribution-components.tsv")
-                .readLines()
-                .drop(1)
-                .filter { it.isNotBlank() }
-                .map { it.split('\t') }
-                .filter { it[0] == "jvm-analysis-formatter" }
-                .map { (_, component, version, _) -> "$component-$version.jar" }
-                .sorted()
         val actualFormatter =
             ZipFile(archive).use { worker ->
                 val analysisJar =
@@ -292,9 +287,13 @@ val verifyAnalysisWorkerLicenses = tasks.register("verifyAnalysisWorkerLicenses"
                         }
                     }
                 }
-            }.filterNot { it.startsWith("ide-kotlin-formatter-") }.sorted()
-        check(actualFormatter == expectedFormatter) {
-            "embedded formatter inventory mismatch: expected $expectedFormatter, found $actualFormatter"
+            }.sorted()
+        check(
+            actualFormatter.size == 1 &&
+                actualFormatter.single().startsWith("ide-kotlin-formatter-") &&
+                actualFormatter.single().endsWith("-relocated-runtime.jar"),
+        ) {
+            "expected one relocated embedded formatter runtime, found $actualFormatter"
         }
     }
 }
@@ -304,7 +303,8 @@ tasks.test {
     val platformBundle = project(":guest-platform").tasks.named("assemblePlatformBundle")
     dependsOn(guestApiJar, platformBundle)
     doFirst {
-        systemProperty("compukters.test.kotlinFormatterClasspath", kotlinFormatterRuntime.files.joinToString(File.pathSeparator))
+        val formatterClasspath = kotlinFormatterRuntime.files + configurations.runtimeClasspath.get().files
+        systemProperty("compukters.test.kotlinFormatterClasspath", formatterClasspath.joinToString(File.pathSeparator))
         systemProperty("compukters.test.guestApi", guestApiJar.get().archiveFile.get().asFile.absolutePath)
         systemProperty(
             "compukters.test.platformBundle",

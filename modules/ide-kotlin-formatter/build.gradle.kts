@@ -80,19 +80,18 @@ val verifyRelocatedFormatterRuntime = tasks.register("verifyRelocatedFormatterRu
     dependsOn(relocatedFormatterJar)
     inputs.file(relocatedFormatterJar.flatMap { it.archiveFile })
     inputs.files(relocatedFormatterRuntime)
+    inputs.file(rootProject.layout.projectDirectory.file("licenses/distribution-components.tsv"))
     doLast {
         val expectedDependencies =
-            listOf(
-                "ec4j-core-1.1.1.jar",
-                "kotlin-logging-jvm-7.0.13.jar",
-                "ktlint-cli-ruleset-core-1.8.0.jar",
-                "ktlint-logger-1.8.0.jar",
-                "ktlint-rule-engine-1.8.0.jar",
-                "ktlint-rule-engine-core-1.8.0.jar",
-                "ktlint-ruleset-standard-1.8.0.jar",
-                "poko-annotations-jvm-0.20.1.jar",
-                "slf4j-api-2.0.18.jar",
-            )
+            rootProject
+                .file("licenses/distribution-components.tsv")
+                .readLines()
+                .drop(1)
+                .filter { it.isNotBlank() }
+                .map { it.split('\t') }
+                .filter { it[0] == "jvm-analysis-formatter" }
+                .map { (_, component, version, _) -> "$component-$version.jar" }
+                .sorted()
         val actualDependencies = relocatedFormatterRuntime.files.map(File::getName).sorted()
         check(actualDependencies == expectedDependencies) {
             "relocated formatter dependency inventory mismatch: expected $expectedDependencies, found $actualDependencies"

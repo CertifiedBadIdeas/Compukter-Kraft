@@ -109,7 +109,7 @@ val verifyToolingRuntimeLicenses =
     tasks.register("verifyToolingRuntimeLicenses") {
         group = "verification"
         description = "Checks shared tooling licenses and its exact external JVM inventory."
-        dependsOn(toolingRuntimeBundle)
+        dependsOn(toolingRuntimeBundle, ":ide-kotlin-formatter:verifyRelocatedFormatterRuntime")
         inputs.file(toolingRuntimeBundle.flatMap { it.archiveFile })
         inputs.file(rootProject.layout.projectDirectory.file("licenses/distribution-components.tsv"))
         doLast {
@@ -172,16 +172,6 @@ val verifyToolingRuntimeLicenses =
             check(actualExternal.none { "embeddable" in it || "scripting-compiler" in it }) {
                 "embeddable or scripting compiler distribution leaked into ${archive.name}"
             }
-            val expectedFormatter =
-                rootProject
-                    .file("licenses/distribution-components.tsv")
-                    .readLines()
-                    .drop(1)
-                    .filter { it.isNotBlank() }
-                    .map { it.split('\t') }
-                    .filter { it[0] == "jvm-analysis-formatter" }
-                    .map { (_, component, version, _) -> "$component-$version.jar" }
-                    .sorted()
             val actualFormatter =
                 ZipFile(archive).use { tooling ->
                     val analysisJar =
@@ -198,9 +188,13 @@ val verifyToolingRuntimeLicenses =
                             }
                         }
                     }
-                }.filterNot { it.startsWith("ide-kotlin-formatter-") }.sorted()
-            check(actualFormatter == expectedFormatter) {
-                "embedded formatter inventory mismatch: expected $expectedFormatter, found $actualFormatter"
+                }.sorted()
+            check(
+                actualFormatter.size == 1 &&
+                    actualFormatter.single().startsWith("ide-kotlin-formatter-") &&
+                    actualFormatter.single().endsWith("-relocated-runtime.jar"),
+            ) {
+                "expected one relocated embedded formatter runtime, found $actualFormatter"
             }
         }
     }
