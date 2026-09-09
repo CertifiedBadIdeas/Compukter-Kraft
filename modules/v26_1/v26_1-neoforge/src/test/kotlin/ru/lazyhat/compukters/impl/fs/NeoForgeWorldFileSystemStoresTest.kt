@@ -21,8 +21,12 @@ package ru.lazyhat.compukters.impl.fs
 import org.junit.jupiter.api.io.TempDir
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class NeoForgeWorldFileSystemStoresTest {
     @TempDir
@@ -69,13 +73,13 @@ class NeoForgeWorldFileSystemStoresTest {
         var generation = 3L
         lifecycle.attach(id, { generation }, {
             events += "drain"
-            5L
+            CompletableFuture.completedFuture(5L)
         })
 
         registry.save(world)
         generation = 4
-        registry.stop(world)
-        registry.stop(world)
+        registry.stop(world).join()
+        registry.stop(world).join()
 
         assertEquals(listOf("flush:$id:3", "drain", "flush:$id:5", "close"), events)
         assertEquals(1, store.closeCalls)
@@ -93,9 +97,9 @@ class NeoForgeWorldFileSystemStoresTest {
                 closer = { it.closeCalls++ },
             )
         val store = registry.store(world)
-        val lease = registry.lifecycle(world).attach(ComputerId.fromLongs(7, 8), { 9 }, { 9 })
+        val lease = registry.lifecycle(world).attach(ComputerId.fromLongs(7, 8), { 9 }, { CompletableFuture.completedFuture(9) })
 
-        lease.release(10)
+        lease.release(CompletableFuture.completedFuture(10)).join()
         registry.save(world)
 
         assertEquals(listOf("flush:10"), events)
@@ -120,6 +124,90 @@ class NeoForgeWorldFileSystemStoresTest {
 
         assertEquals(listOf("tombstone:$id", "recover:$id"), events)
     }
+
+    @Test
+    fun `unload retains ownership and defers destruction until the worker closes`() {
+        val events = mutableListOf<String>()
+        val registry = registry(events)
+        val store = registry.store(world)
+        val id = ComputerId.fromLongs(1, 2)
+        val closed = CompletableFuture<Long?>()
+        val lifecycle = registry.lifecycle(world)
+        val lease = lifecycle.attach(id, { 1 }, { error("unload already requested close") })
+        val released = lease.release(closed)
+        assertFalse(released.isDone)
+        assertFailsWith<IllegalStateException> {
+            lifecycle.attach(id, { null }, { CompletableFuture.completedFuture(null) })
+        }
+        registry.tombstone(world, id)
+        registry.save(world)
+        assertTrue(events.isEmpty())
+        closed.complete(7)
+        released.join()
+        assertEquals(listOf("flush:7", "tombstone"), events)
+        assertEquals(0, store.closeCalls)
+        registry.recover(world, id)
+        lifecycle.attach(id, { null }, { CompletableFuture.completedFuture(null) })
+        registry.stop(world).join()
+    }
+
+    @Test
+    fun `stop starts every drain and waits for all barriers without holding up its caller`() {
+        val events = mutableListOf<String>()
+        val registry = registry(events)
+        val store = registry.store(world)
+        val first = CompletableFuture<Long?>()
+        val second = CompletableFuture<Long?>()
+        val lifecycle = registry.lifecycle(world)
+        lifecycle.attach(ComputerId.fromLongs(1, 1), { null }, {
+            events += "drain1"
+            first
+        })
+        lifecycle.attach(ComputerId.fromLongs(2, 2), { null }, {
+            events += "drain2"
+            second
+        })
+        val stopped = registry.stop(world)
+        val duplicate = registry.stop(world)
+        stopped.cancel(false)
+        assertFalse(duplicate.isDone)
+        assertEquals(listOf("drain1", "drain2"), events)
+        assertFailsWith<IllegalStateException> { registry.store(world) }
+        second.complete(2)
+        assertEquals(0, store.closeCalls)
+        first.complete(1)
+        duplicate.join()
+        assertEquals(listOf("drain1", "drain2", "flush:2", "flush:1", "close"), events)
+        assertEquals(1, store.closeCalls)
+        registry.stop(world).join()
+        assertEquals(1, store.closeCalls)
+    }
+
+    @Test
+    fun `failed ownership barrier prevents unsafe store close and reopening`() {
+        val events = mutableListOf<String>()
+        val registry = registry(events)
+        val store = registry.store(world)
+        val failed = CompletableFuture<Long?>()
+        registry.lifecycle(world).attach(ComputerId.fromLongs(1, 1), { null }, { failed })
+        val stopped = registry.stop(world)
+        failed.completeExceptionally(IllegalStateException("native close failed"))
+        assertTrue(stopped.isCompletedExceptionally)
+        assertEquals(0, store.closeCalls)
+        assertFailsWith<IllegalStateException> { registry.store(world) }
+    }
+
+    private fun registry(events: MutableList<String>) =
+        WorldFileSystemStoreRegistry(
+            opener = { FakeStore() },
+            flusher = { _, _, generation -> events += "flush:$generation" },
+            tombstoner = { _, _ -> events += "tombstone" },
+            recoverer = { _, _ -> events += "recover" },
+            closer = {
+                it.closeCalls++
+                events += "close"
+            },
+        )
 
     private class FakeStore {
         var closeCalls = 0

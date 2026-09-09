@@ -32,6 +32,8 @@ import ru.lazyhat.compukters.minecraft.computer.ComputerFileSystemLease
 import ru.lazyhat.compukters.minecraft.computer.ComputerFileSystemLifecycle
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 internal class WorldFileSystemStoreRegistry<S : Any>(
     private val opener: (Path) -> S,
@@ -61,42 +63,55 @@ internal class WorldFileSystemStoreRegistry<S : Any>(
     fun tombstone(
         worldRoot: Path,
         computerId: ComputerId,
-    ) = tombstoner(entry(worldRoot).store, computerId)
+    ) {
+        val current = entry(worldRoot)
+        val attachment = current.active[computerId]
+        if (attachment == null) {
+            tombstoner(current.store, computerId)
+        } else {
+            attachment.tombstone = true
+            release(current, attachment, attachment.drain)
+        }
+    }
 
     @Synchronized
     fun recover(
         worldRoot: Path,
         computerId: ComputerId,
-    ) = recoverer(entry(worldRoot).store, computerId)
+    ) {
+        val current = entry(worldRoot)
+        check(computerId !in current.active) { "computer filesystem is still active: $computerId" }
+        recoverer(current.store, computerId)
+    }
 
     @Synchronized
-    fun stop(worldRoot: Path) {
-        val current = entries.remove(canonicalWorldRoot(worldRoot)) ?: return
-        val active = current.active.values.toList()
-        current.active.clear()
-        var failure: Throwable? = null
-        active.forEach { attachment ->
-            val generation =
-                try {
-                    attachment.drain()
-                } catch (error: Throwable) {
-                    failure = failure ?: error
-                    null
-                }
-            if (generation != null) {
-                try {
-                    flusher(current.store, attachment.computerId, generation)
-                } catch (error: Throwable) {
-                    failure = failure ?: error
+    fun stop(worldRoot: Path): CompletableFuture<Void> {
+        val key = canonicalWorldRoot(worldRoot)
+        val current = entries[key] ?: return CompletableFuture.completedFuture(null)
+        current.stopping?.let { return it.copy() }
+        val stopped = CompletableFuture<Void>()
+        current.stopping = stopped
+        val barriers =
+            current.active.values
+                .toList()
+                .map { release(current, it, it.drain) }
+        CompletableFuture.allOf(*barriers.toTypedArray()).whenComplete { _, failure ->
+            synchronized(this) {
+                if (failure != null) {
+                    // Never close a store whose machine ownership could not be released.
+                    stopped.completeExceptionally(failure)
+                } else {
+                    try {
+                        closer(current.store)
+                        entries.remove(key, current)
+                        stopped.complete(null)
+                    } catch (error: Throwable) {
+                        stopped.completeExceptionally(error)
+                    }
                 }
             }
         }
-        try {
-            closer(current.store)
-        } catch (error: Throwable) {
-            failure = failure ?: error
-        }
-        failure?.let { throw it }
+        return stopped.copy()
     }
 
     @Synchronized
@@ -104,54 +119,85 @@ internal class WorldFileSystemStoreRegistry<S : Any>(
         key: Path,
         computerId: ComputerId,
         generation: () -> Long?,
-        drain: () -> Long?,
+        drain: () -> CompletableFuture<Long?>,
     ): ComputerFileSystemLease {
         val current = entries[key] ?: error("filesystem store has not been opened for $key")
+        check(current.stopping == null) { "filesystem store is stopping" }
         check(computerId !in current.active) { "computer filesystem is already active: $computerId" }
         val attachment = ActiveComputer(computerId, generation, drain)
         current.active[computerId] = attachment
-        return ComputerFileSystemLease { finalGeneration -> release(key, attachment, finalGeneration) }
+        return ComputerFileSystemLease { closed -> release(current, attachment) { closed } }
     }
 
     @Synchronized
     private fun release(
-        key: Path,
+        current: Entry<S>,
         attachment: ActiveComputer,
-        generation: Long?,
-    ) {
-        val current = entries[key] ?: return
-        if (current.active[attachment.computerId] !== attachment) return
-        current.active.remove(attachment.computerId)
-        if (generation != null) flusher(current.store, attachment.computerId, generation)
+        close: () -> CompletableFuture<Long?>,
+    ): CompletableFuture<Void> {
+        attachment.released?.let { return it.copy() }
+        val released = CompletableFuture<Void>()
+        attachment.released = released
+        val closed =
+            try {
+                close()
+            } catch (error: Throwable) {
+                CompletableFuture.failedFuture(error)
+            }
+        closed.whenComplete { generation, failure ->
+            synchronized(this) {
+                if (failure != null) {
+                    released.completeExceptionally(failure)
+                } else {
+                    try {
+                        if (generation != null) flusher(current.store, attachment.computerId, generation)
+                        if (attachment.tombstone) tombstoner(current.store, attachment.computerId)
+                        current.active.remove(attachment.computerId, attachment)
+                        released.complete(null)
+                    } catch (error: Throwable) {
+                        released.completeExceptionally(error)
+                    }
+                }
+            }
+        }
+        return released.copy()
     }
 
     private fun entry(worldRoot: Path): Entry<S> {
         val key = canonicalWorldRoot(worldRoot)
-        return entries.getOrPut(key) {
-            val storageRoot = key.resolve(STORAGE_DIRECTORY)
-            Files.createDirectories(storageRoot)
-            Entry(opener(storageRoot.toRealPath()))
-        }
+        return entries
+            .getOrPut(key) {
+                val storageRoot = key.resolve(STORAGE_DIRECTORY)
+                Files.createDirectories(storageRoot)
+                Entry(opener(storageRoot.toRealPath()))
+            }.also { check(it.stopping == null) { "filesystem store is stopping" } }
     }
 
     private fun canonicalWorldRoot(worldRoot: Path): Path = worldRoot.toRealPath()
 
     private fun Entry<S>.flushActive() {
         active.values.forEach { attachment ->
-            attachment.generation()?.let { flusher(store, attachment.computerId, it) }
+            if (attachment.released == null) {
+                attachment.generation()?.let { flusher(store, attachment.computerId, it) }
+            }
         }
     }
 
     private class Entry<S : Any>(
         val store: S,
         val active: MutableMap<ComputerId, ActiveComputer> = mutableMapOf(),
-    )
+    ) {
+        var stopping: CompletableFuture<Void>? = null
+    }
 
     private class ActiveComputer(
         val computerId: ComputerId,
         val generation: () -> Long?,
-        val drain: () -> Long?,
-    )
+        val drain: () -> CompletableFuture<Long?>,
+    ) {
+        var released: CompletableFuture<Void>? = null
+        var tombstone = false
+    }
 
     private companion object {
         val STORAGE_DIRECTORY: Path = Path.of("compukters", "filesystems")
@@ -204,7 +250,8 @@ object NeoForgeWorldFileSystemStores {
     }
 
     fun onServerStopping(event: ServerStoppingEvent) {
-        registry.stop(worldRoot(event.server))
+        // Shutdown only: actor close barriers do not depend on server tick/result pumping.
+        registry.stop(worldRoot(event.server)).get(10, TimeUnit.SECONDS)
     }
 
     private fun worldRoot(server: MinecraftServer): Path = server.getWorldPath(LevelResource.ROOT)

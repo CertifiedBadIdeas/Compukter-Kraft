@@ -22,6 +22,7 @@ import net.minecraft.server.level.ServerLevel
 import ru.lazyhat.compukters.core.device.runtime.compiler.CompilerCompletionRouter
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import ru.lazyhat.compukters.lang.runtime.fs.WorldFileSystemStore
+import java.util.concurrent.CompletableFuture
 
 class ComputerFileSystemContext(
     val store: WorldFileSystemStore,
@@ -36,7 +37,7 @@ class ComputerFileSystemContext(
 
     internal fun attach(
         generation: () -> Long?,
-        drain: () -> Long?,
+        drain: () -> CompletableFuture<Long?>,
     ): ComputerFileSystemLease = lifecycle.attach(computerId, generation, drain)
 }
 
@@ -57,10 +58,11 @@ fun interface ComputerFileSystemLifecycle {
     fun attach(
         computerId: ComputerId,
         generation: () -> Long?,
-        drain: () -> Long?,
+        drain: () -> CompletableFuture<Long?>,
     ): ComputerFileSystemLease
 }
 
 fun interface ComputerFileSystemLease {
-    fun release(generation: Long?)
+    /** Retains ownership until the runtime has closed; completion may occur on a worker. */
+    fun release(closed: CompletableFuture<Long?>): CompletableFuture<Void>
 }

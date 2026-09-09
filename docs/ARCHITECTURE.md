@@ -158,6 +158,14 @@ computer through the player destruction lifecycle closes its machine before crea
 recoverable tombstone; ordinary block-entity removal during chunk unload only closes the current machine and preserves
 its filesystem.
 
+The Minecraft filesystem registry accepts asynchronous machine-close barriers. An unloading computer retains its
+attachment until the barrier completes and the final generation is flushed; destruction defers its tombstone until
+that point. Store shutdown starts every outstanding drain before waiting for the combined barrier. Ordinary release
+does not wait for VM completion; the server-stopping hook alone permits a bounded ten-second wait. A failed close
+barrier keeps the store unavailable rather than closing storage underneath a possibly live native machine.
+This is a lifetime migration only: the existing native flush/tombstone calls still wait for persistence and must be
+moved behind a bounded asynchronous persistence adapter before the production actor carrier is enabled.
+
 The versioned FFM ABI exposes opaque world-store lifecycle operations, machine creation inside a store, stateless
 artifact verification, and dedicated bounded compilation request and completion calls. Kotlin can select a world
 store, identify a computer, request flush, tombstone, or recovery, and route compiler results, but it cannot perform

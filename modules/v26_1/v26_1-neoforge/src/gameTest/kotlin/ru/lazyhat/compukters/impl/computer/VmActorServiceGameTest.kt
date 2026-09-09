@@ -32,6 +32,7 @@ import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorValue
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEndpoint
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
+import ru.lazyhat.compukters.impl.fs.WorldFileSystemStoreRegistry
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import ru.lazyhat.compukters.lang.runtime.fs.WorldFileSystemStore
 import java.nio.file.Files
@@ -45,14 +46,24 @@ internal class VmActorServiceGameTest(
         val service = NeoForgeVmActorServices.service(server)
         val endpoint = VmActorEndpoint(ComputerId.fromLongs(603, 1), 1)
         val rom = ComputerBlockGameTest.processTestRom()
-        val store = WorldFileSystemStore.open(Files.createTempDirectory("compukters-actor-gametest-"))
+        val root = Files.createTempDirectory("compukters-actor-gametest-")
+        val stores =
+            WorldFileSystemStoreRegistry(
+                opener = WorldFileSystemStore::open,
+                flusher = WorldFileSystemStore::flush,
+                tombstoner = WorldFileSystemStore::tombstone,
+                recoverer = WorldFileSystemStore::recover,
+                closer = WorldFileSystemStore::close,
+            )
+        val store = stores.store(root)
         val lease = requireNotNull(service.attachBootable(endpoint, store, rom))
         val computer = ActorProgramComputer(service, lease, { RedstoneCommitResult.Committed })
+        stores.lifecycle(root).attach(endpoint.computerId, { computer.fileSystemGeneration }, computer::closeAsync)
         val boot = computer.turnOn()
         var deliveredOnServer = false
         val observed = boot.thenAccept { deliveredOnServer = server.isSameThread }
         var terminal: CompletableFuture<ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorReply>? = null
-        var closed: CompletableFuture<Long?>? = null
+        var closed: CompletableFuture<Void>? = null
         helper
             .startSequence()
             .thenWaitUntil {
@@ -73,14 +84,18 @@ internal class VmActorServiceGameTest(
                     "actor boot did not publish a native terminal",
                 )
             }.thenExecute {
-                closed = computer.closeAsync()
+                closed = stores.stop(root)
             }.thenWaitUntil {
                 helper.assertTrue(closed!!.isDone, "actor did not close on its worker")
             }.thenExecute {
-                val generation = closed!!.getNow(null)
-                helper.assertTrue(generation != null, "actor close did not report its final filesystem generation")
-                store.flush(endpoint.computerId, requireNotNull(generation))
-                store.close()
+                closed!!.getNow(null)
+                // Reopening proves the real native store was closed after the worker released its machine.
+                val reopened = stores.store(root)
+                helper.assertTrue(
+                    reopened.health() == ru.lazyhat.compukters.lang.runtime.fs.FileSystemStoreHealth.ACTIVE,
+                    "filesystem store did not reopen after the actor close barrier",
+                )
+                stores.stop(root).getNow(null)
             }.thenSucceed()
     }
 

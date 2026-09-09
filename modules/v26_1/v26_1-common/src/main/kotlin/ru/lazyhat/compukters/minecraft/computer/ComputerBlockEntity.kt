@@ -225,7 +225,11 @@ open class ComputerBlockEntity internal constructor(
                 redstoneHostPort = redstoneHostPort,
                 initialRedstoneOutput = committedRedstoneOutput,
             )
-        filesystemLease = filesystem?.attach(created::filesystemGeneration, ::drainCarrier)
+        filesystemLease =
+            filesystem?.attach(created::filesystemGeneration) {
+                java.util.concurrent.CompletableFuture
+                    .completedFuture(drainCarrier())
+            }
         return created
     }
 
@@ -252,7 +256,11 @@ open class ComputerBlockEntity internal constructor(
         current?.close()
         carrier = null
         terminalMachineId = null
-        filesystemLease?.release(generation)
+        filesystemLease
+            ?.release(
+                java.util.concurrent.CompletableFuture
+                    .completedFuture(generation),
+            )?.getNow(null)
         filesystemLease = null
     }
 
