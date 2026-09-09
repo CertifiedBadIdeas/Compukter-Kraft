@@ -292,6 +292,7 @@ val bootArtifact = layout.buildDirectory.file("generated/system/boot.cpkt")
 val shellArtifact = layout.buildDirectory.file("generated/system/shell.cpkt")
 val kotlincArtifact = layout.buildDirectory.file("generated/system/kotlinc.cpkt")
 val editArtifact = layout.buildDirectory.file("generated/system/edit.cpkt")
+val vmbenchArtifact = layout.buildDirectory.file("generated/system/vmbench.cpkt")
 
 val generateKotlinSubsetConformanceArtifact = tasks.register<Test>("generateKotlinSubsetConformanceArtifact") {
     dependsOn(tasks.jar)
@@ -501,6 +502,23 @@ val generateEditArtifact = tasks.register<Test>("generateEditArtifact") {
     doFirst {
         systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
         systemProperty("compukters.edit.artifact", editArtifact.get().asFile.absolutePath)
+    }
+}
+
+val generateVmbenchArtifact = tasks.register<Test>("generateVmbenchArtifact") {
+    description = "Compiles the checked-in deterministic VM benchmark into a Compukter Artifact."
+    group = "build"
+    dependsOn(tasks.jar)
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("*checked in vm benchmark compiles deterministically*")
+    inputs.file(rootProject.file("system/programs/vmbench.kt"))
+    inputs.file(workerJar)
+    outputs.file(vmbenchArtifact)
+    doFirst {
+        systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
+        systemProperty("compukters.vmbench.artifact", vmbenchArtifact.get().asFile.absolutePath)
     }
 }
 
