@@ -12,6 +12,10 @@ interpreter, quotas, and Minecraft computer lifecycle as player programs; it has
 The first workload isolates integer and branch execution. It does not measure terminal, filesystem, compiler,
 redstone, network, or managed-allocation throughput.
 
+Compukters also provides operator-only fleet commands. The headless mode isolates the native VM and actor scheduler;
+the area mode drives ordinary placed computers and therefore includes block-entity, chunk, filesystem, and Minecraft
+lifecycle overhead. Neither mode is a player-facing computer network or delivery protocol.
+
 ## Run one workload
 
 At a computer shell, run:
@@ -36,6 +40,44 @@ vmbench cpu: checksum=-365826314
 The program prints once before and once after the hot loop. It makes no terminal or host-capability calls while the
 workload is running, so a long run will leave the displayed start line unchanged.
 
+## Profile the actor scheduler
+
+With cheats or server-operator permission, start up to 1000 ephemeral benchmark VMs:
+
+```text
+/compukters vmbench start <count 1..1000> <rounds 1..1000000>
+/compukters vmbench status
+/compukters vmbench stop
+```
+
+Headless VMs execute an internal verified artifact through the same native session and actor scheduler used by placed
+computers. The artifact receives `rounds` through an ordinary terminal Text event, not a benchmark-only VM operation.
+It has no persistent filesystem or block entity and is closed through the actor lifecycle barrier after completion,
+explicit stop, or server shutdown.
+
+`status` reports admitted, active, completed, failed, and closing actors; elapsed ticks and current smoothed Minecraft
+MSPT; worker, mailbox, and result occupancy; average queue and execution time; and mailbox rejection deltas. Admission
+may be lower than requested when ordinary computers already occupy the configured actor capacity. Run `stop` before
+changing the workload, and wait for `STOPPED` before starting another fleet.
+
+For an initial saturation profile, record an idle baseline and compare equal intervals at 1, 10, 100, 500, and 1000
+actors. Use enough rounds that the fleet remains active for the complete observation interval. Scheduler saturation
+should increase queue latency and completion time rather than Minecraft MSPT.
+
+## Dispatch to physical computers
+
+After placing and booting computers, send the ordinary shell command to every loaded computer in a bounded cuboid:
+
+```text
+/compukters vmbench area <from> <to> <rounds 1..1000000>
+```
+
+For example, `compukters vmbench area 0 64 0 9 73 9 1000000` scans a 10x10x10 region. The region may contain at most
+32,768 block positions and at most 1000 computers receive a command. The dispatcher never loads chunks: unloaded
+positions are counted and skipped. It first reports the scan and scheduled fan-out, then reports how many computers
+accepted or rejected the asynchronous canonical command. Boot the fleet and let every shell reach its prompt before
+dispatching if you want all computers to accept it.
+
 ## Profile scaling in a world
 
 Use a disposable world with cheats enabled, otherwise idle loaded chunks, and a fixed render and simulation distance.
@@ -44,9 +86,9 @@ Keep the Minecraft, NeoForge, Compukters, Java, and hardware versions unchanged 
 1. Record a zero-benchmark baseline with the server's vanilla profiler: run `/debug start`, wait for a fixed interval
    such as 60 seconds, then run `/debug stop`.
 2. Place and boot one computer. Confirm `vmbench cpu 2` produces the checksum above.
-3. Start `vmbench cpu 1000000` and capture another profile for the same interval.
-4. Repeat with 2, 4, 8, and then more simultaneously running computers. Start the same command on every computer and
-   begin profiling only after the whole fleet is running.
+3. Start `vmbench cpu 1000000`, or use the bounded `area` command, and capture another profile for the same interval.
+4. Repeat with 2, 4, 8, and then more simultaneously running computers. Begin profiling only after the whole fleet is
+   running.
 5. For every run, record the computer count, profile duration, observed milliseconds per tick or TPS, and the generated
    vanilla profile archive. Stop increasing the fleet once the server cannot sustain its target tick rate.
 
@@ -56,9 +98,10 @@ complete more aggregate work before their tick time degrades.
 
 ## Stop a long run
 
-`vmbench` runs as a foreground process and Compukters does not currently provide Ctrl+C process signalling. Use the
-computer's existing **Shutdown** or **Reboot** action to stop it. Breaking the block also closes the active machine, but
-use a disposable world and prefer an orderly power action when gathering profiles.
+`vmbench` runs as a foreground process and Compukters does not currently provide Ctrl+C process signalling. For a
+headless fleet, use `/compukters vmbench stop`. For physical computers, use the existing **Shutdown** or **Reboot**
+action. Breaking the block also closes the active machine, but use a disposable world and prefer an orderly power
+action when gathering profiles.
 
 Unused work does not accumulate while the computer is unloaded or powered off. Start a fresh workload after rebooting
 instead of treating interrupted and resumed observations as one benchmark run.

@@ -22,6 +22,7 @@ import com.mojang.brigadier.CommandDispatcher
 import com.mojang.brigadier.arguments.IntegerArgumentType
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.commands.Commands
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.neoforged.neoforge.event.RegisterCommandsEvent
@@ -34,6 +35,7 @@ import java.util.Locale
 
 internal object VmBenchmarkCommands {
     private val fleets = IdentityHashMap<MinecraftServer, HeadlessVmBenchmarkFleet>()
+    private val areaDispatcher = VmBenchmarkAreaDispatcher()
 
     fun register(event: RegisterCommandsEvent) = register(event.dispatcher)
 
@@ -64,7 +66,31 @@ internal object VmBenchmarkCommands {
                                         ),
                                 ),
                         ).then(Commands.literal("status").executes { status(it.source) })
-                        .then(Commands.literal("stop").executes { stop(it.source) }),
+                        .then(Commands.literal("stop").executes { stop(it.source) })
+                        .then(
+                            Commands
+                                .literal("area")
+                                .then(
+                                    Commands
+                                        .argument("from", BlockPosArgument.blockPos())
+                                        .then(
+                                            Commands
+                                                .argument("to", BlockPosArgument.blockPos())
+                                                .then(
+                                                    Commands
+                                                        .argument("rounds", IntegerArgumentType.integer(1, MAXIMUM_ROUNDS))
+                                                        .executes { context ->
+                                                            area(
+                                                                context.source,
+                                                                BlockPosArgument.getLoadedBlockPos(context, "from"),
+                                                                BlockPosArgument.getLoadedBlockPos(context, "to"),
+                                                                IntegerArgumentType.getInteger(context, "rounds"),
+                                                            )
+                                                        },
+                                                ),
+                                        ),
+                                ),
+                        ),
                 ),
         )
     }
@@ -127,6 +153,41 @@ internal object VmBenchmarkCommands {
         source.sendSuccess({ Component.literal("Headless VM benchmark stopping $stopped actors") }, false)
         return stopped
     }
+
+    private fun area(
+        source: CommandSourceStack,
+        first: net.minecraft.core.BlockPos,
+        second: net.minecraft.core.BlockPos,
+        rounds: Int,
+    ): Int =
+        runCatching {
+            val dispatch = areaDispatcher.dispatch(MinecraftVmBenchmarkAreaAccess(source.level), first, second, rounds)
+            source.sendSuccess(
+                {
+                    Component.literal(
+                        "VM benchmark area scanned ${dispatch.scannedPositions} positions, found " +
+                            "${dispatch.discoveredComputers} computers, scheduled ${dispatch.scheduledComputers}, " +
+                            "skipped ${dispatch.unloadedPositions} unloaded positions and limited ${dispatch.limitedComputers}",
+                    )
+                },
+                false,
+            )
+            dispatch.completion.thenAccept { result ->
+                source.sendSuccess(
+                    {
+                        Component.literal(
+                            "VM benchmark area delivery: ${result.acceptedComputers} accepted, " +
+                                "${result.rejectedComputers} rejected, ${result.limitedComputers} over limit",
+                        )
+                    },
+                    false,
+                )
+            }
+            dispatch.scheduledComputers
+        }.getOrElse { failure ->
+            source.sendFailure(Component.literal(failure.message ?: "Unable to dispatch VM benchmark area"))
+            0
+        }
 
     private fun fleet(server: MinecraftServer): HeadlessVmBenchmarkFleet =
         fleets.computeIfAbsent(server) {
