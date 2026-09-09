@@ -30,6 +30,8 @@ import ru.lazyhat.compukters.ide.client.target.IdeVerificationTicket
 import ru.lazyhat.compukters.ide.client.target.IdeVerifyResult
 import ru.lazyhat.compukters.ide.compiler.profile.TargetCompileProfile
 import ru.lazyhat.compukters.ide.project.ToolchainLockIdentity
+import ru.lazyhat.compukters.impl.network.awaitServerResult
+import ru.lazyhat.compukters.impl.network.serverOperation
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import java.security.MessageDigest
 import java.util.UUID

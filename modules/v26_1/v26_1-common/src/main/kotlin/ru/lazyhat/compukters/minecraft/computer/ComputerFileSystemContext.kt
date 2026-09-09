@@ -19,6 +19,7 @@
 package ru.lazyhat.compukters.minecraft.computer
 
 import net.minecraft.server.level.ServerLevel
+import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorService
 import ru.lazyhat.compukters.core.device.runtime.compiler.CompilerCompletionRouter
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import ru.lazyhat.compukters.lang.runtime.fs.WorldFileSystemStore
@@ -30,6 +31,7 @@ class ComputerFileSystemContext(
     romImage: ByteArray,
     private val lifecycle: ComputerFileSystemLifecycle,
     internal val compilerRouter: CompilerCompletionRouter? = null,
+    internal val actorService: ProgramRuntimeActorService? = null,
 ) {
     private val romImage = romImage.copyOf()
 

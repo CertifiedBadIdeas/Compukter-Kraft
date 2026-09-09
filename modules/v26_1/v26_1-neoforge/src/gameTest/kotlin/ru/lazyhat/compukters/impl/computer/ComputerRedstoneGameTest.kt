@@ -36,6 +36,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import ru.lazyhat.compukters.minecraft.computer.ComputerBlock
+import java.util.concurrent.CompletableFuture
 
 internal class ComputerRedstoneGameTest(
     testData: TestData<Holder<TestEnvironmentDefinition<*>>>,
@@ -48,7 +49,9 @@ internal class ComputerRedstoneGameTest(
             block.defaultBlockState().setValue(ComputerBlock.FACING, Direction.NORTH),
         )
         val entity = helper.getBlockEntity(computerPosition, NeoForgeComputerBlockEntity::class.java)
-        entity.prepareTerminal()
+        entity.prepareTerminalAsync()
+        var setup: CompletableFuture<Void>? = null
+        var terminal: CompletableFuture<TerminalState?>? = null
 
         helper
             .startSequence()
@@ -59,15 +62,27 @@ internal class ComputerRedstoneGameTest(
                 )
             }.thenExecute {
                 val artifact = fixture()
-                val candidate = requireNotNull(entity.verifyForDeploy(artifact))
-                val expected = requireNotNull(entity.executableRevision("/home/redstone"))
-                helper.assertTrue(expected == VmExecutableRevision.Absent, "redstone executable already existed")
-                entity.deploy("/home/redstone", expected, candidate)
-                helper.assertTrue(entity.submitTerminalText("redstone"), "shell rejected the redstone command")
-                helper.assertTrue(
-                    entity.submitTerminalKey(TerminalKey.ENTER, TerminalKeyAction.PRESS),
-                    "shell rejected the redstone command enter key",
-                )
+                setup =
+                    entity
+                        .verifyForDeployAsync(artifact)
+                        .thenCompose { candidate ->
+                            requireNotNull(candidate)
+                            entity.executableRevisionAsync("/home/redstone").thenCompose { expected ->
+                                requireNotNull(expected)
+                                helper.assertTrue(expected == VmExecutableRevision.Absent, "redstone executable already existed")
+                                entity.deployAsync("/home/redstone", expected, candidate)
+                            }
+                        }.thenCompose {
+                            entity.submitTerminalTextAsync("redstone")
+                        }.thenCompose { accepted ->
+                            helper.assertTrue(accepted, "shell rejected the redstone command")
+                            entity.submitTerminalKeyAsync(TerminalKey.ENTER, TerminalKeyAction.PRESS)
+                        }.thenAccept { accepted ->
+                            helper.assertTrue(accepted, "shell rejected the redstone command enter key")
+                        }
+            }.thenWaitUntil {
+                helper.assertTrue(setup?.isDone == true, "redstone program setup is still pending")
+                setup!!.getNow(null)
             }.thenIdle(2)
             .thenExecute {
                 helper.setBlock(computerPosition.west(), Blocks.REDSTONE_BLOCK)
@@ -83,7 +98,10 @@ internal class ComputerRedstoneGameTest(
                 helper.assertTrue(bottom == 0, "local BOTTOM output expected level 0, got $bottom")
             }.thenWaitUntil {
                 val state = entity.runtimeState
-                val output = terminalText(entity.terminalFullState())
+                if (terminal == null) terminal = entity.terminalFullStateAsync()
+                helper.assertTrue(terminal!!.isDone, "redstone terminal snapshot is still pending")
+                val output = terminalText(terminal!!.getNow(null))
+                if (!output.endsWith("> redstone\n>\n")) terminal = null
                 helper.assertTrue(
                     state == ProgramComputerState.WaitingForInput && output.endsWith("> redstone\n>\n"),
                     "redstone program did not return successfully after more than 64 writes: state=$state output=$output",

@@ -15,6 +15,7 @@ package ru.lazyhat.compukters.impl.ide.target
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import ru.lazyhat.compukters.ide.client.target.IdeAttachedTarget
 import ru.lazyhat.compukters.ide.client.target.IdeTargetFailureKind
+import ru.lazyhat.compukters.impl.network.ServerOperationScope
 import ru.lazyhat.compukters.impl.terminal.TerminalInputAdmission
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import java.util.UUID
@@ -34,7 +35,7 @@ internal class IdeTargetTerminalSessionService(
     private val pendingDeliveries = mutableListOf<IdeTerminalDelivery>()
     private val removalObservation = leases.observeRemovals(::targetRemoved)
     private var closed = false
-    private val polls = IdeServerOperations(maximumPendingPerPlayer = 1)
+    private val polls = ServerOperationScope(maximumPendingPerPlayer = 1)
     private val pendingOpens = mutableMapOf<UUID, Any>()
 
     constructor(

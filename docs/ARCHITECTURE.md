@@ -101,8 +101,8 @@ I/O run outside the server tick thread.
 The asynchronous actor migration (#603) has a server-scoped service registered with NeoForge. Server startup records
 its lifetime; workers are allocated on first use. Each post-tick drains at most 256 actor results and runs reply
 callbacks on the server thread. Stopping removes the service before closing it, so late callbacks cannot reopen it.
-The production computer carrier still uses the synchronous host below until terminal, deployment, filesystem, and
-save/unload operations have all been adapted to actor ownership.
+Production computers attach one actor identified by `ComputerId` and a machine epoch. A full scheduler rejects a new
+attachment without blocking or failing the server tick; the block remains powered off and retries on a later tick.
 
 `ActorProgramComputer` is the asynchronous carrier implementation for that migration. Its server-side state is an
 observation from actor replies, and terminal, filesystem, deployment, and input requests return futures. It keeps at
@@ -113,14 +113,16 @@ barrier does not depend on server result pumping and may complete on a worker th
 
 `ProgramRuntimeHost` owns one current Rust `ComputerMachine`, advances it with bounded guest and maintenance budgets,
 commits terminal changes once per active server tick, and exposes typed full/delta states and failures through JDK 25
-FFM. It does not own a second grid or output transcript. It is loader-independent and server-thread confined.
+FFM. It does not own a second grid or output transcript. It is loader-independent and confined to its actor worker.
 
-The Minecraft carrier owns exactly one host and advances it once per server tick. Rust starts `/rom/boot`, compiled
-from `system/programs/boot.kt`; boot delegates to `/rom/shell`, compiled from `system/programs/shell.kt`. A foreground
-child suspends its parent until it exits or fails. There is one active foreground lane today, while the runtime
-contract leaves room for later parallel execution. Reboot replaces the complete machine stack and clears the
-terminal. Minecraft sends full state to a new viewer and ordered deltas thereafter. Terminal viewers may submit
-bounded key and text events, which merge in server-arrival order without client-side echo or a terminal input lease.
+The Minecraft carrier owns exactly one actor endpoint and submits at most one advance for each server tick. Rust starts
+`/rom/boot`, compiled from `system/programs/boot.kt`; boot delegates to `/rom/shell`, compiled from
+`system/programs/shell.kt`. A foreground child suspends its parent until it exits or fails. There is one active
+foreground lane today, while the runtime contract leaves room for later parallel execution. Reboot replaces the
+complete machine stack and clears the terminal. Minecraft sends full state to a new viewer and ordered deltas
+thereafter. Terminal viewers submit bounded asynchronous key, text, state, and resync operations, which merge in
+server-arrival order without client-side echo or a terminal input lease. Replies are published only after returning to
+the server thread and only while the viewer still refers to the same machine epoch.
 
 The raw terminal is a synchronous Rust device: cell writes, positional writes, rectangular fills, colors, cursor
 changes, and input polling never cross into Minecraft. The authoritative fixed 51x19 cell grid and its replication
@@ -169,7 +171,9 @@ identities per world, including pending removal/recovery; each identity owns at 
 Repeated saves coalesce to the latest requested generation. The identity remains unavailable until final persistence
 completes, so a quickly reloaded block retries attachment on later ticks instead of opening a second machine.
 Persistence failures are logged once, fail outstanding lifecycle futures, and prevent unsafe reattachment or store
-close. Initial store opening and ordinary VM execution still use the legacy synchronous path during actor migration.
+close. Initial store opening happens during server startup rather than an ordinary computer tick. Calls sharing a
+native world-store handle are serialized by a fair lock across VM actors and persistence work, while ordinary VM
+execution stays on actor workers.
 
 The versioned FFM ABI exposes opaque world-store lifecycle operations, machine creation inside a store, stateless
 artifact verification, and dedicated bounded compilation request and completion calls. Kotlin can select a world
@@ -189,8 +193,8 @@ answers. The request transport admits at most 256 pending operations per server 
 suspended work. Verification retains its upload staging reservation while awaiting the runtime, and a candidate
 returned after its target lease ends is closed instead of becoming a ticket. The IDE terminal also supports suspended
 open, resync, input, and polling operations. Each viewer has at most one pending poll; replies are checked against the
-current viewer session and machine before publication. The standalone terminal and production block carrier are still
-on the synchronous adapter during the actor migration.
+current viewer session and machine before publication. The standalone terminal uses the same bounded asynchronous
+transport as the IDE terminal, and its viewer state is discarded when the server stops.
 
 ## Guest programs and APIs
 

@@ -23,6 +23,7 @@ import ru.lazyhat.compukters.ide.client.target.IdeTargetFailureKind
 import ru.lazyhat.compukters.ide.client.target.IdeTargetProfileId
 import ru.lazyhat.compukters.ide.compiler.profile.TargetCompileProfileIdentity
 import ru.lazyhat.compukters.impl.compiler.NeoForgeCompilerServices
+import ru.lazyhat.compukters.impl.network.awaitServerResult
 import ru.lazyhat.compukters.impl.terminal.TerminalNetwork
 import ru.lazyhat.compukters.minecraft.computer.ComputerBlockEntity
 import java.util.UUID
@@ -49,7 +50,8 @@ internal class NeoForgeIdeTargetResolver(
             serverPlayer.level().getBlockEntity(origin.position) as? ComputerBlockEntity
                 ?: return rejected("Target computer is unavailable")
         if (!origin.isAuthorized(serverPlayer, entity)) return rejected("Target computer is not interactable")
-        entity.prepareTerminal() ?: return rejected("Target VM is unavailable")
+        // Starts boot without waiting; target operations are ordered behind it in the actor mailbox.
+        entity.prepareTerminalAsync()
         val machineId = entity.terminalMachineId ?: return rejected("Target VM is unavailable")
         val profile = NeoForgeCompilerServices.targetProfile(server)
         val dimension =
@@ -79,24 +81,28 @@ internal class NeoForgeIdeTargetResolver(
                 },
                 deployment =
                     IdeTargetDeploymentOperations(
-                        verifyForDeploy = entity::verifyForDeploy,
-                        executableRevision = entity::executableRevision,
-                        deploy = entity::deploy,
-                        submitCanonicalLine = entity::submitCanonicalLine,
+                        verifyForDeploy = { entity.verifyForDeployAsync(it).awaitServerResult() },
+                        executableRevision = { entity.executableRevisionAsync(it).awaitServerResult() },
+                        deploy = { path, expected, candidate -> entity.deployAsync(path, expected, candidate).awaitServerResult() },
+                        submitCanonicalLine = { entity.submitCanonicalLineAsync(it).awaitServerResult() },
                     ),
                 terminal =
                     IdeTargetTerminalOperations(
                         machineId = { entity.terminalMachineId },
-                        fullState = entity::terminalFullState,
-                        changesSince = entity::terminalChangesSince,
-                        submitKey = entity::submitTerminalKey,
-                        submitText = entity::submitTerminalText,
+                        fullState = { entity.terminalFullStateAsync().awaitServerResult() },
+                        changesSince = { entity.terminalChangesSinceAsync(it).awaitServerResult() },
+                        submitKey = { key, action, modifiers -> entity.submitTerminalKeyAsync(key, action, modifiers).awaitServerResult() },
+                        submitText = { entity.submitTerminalTextAsync(it).awaitServerResult() },
                     ),
                 fileSystem =
                     IdeTargetFileSystemOperations(
-                        stat = entity::fileStat,
-                        list = entity::fileList,
-                        read = entity::fileRead,
+                        stat = { entity.fileStatAsync(it).awaitServerResult() },
+                        list = { path, startAfter, maximumEntries ->
+                            entity.fileListAsync(path, startAfter, maximumEntries).awaitServerResult()
+                        },
+                        read = { path, offset, maximumBytes, generation ->
+                            entity.fileReadAsync(path, offset, maximumBytes, generation).awaitServerResult()
+                        },
                     ),
             ),
         )

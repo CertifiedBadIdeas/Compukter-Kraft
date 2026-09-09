@@ -22,6 +22,7 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.storage.LevelResource
 import net.neoforged.neoforge.event.level.LevelEvent
+import net.neoforged.neoforge.event.server.ServerStartingEvent
 import net.neoforged.neoforge.event.server.ServerStoppingEvent
 import ru.lazyhat.compukters.impl.compiler.NeoForgeCompilerServices
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
@@ -459,6 +460,8 @@ object NeoForgeWorldFileSystemStores {
                     romImage,
                     registry.lifecycle(root),
                     NeoForgeCompilerServices.router(level.server),
+                    ru.lazyhat.compukters.impl.computer.NeoForgeVmActorServices
+                        .service(level.server),
                 )
             }
 
@@ -478,6 +481,11 @@ object NeoForgeWorldFileSystemStores {
     fun onLevelSave(event: LevelEvent.Save) {
         val level = event.level as? ServerLevel ?: return
         registry.save(worldRoot(level.server))
+    }
+
+    fun onServerStarting(event: ServerStartingEvent) {
+        // Open and validate the world store during server startup, never during an ordinary computer tick.
+        registry.store(worldRoot(event.server))
     }
 
     fun onServerStopping(event: ServerStoppingEvent) {

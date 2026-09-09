@@ -18,6 +18,8 @@
 
 package ru.lazyhat.compukters.impl.ide.target
 
+import ru.lazyhat.compukters.impl.network.ServerOperationScope
+import ru.lazyhat.compukters.impl.network.awaitServerResult
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
@@ -27,13 +29,13 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class IdeServerOperationsTest {
+class ServerOperationScopeTest {
     @Test
     fun `suspended requests remain bounded and release capacity on completion`() {
         val player = UUID.randomUUID()
         val other = UUID.randomUUID()
         val completion = CompletableFuture<Int>()
-        IdeServerOperations(maximumPending = 2, maximumPendingPerPlayer = 1).use { operations ->
+        ServerOperationScope(maximumPending = 2, maximumPendingPerPlayer = 1).use { operations ->
             val first = assertNotNull(operations.submit(player) { completion.awaitServerResult() })
             assertFalse(first.isDone)
             assertNull(operations.submit(player) { 2 })
@@ -52,7 +54,7 @@ class IdeServerOperationsTest {
     fun `cancelling a reply cannot bypass the suspended operation limit`() {
         val player = UUID.randomUUID()
         val completion = CompletableFuture<Int>()
-        IdeServerOperations(maximumPending = 1).use { operations ->
+        ServerOperationScope(maximumPending = 1).use { operations ->
             val pending = assertNotNull(operations.submit(player) { completion.awaitServerResult() })
             pending.cancel(false)
             assertNull(operations.submit(player) { 2 })
@@ -65,7 +67,7 @@ class IdeServerOperationsTest {
     fun `closing resolves replies and prevents new requests while late completion is harmless`() {
         val player = UUID.randomUUID()
         val completion = CompletableFuture<Int>()
-        val operations = IdeServerOperations()
+        val operations = ServerOperationScope()
         val pending = assertNotNull(operations.submit(player) { completion.awaitServerResult() })
         operations.close()
         assertTrue(pending.isCompletedExceptionally)

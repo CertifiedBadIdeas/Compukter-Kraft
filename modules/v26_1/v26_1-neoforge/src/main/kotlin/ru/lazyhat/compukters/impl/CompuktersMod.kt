@@ -50,6 +50,7 @@ class CompuktersMod(
         if (FMLEnvironment.getDist() == Dist.CLIENT) IdeClientBootstrap.register(eventBus)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onLevelSave)
         NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::onServerStarting)
+        NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onServerStarting)
         NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::afterServerTick)
         NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::onServerStopping)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onServerStopping)

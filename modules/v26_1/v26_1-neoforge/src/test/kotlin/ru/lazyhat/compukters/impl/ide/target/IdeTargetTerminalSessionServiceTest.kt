@@ -22,6 +22,8 @@ import ru.lazyhat.compukters.ide.client.target.IdeTargetId
 import ru.lazyhat.compukters.ide.client.target.IdeTargetProfileId
 import ru.lazyhat.compukters.ide.compiler.profile.TargetCompileProfile
 import ru.lazyhat.compukters.ide.project.ToolchainLockIdentity
+import ru.lazyhat.compukters.impl.network.awaitServerResult
+import ru.lazyhat.compukters.impl.network.serverOperation
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalCell
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalChange
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey

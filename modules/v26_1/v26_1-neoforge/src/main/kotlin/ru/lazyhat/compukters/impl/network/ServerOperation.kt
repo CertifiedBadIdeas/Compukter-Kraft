@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package ru.lazyhat.compukters.impl.ide.target
+package ru.lazyhat.compukters.impl.network
 
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException

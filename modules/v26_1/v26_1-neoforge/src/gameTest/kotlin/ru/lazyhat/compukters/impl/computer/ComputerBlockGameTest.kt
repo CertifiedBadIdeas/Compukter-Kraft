@@ -66,7 +66,7 @@ import ru.lazyhat.compukters.impl.ide.target.IdeTargetDeploymentOperations
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetFileSystemOperations
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetFileSystemService
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetLeaseService
-import ru.lazyhat.compukters.impl.ide.target.serverOperation
+import ru.lazyhat.compukters.impl.network.serverOperation
 import ru.lazyhat.compukters.impl.registry.CompuktersRegistry
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import ru.lazyhat.compukters.lang.runtime.fs.FileSystemStoreHealth
@@ -135,14 +135,20 @@ object ComputerBlockGameTest {
             helper.assertBlockPresent(block, position)
             val entity = helper.getBlockEntity(position, NeoForgeComputerBlockEntity::class.java)
             var persistenceStep: PersistenceStep? = null
+            var initialTerminal: CompletableFuture<TerminalState?>? = null
             helper.assertTrue(
                 entity.type === CompuktersRegistry.COMPUTER_BLOCK_ENTITY.get(),
                 "computer block created the wrong block entity type",
             )
             helper
                 .startSequence()
-                .thenWaitUntil { assertAutoBooted(helper, entity) }
-                .thenExecute {
+                .thenWaitUntil {
+                    if (entity.runtimeState != neverStarted() && initialTerminal == null) {
+                        initialTerminal = entity.terminalFullStateAsync()
+                    }
+                    helper.assertTrue(initialTerminal?.isDone == true, "computer terminal snapshot is still pending")
+                    assertPopulatedTerminal(helper, initialTerminal!!.getNow(null))
+                }.thenExecute {
                     helper.setBlock(position, Blocks.AIR)
                     helper.assertTrue(entity.isRemoved, "removing the block did not remove its computer block entity")
                     helper.assertTrue(entity.runtimeState == ProgramComputerState.Closed, "removing the block did not close its VM")
@@ -155,14 +161,18 @@ object ComputerBlockGameTest {
                     verifyIdeTargetFileImport(helper)
                     persistenceStep = verifyTombstoneRecovery(helper, position)
                 }.thenWaitUntil {
-                    helper.assertTrue(persistenceStep!!.ready(), "filesystem destruction or recovery is still pending")
+                    val step = persistenceStep
+                    helper.assertTrue(step != null, "filesystem destruction stage was not initialized")
+                    helper.assertTrue(step!!.ready(), "filesystem destruction or recovery is still pending")
                 }.thenExecute {
-                    persistenceStep!!.verify()
+                    requireNotNull(persistenceStep).verify()
                     persistenceStep = verifyTwoComputerWorldRestart(helper, position, position.east())
                 }.thenWaitUntil {
-                    helper.assertTrue(persistenceStep!!.ready(), "unloaded computers still own their filesystems")
+                    val step = persistenceStep
+                    helper.assertTrue(step != null, "filesystem reload stage was not initialized")
+                    helper.assertTrue(step!!.ready(), "unloaded computers still own their filesystems")
                 }.thenExecute {
-                    persistenceStep!!.verify()
+                    requireNotNull(persistenceStep).verify()
                 }.thenSucceed()
         }
 
@@ -171,12 +181,10 @@ object ComputerBlockGameTest {
         override fun typeDescription(): MutableComponent = Component.literal("Compukters computer lifecycle")
     }
 
-    private fun assertAutoBooted(
+    private fun assertPopulatedTerminal(
         helper: GameTestHelper,
-        entity: NeoForgeComputerBlockEntity,
+        populated: TerminalState?,
     ) {
-        helper.assertTrue(entity.runtimeState != neverStarted(), "computer did not auto-boot on the server ticker")
-        val populated = entity.terminalFullState()
         helper.assertTrue(populated != null, "running computer did not expose its Rust terminal")
         helper.assertTrue(populated!!.revision > 0, "terminal output was not committed")
         helper.assertTrue(
@@ -680,28 +688,28 @@ object ComputerBlockGameTest {
         val firstGeneration = writeFixture(firstContext.store, firstId, "filesystem-write.cpkt")
         val secondGeneration = writeFixture(secondContext.store, secondId, "filesystem-write-alternate.cpkt")
 
-        first.prepareTerminal()
-        second.prepareTerminal()
+        first.prepareTerminalAsync()
+        second.prepareTerminalAsync()
         val restoredFirst = reloadComputer(helper, firstPosition, firstId)
         val restoredSecond = reloadComputer(helper, secondPosition, secondId)
         return PersistenceStep(
             ready = {
                 // Tickers may already have reattached a ready machine before this sequence runs.
                 (
-                    restoredFirst.terminalFullState() != null ||
+                    restoredFirst.runtimeState != neverStarted() ||
                         NeoForgeWorldFileSystemStores.contextSource.available(
                             helper.level,
                             firstId,
                         )
                 ) &&
                     (
-                        restoredSecond.terminalFullState() != null ||
+                        restoredSecond.runtimeState != neverStarted() ||
                             NeoForgeWorldFileSystemStores.contextSource.available(helper.level, secondId)
                     )
             },
             verify = {
-                restoredFirst.prepareTerminal()
-                restoredSecond.prepareTerminal()
+                restoredFirst.prepareTerminalAsync()
+                restoredSecond.prepareTerminalAsync()
 
                 NeoForgeWorldFileSystemStores.onLevelSave(LevelEvent.Save(helper.level))
                 helper.assertTrue(

@@ -38,6 +38,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalModifier
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
+import java.util.concurrent.CompletableFuture
 
 open class ComputerBlockEntity internal constructor(
     type: BlockEntityType<*>,
@@ -89,14 +90,27 @@ open class ComputerBlockEntity internal constructor(
 
     fun terminalFullState(): TerminalState? = carrier?.terminalFullState()
 
+    fun terminalFullStateAsync(): CompletableFuture<TerminalState?> =
+        carrier?.terminalFullStateAsync() ?: CompletableFuture.completedFuture(null)
+
     fun prepareTerminal(): TerminalState? {
         if (carrier == null && !filesystemAvailable()) return null
-        val current = carrier ?: createCarrier().also { carrier = it }
+        val current = carrier ?: createCarrier()?.also { carrier = it } ?: return null
         if (current.state == neverStarted()) runtimeState = current.turnOn()
         return current.terminalFullState()
     }
 
+    fun prepareTerminalAsync(): CompletableFuture<TerminalState?> {
+        if (carrier == null && !filesystemAvailable()) return CompletableFuture.completedFuture(null)
+        val current = carrier ?: createCarrier()?.also { carrier = it } ?: return CompletableFuture.completedFuture(null)
+        if (current.state == neverStarted()) runtimeState = current.turnOn()
+        return current.terminalFullStateAsync()
+    }
+
     fun terminalChangesSince(revision: Long): TerminalUpdate? = carrier?.terminalChangesSince(revision)
+
+    fun terminalChangesSinceAsync(revision: Long): CompletableFuture<TerminalUpdate?> =
+        carrier?.terminalChangesSinceAsync(revision) ?: CompletableFuture.completedFuture(null)
 
     fun submitTerminalKey(
         key: TerminalKey,
@@ -104,19 +118,44 @@ open class ComputerBlockEntity internal constructor(
         modifiers: Set<TerminalModifier> = emptySet(),
     ): Boolean = carrier?.sendTerminalKey(key, action, modifiers) == true
 
+    fun submitTerminalKeyAsync(
+        key: TerminalKey,
+        action: TerminalKeyAction,
+        modifiers: Set<TerminalModifier> = emptySet(),
+    ): CompletableFuture<Boolean> = carrier?.sendTerminalKeyAsync(key, action, modifiers) ?: CompletableFuture.completedFuture(false)
+
     fun submitTerminalText(value: String): Boolean = carrier?.sendTerminalText(value) == true
+
+    fun submitTerminalTextAsync(value: String): CompletableFuture<Boolean> =
+        carrier?.sendTerminalTextAsync(value) ?: CompletableFuture.completedFuture(false)
 
     fun verifyForDeploy(artifact: ByteArray): ProgramDeploymentCandidate? = carrier?.verifyForDeploy(artifact)
 
+    fun verifyForDeployAsync(artifact: ByteArray) =
+        carrier?.verifyForDeployAsync(artifact) ?: CompletableFuture.completedFuture<ProgramDeploymentCandidate?>(null)
+
     fun executableRevision(path: String): VmExecutableRevision? = carrier?.executableRevision(path)
 
+    fun executableRevisionAsync(path: String) =
+        carrier?.executableRevisionAsync(path) ?: CompletableFuture.completedFuture<VmExecutableRevision?>(null)
+
     fun fileStat(path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) = carrier?.fileStat(path)
+
+    fun fileStatAsync(path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) =
+        carrier?.fileStatAsync(path) ?: CompletableFuture.completedFuture<ru.lazyhat.compukters.lang.runtime.fs.VmFileStat?>(null)
 
     fun fileList(
         path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
         startAfter: String?,
         maximumEntries: Int,
     ) = carrier?.fileList(path, startAfter, maximumEntries)
+
+    fun fileListAsync(
+        path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
+        startAfter: String?,
+        maximumEntries: Int,
+    ) = carrier?.fileListAsync(path, startAfter, maximumEntries)
+        ?: CompletableFuture.completedFuture<ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing?>(null)
 
     fun fileRead(
         path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
@@ -125,13 +164,30 @@ open class ComputerBlockEntity internal constructor(
         expectedGeneration: Long,
     ) = carrier?.fileRead(path, offset, maximumBytes, expectedGeneration)
 
+    fun fileReadAsync(
+        path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
+        offset: Long,
+        maximumBytes: Int,
+        expectedGeneration: Long,
+    ) = carrier?.fileReadAsync(path, offset, maximumBytes, expectedGeneration)
+        ?: CompletableFuture.completedFuture<ru.lazyhat.compukters.lang.runtime.fs.VmFileChunk?>(null)
+
     fun deploy(
         path: String,
         expected: VmExecutableRevision,
         candidate: ProgramDeploymentCandidate,
     ): VmExecutableRevision? = carrier?.deploy(path, expected, candidate)
 
+    fun deployAsync(
+        path: String,
+        expected: VmExecutableRevision,
+        candidate: ProgramDeploymentCandidate,
+    ) = carrier?.deployAsync(path, expected, candidate) ?: CompletableFuture.completedFuture<VmExecutableRevision?>(null)
+
     fun submitCanonicalLine(line: CharArray): Boolean = carrier?.submitCanonicalLine(line) == true
+
+    fun submitCanonicalLineAsync(line: CharArray): CompletableFuture<Boolean> =
+        carrier?.submitCanonicalLineAsync(line) ?: CompletableFuture.completedFuture(false)
 
     internal fun redstoneOutput(direction: Direction): Int =
         redstoneOutputField(committedRedstoneOutput, localSide(blockState.getValue(ComputerBlock.FACING), direction))
@@ -164,7 +220,7 @@ open class ComputerBlockEntity internal constructor(
 
     internal fun serverTick() {
         if (carrier == null && !filesystemAvailable()) return
-        val current = carrier ?: createCarrier().also { carrier = it }
+        val current = carrier ?: createCarrier()?.also { carrier = it } ?: return
         if (current.state == neverStarted()) {
             runtimeState = current.turnOn()
         }
@@ -172,10 +228,14 @@ open class ComputerBlockEntity internal constructor(
         if (serverLevel != null) {
             sampleRedstoneInputs { direction ->
                 serverLevel.getSignal(blockPos.relative(direction), direction)
-            }?.let(current::submitRedstoneInput)
+            }?.let { packet ->
+                current.submitRedstoneInputAsync(packet).whenComplete { accepted, failure ->
+                    if (failure != null || accepted != true) markRedstoneInputDirty()
+                }
+            }
         }
         if (runtimeState.isPoweredOn()) {
-            runtimeState = current.serverTick()
+            runtimeState = current.serverTick(serverLevel?.server?.tickCount?.toLong() ?: 0L)
         }
     }
 
@@ -212,9 +272,9 @@ open class ComputerBlockEntity internal constructor(
         payload.putInt(REDSTONE_OUTPUT_KEY, committedRedstoneOutput)
     }
 
-    private fun createCarrier(): ComputerCarrier {
+    private fun createCarrier(): ComputerCarrier? {
         val deviceId = blockPos.hashCode()
-        terminalMachineId = nextMachineId()
+        val machineId = nextMachineId()
         val filesystem =
             (level as? ServerLevel)?.let { serverLevel ->
                 filesystemContextSource?.create(serverLevel, identity.id(), SystemRomImage.packaged())
@@ -222,16 +282,15 @@ open class ComputerBlockEntity internal constructor(
         val created =
             carrierFactory.create(
                 deviceId = deviceId,
+                machineEpoch = machineId,
                 stateSink = { _, state -> runtimeState = state },
                 filesystem = filesystem,
                 redstoneHostPort = redstoneHostPort,
                 initialRedstoneOutput = committedRedstoneOutput,
             )
-        filesystemLease =
-            filesystem?.attach(created::filesystemGeneration) {
-                java.util.concurrent.CompletableFuture
-                    .completedFuture(drainCarrier())
-            }
+        if (created == null) return null
+        terminalMachineId = machineId
+        filesystemLease = filesystem?.attach(created::filesystemGeneration, ::drainCarrier)
         return created
     }
 
@@ -257,26 +316,19 @@ open class ComputerBlockEntity internal constructor(
 
     private fun closeCarrier() {
         val current = carrier
-        val generation = current?.filesystemGeneration()
-        current?.close()
         carrier = null
         terminalMachineId = null
-        filesystemLease
-            ?.release(
-                java.util.concurrent.CompletableFuture
-                    .completedFuture(generation),
-            )?.getNow(null)
+        val closed = current?.closeAsync() ?: CompletableFuture.completedFuture<Long?>(null)
+        filesystemLease?.release(closed)?.whenComplete { _, _ -> }
         filesystemLease = null
     }
 
-    private fun drainCarrier(): Long? {
+    private fun drainCarrier(): CompletableFuture<Long?> {
         val current = carrier
-        val generation = current?.filesystemGeneration()
-        current?.close()
         carrier = null
         terminalMachineId = null
         filesystemLease = null
-        return generation
+        return current?.closeAsync() ?: CompletableFuture.completedFuture(null)
     }
 
     private fun nextMachineId(): Long {

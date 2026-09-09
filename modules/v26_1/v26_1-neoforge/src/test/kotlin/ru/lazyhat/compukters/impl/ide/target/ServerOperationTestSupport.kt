@@ -18,6 +18,8 @@
 
 package ru.lazyhat.compukters.impl.ide.target
 
+import ru.lazyhat.compukters.impl.network.serverOperation
+
 internal fun runServerTest(operation: suspend () -> Unit) {
     val result = serverOperation(operation)
     check(result.isDone) { "test unexpectedly suspended; drive its pending actor response explicitly" }

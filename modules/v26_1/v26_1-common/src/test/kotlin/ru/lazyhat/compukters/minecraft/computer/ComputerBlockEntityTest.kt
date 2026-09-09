@@ -142,6 +142,32 @@ class ComputerBlockEntityTest {
     }
 
     @Test
+    fun `server tick retries a carrier rejected by scheduler capacity`() {
+        var attempts = 0
+        lateinit var accepted: FakeCarrier
+        val entity =
+            TestComputerBlockEntity(
+                ComputerCarrierFactory { deviceId, _, stateSink, _, redstoneHostPort, initialRedstoneOutput ->
+                    attempts++
+                    if (attempts == 1) {
+                        null
+                    } else {
+                        FakeCarrier(deviceId, stateSink, redstoneHostPort, initialRedstoneOutput).also { accepted = it }
+                    }
+                },
+            )
+
+        entity.serverTick()
+        assertNull(entity.terminalMachineId)
+        assertEquals(neverStarted(), entity.runtimeState)
+
+        entity.serverTick()
+        assertTrue(requireNotNull(entity.terminalMachineId) > 0)
+        assertEquals(1, accepted.turnOnCalls)
+        assertEquals(1, accepted.serverTickCalls)
+    }
+
+    @Test
     fun `server tick keeps advancing while compiler completion is pending`() {
         val fixture = fixture()
         fixture.entity.serverTick()
@@ -235,7 +261,7 @@ class ComputerBlockEntityTest {
         val carriers = mutableListOf<FakeCarrier>()
         val entity =
             TestComputerBlockEntity(
-                ComputerCarrierFactory { deviceId, stateSink, _, redstoneHostPort, initialRedstoneOutput ->
+                ComputerCarrierFactory { deviceId, _, stateSink, _, redstoneHostPort, initialRedstoneOutput ->
                     FakeCarrier(deviceId, stateSink, redstoneHostPort, initialRedstoneOutput).also(carriers::add)
                 },
             )
@@ -289,7 +315,7 @@ class ComputerBlockEntityTest {
             return publishState(ProgramComputerState.Running)
         }
 
-        override fun serverTick(): ProgramComputerState {
+        override fun serverTick(worldTick: Long): ProgramComputerState {
             serverTickCalls++
             return state
         }

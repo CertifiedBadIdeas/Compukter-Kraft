@@ -24,6 +24,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext
 import ru.lazyhat.compukters.core.MOD_ID
 import ru.lazyhat.compukters.ide.client.target.IdeTargetFailure
 import ru.lazyhat.compukters.ide.client.target.IdeTargetFailureKind
+import ru.lazyhat.compukters.impl.network.ServerOperationScope
 import java.util.WeakHashMap
 
 @EventBusSubscriber(modid = MOD_ID)
@@ -200,7 +201,7 @@ internal object IdeTargetNetwork {
     ) : AutoCloseable {
         private val leases = IdeTargetLeaseService(NeoForgeIdeTargetResolver(server))
         private val deployments = IdeTargetDeploymentService(leases)
-        val operations = IdeServerOperations()
+        val operations = ServerOperationScope()
         val terminals = IdeTargetTerminalSessionService(leases)
         val processor = IdeTargetRequestProcessor(leases, deployments)
         private val server = server
