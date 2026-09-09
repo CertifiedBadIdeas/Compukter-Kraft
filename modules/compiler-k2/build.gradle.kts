@@ -293,6 +293,7 @@ val shellArtifact = layout.buildDirectory.file("generated/system/shell.cpkt")
 val kotlincArtifact = layout.buildDirectory.file("generated/system/kotlinc.cpkt")
 val editArtifact = layout.buildDirectory.file("generated/system/edit.cpkt")
 val vmbenchArtifact = layout.buildDirectory.file("generated/system/vmbench.cpkt")
+val vmbenchAgentArtifact = layout.buildDirectory.file("generated/system/vmbench-agent.cpkt")
 
 val generateKotlinSubsetConformanceArtifact = tasks.register<Test>("generateKotlinSubsetConformanceArtifact") {
     dependsOn(tasks.jar)
@@ -514,11 +515,30 @@ val generateVmbenchArtifact = tasks.register<Test>("generateVmbenchArtifact") {
     classpath = sourceSets.test.get().runtimeClasspath
     filter.includeTestsMatching("*checked in vm benchmark compiles deterministically*")
     inputs.file(rootProject.file("system/programs/vmbench.kt"))
+    inputs.file(rootProject.file("system/programs/vmbench-workload.kt"))
     inputs.file(workerJar)
     outputs.file(vmbenchArtifact)
     doFirst {
         systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
         systemProperty("compukters.vmbench.artifact", vmbenchArtifact.get().asFile.absolutePath)
+    }
+}
+
+val generateVmbenchAgentArtifact = tasks.register<Test>("generateVmbenchAgentArtifact") {
+    description = "Compiles the checked-in headless VM benchmark agent into a Compukter Artifact."
+    group = "build"
+    dependsOn(tasks.jar)
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("*checked in vm benchmark agent compiles deterministically*")
+    inputs.file(rootProject.file("system/programs/vmbench-agent.kt"))
+    inputs.file(rootProject.file("system/programs/vmbench-workload.kt"))
+    inputs.file(workerJar)
+    outputs.file(vmbenchAgentArtifact)
+    doFirst {
+        systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
+        systemProperty("compukters.vmbenchAgent.artifact", vmbenchAgentArtifact.get().asFile.absolutePath)
     }
 }
 

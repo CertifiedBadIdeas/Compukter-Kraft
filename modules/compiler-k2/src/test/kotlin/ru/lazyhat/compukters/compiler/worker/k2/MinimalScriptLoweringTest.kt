@@ -1429,14 +1429,38 @@ class MinimalScriptLoweringTest {
     fun `checked in vm benchmark compiles deterministically`() =
         withAdapter { adapter ->
             val source = Path.of("../..", "system/programs/vmbench.kt").readText()
-            val first = adapter.compile(request("system/programs/vmbench.kt" to source))
-            val second = adapter.compile(request("system/programs/vmbench.kt" to source))
+            val workload = Path.of("../..", "system/programs/vmbench-workload.kt").readText()
+            val first = adapter.compile(request("system/programs/vmbench-workload.kt" to workload, "system/programs/vmbench.kt" to source))
+            val second = adapter.compile(request("system/programs/vmbench-workload.kt" to workload, "system/programs/vmbench.kt" to source))
 
             val artifact = assertNotNull(first.artifact, first.diagnostics.joinToString()).toByteArray()
             assertContentEquals(artifact, assertNotNull(second.artifact).toByteArray())
             assertOrdinaryEntry(artifact)
             assertTrue(first.diagnostics.none { it.severity.name == "ERROR" }, first.diagnostics.toString())
             System.getProperty("compukters.vmbench.artifact")?.let { output ->
+                Path.of(output).also { it.parent.createDirectories() }.writeBytes(artifact)
+            }
+        }
+
+    @Test
+    fun `checked in vm benchmark agent compiles deterministically`() =
+        withAdapter { adapter ->
+            val source = Path.of("../..", "system/programs/vmbench-agent.kt").readText()
+            val workload = Path.of("../..", "system/programs/vmbench-workload.kt").readText()
+            val first =
+                adapter.compile(
+                    request("system/programs/vmbench-agent.kt" to source, "system/programs/vmbench-workload.kt" to workload),
+                )
+            val second =
+                adapter.compile(
+                    request("system/programs/vmbench-agent.kt" to source, "system/programs/vmbench-workload.kt" to workload),
+                )
+
+            val artifact = assertNotNull(first.artifact, first.diagnostics.joinToString()).toByteArray()
+            assertContentEquals(artifact, assertNotNull(second.artifact).toByteArray())
+            assertOrdinaryEntry(artifact)
+            assertTrue(first.diagnostics.none { it.severity.name == "ERROR" }, first.diagnostics.toString())
+            System.getProperty("compukters.vmbenchAgent.artifact")?.let { output ->
                 Path.of(output).also { it.parent.createDirectories() }.writeBytes(artifact)
             }
         }

@@ -30,6 +30,7 @@ val shellArtifact = project(":compiler-k2").layout.buildDirectory.file("generate
 val kotlincArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/system/kotlinc.cpkt")
 val editArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/system/edit.cpkt")
 val vmbenchArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/system/vmbench.cpkt")
+val vmbenchAgentArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/system/vmbench-agent.cpkt")
 val toolingRuntimeBundle = project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.zip.xz")
 val toolingRuntimeManifest = project(":tooling-runtime").layout.buildDirectory.file("distributions/k2-tooling-workers.bundle")
 
@@ -40,6 +41,7 @@ tasks.processResources {
         ":compiler-k2:generateKotlincArtifact",
         ":compiler-k2:generateEditArtifact",
         ":compiler-k2:generateVmbenchArtifact",
+        ":compiler-k2:generateVmbenchAgentArtifact",
         ":tooling-runtime:toolingRuntimeBundle",
         ":tooling-runtime:toolingRuntimeManifest",
     )
@@ -62,6 +64,10 @@ tasks.processResources {
     from(vmbenchArtifact) {
         into("system/programs")
         rename { "vmbench" }
+    }
+    from(vmbenchAgentArtifact) {
+        into("system/programs")
+        rename { "vmbench-agent" }
     }
     from(toolingRuntimeBundle) {
         into("tooling/workers")

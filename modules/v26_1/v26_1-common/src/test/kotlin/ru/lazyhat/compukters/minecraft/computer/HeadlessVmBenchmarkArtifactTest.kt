@@ -16,29 +16,21 @@
  * limitations under the License.
  */
 
-package compukter.system.vmbench
+package ru.lazyhat.compukters.minecraft.computer
 
-import compukter.io.Stderr
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertFalse
 
-fun main(args: Array<String>) {
-    if (args.size != 2 || args[0] != "cpu") {
-        writeUsage()
-        return
+class HeadlessVmBenchmarkArtifactTest {
+    @Test
+    fun `packaged agent is present and returned as a defensive copy`() {
+        val first = HeadlessVmBenchmarkArtifact.packaged()
+        val expected = first.copyOf()
+        assertFalse(first.isEmpty())
+
+        first.fill(0)
+
+        assertContentEquals(expected, HeadlessVmBenchmarkArtifact.packaged())
     }
-    val rounds = parseVmbenchRounds(args[1])
-    if (rounds == 0) {
-        writeUsage()
-        return
-    }
-
-    print("vmbench cpu: rounds=")
-    print(rounds)
-    println(", iterations per round=1024")
-    val checksum = runVmbenchCpu(rounds)
-    print("vmbench cpu: checksum=")
-    println(checksum)
-}
-
-private fun writeUsage() {
-    Stderr.write("usage: vmbench cpu <rounds 1..1000000>\n")
 }

@@ -67,6 +67,24 @@ import kotlin.test.assertTrue
 
 class ProgramRuntimeHostIntegrationTest {
     @Test
+    fun `headless benchmark accepts rounds through terminal input and halts with deterministic checksum`() {
+        VmRuntime.loadNativeLibrary(Path.of(requiredProperty("compukters.ffi.library")))
+        val artifact = Path.of(requiredProperty("compukters.vmbenchAgentRuntime.artifact")).readBytes()
+        assertTrue(VmArtifactVerifier.verify(artifact))
+
+        ProgramRuntimeHost().use { host ->
+            assertEquals(ProgramStartResult.Started, host.start(artifact))
+            advanceUntil(host) { it == ProgramRuntimeState.WaitingForInput }
+            assertTrue(host.sendTerminalText("2"))
+            advanceUntil(host) { it is ProgramRuntimeState.Halted }
+            assertEquals(
+                "vmbench agent: rounds=2\nvmbench agent: checksum=-365826314\n",
+                terminalText(requireNotNull(host.terminalFullState())),
+            )
+        }
+    }
+
+    @Test
     fun `ROM boot runs a foreground child and reboot creates a fresh shell`() {
         VmRuntime.loadNativeLibrary(Path.of(requiredProperty("compukters.ffi.library")))
         val boot = Path.of(requiredProperty("compukters.bootRuntime.artifact")).readBytes()

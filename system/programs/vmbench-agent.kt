@@ -19,26 +19,20 @@
 package compukter.system.vmbench
 
 import compukter.io.Stderr
+import compukter.terminal.Terminal
 
-fun main(args: Array<String>) {
-    if (args.size != 2 || args[0] != "cpu") {
-        writeUsage()
-        return
-    }
-    val rounds = parseVmbenchRounds(args[1])
+fun main() {
+    val event = Terminal.awaitEvent()
+    val rounds = if (event == 1) parseVmbenchRounds(Terminal.eventText()) else 0
+    Terminal.finishEvent()
     if (rounds == 0) {
-        writeUsage()
+        Stderr.write("vmbench agent requires rounds 1..1000000\n")
         return
     }
 
-    print("vmbench cpu: rounds=")
-    print(rounds)
-    println(", iterations per round=1024")
+    print("vmbench agent: rounds=")
+    println(rounds)
     val checksum = runVmbenchCpu(rounds)
-    print("vmbench cpu: checksum=")
+    print("vmbench agent: checksum=")
     println(checksum)
-}
-
-private fun writeUsage() {
-    Stderr.write("usage: vmbench cpu <rounds 1..1000000>\n")
 }
