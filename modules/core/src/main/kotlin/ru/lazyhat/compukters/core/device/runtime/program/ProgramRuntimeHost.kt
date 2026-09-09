@@ -75,6 +75,8 @@ class ProgramRuntimeHost internal constructor(
     private var activeVmEpoch = 0L
     private var pendingCompilation: ComputerCompilationAddress? = null
     private var pendingRedstoneCommit: PendingRedstoneCommit? = null
+    internal var lastClosedFileSystemGeneration: Long? = null
+        private set
     private var confirmedRedstoneOutput = RedstoneWire.requireOutputRegister(initialRedstoneOutput)
     private var lastRedstoneInput = 0
     var state: ProgramRuntimeState = ProgramRuntimeState.Idle
@@ -521,7 +523,11 @@ class ProgramRuntimeHost internal constructor(
         pendingRedstoneCommit = null
         activeVmEpoch = 0
         try {
-            session?.close()
+            try {
+                session?.filesystemGeneration()?.let { lastClosedFileSystemGeneration = it }
+            } finally {
+                session?.close()
+            }
         } finally {
             session = null
         }

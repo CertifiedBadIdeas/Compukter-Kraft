@@ -104,6 +104,13 @@ callbacks on the server thread. Stopping removes the service before closing it, 
 The production computer carrier still uses the synchronous host below until terminal, deployment, filesystem, and
 save/unload operations have all been adapted to actor ownership.
 
+`ActorProgramComputer` is the asynchronous carrier implementation for that migration. Its server-side state is an
+observation from actor replies, and terminal, filesystem, deployment, and input requests return futures. It keeps at
+most one advance in flight, suppresses obsolete lifecycle replies, and performs redstone world commits on its owning
+server thread. A full actor mailbox retains the redstone acknowledgement for retry without repeating the mutation.
+Its close future reports the final filesystem generation after accepted work drains and native resources close; this
+barrier does not depend on server result pumping and may complete on a worker thread.
+
 `ProgramRuntimeHost` owns one current Rust `ComputerMachine`, advances it with bounded guest and maintenance budgets,
 commits terminal changes once per active server tick, and exposes typed full/delta states and failures through JDK 25
 FFM. It does not own a second grid or output transcript. It is loader-independent and server-thread confined.

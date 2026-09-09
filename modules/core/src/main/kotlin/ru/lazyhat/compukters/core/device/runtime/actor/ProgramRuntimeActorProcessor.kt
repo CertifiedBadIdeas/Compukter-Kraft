@@ -30,6 +30,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentConflictException
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentFileSystemException
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentProfileChangedException
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentWrongMachineException
+import java.util.concurrent.CompletableFuture
 
 internal class ProgramRuntimeActorProcessor(
     private val host: ProgramRuntimeHost,
@@ -38,11 +39,13 @@ internal class ProgramRuntimeActorProcessor(
     private val deploymentCandidates = mutableMapOf<ProgramDeploymentToken, ProgramDeploymentCandidate>()
     private var nextDeploymentToken = 0L
     private var pendingRedstoneRequest: ProgramRuntimeRequestId? = null
+    val closed = CompletableFuture<Long?>()
+    private var lastFileSystemGeneration: Long? = null
 
     override fun process(command: ProgramRuntimeActorCommand): ProgramRuntimeActorReply {
         val value =
             try {
-                execute(command)
+                execute(command).also { captureGeneration() }
             } catch (failure: VmFileSystemReadException) {
                 ProgramRuntimeActorValue.Rejected(ProgramRuntimeActorFailure.FileSystem(failure.failure))
             } catch (_: VmDeploymentConflictException) {
@@ -64,18 +67,20 @@ internal class ProgramRuntimeActorProcessor(
                     ProgramRuntimeActorFailure.Bridge(failure.message ?: "native VM bridge failure"),
                 )
             }
-        return ProgramRuntimeActorReply(command.requestId, host.state, value)
+        return ProgramRuntimeActorReply(command.requestId, host.state, value, lastFileSystemGeneration)
     }
 
     private fun execute(command: ProgramRuntimeActorCommand): ProgramRuntimeActorValue =
         when (command) {
             is ProgramRuntimeActorCommand.Start -> {
+                captureGeneration()
                 pendingRedstoneRequest = null
                 discardAllCandidates()
                 ProgramRuntimeActorValue.Start(host.start(command.artifactBytes()))
             }
 
             is ProgramRuntimeActorCommand.StartBoot -> {
+                captureGeneration()
                 pendingRedstoneRequest = null
                 discardAllCandidates()
                 ProgramRuntimeActorValue.Start(host.startBoot())
@@ -160,6 +165,7 @@ internal class ProgramRuntimeActorProcessor(
             }
 
             is ProgramRuntimeActorCommand.Shutdown -> {
+                captureGeneration()
                 pendingRedstoneRequest = null
                 discardAllCandidates()
                 host.shutdown()
@@ -167,6 +173,7 @@ internal class ProgramRuntimeActorProcessor(
             }
 
             is ProgramRuntimeActorCommand.Reboot -> {
+                captureGeneration()
                 pendingRedstoneRequest = null
                 discardAllCandidates()
                 host.shutdown()
@@ -197,9 +204,21 @@ internal class ProgramRuntimeActorProcessor(
 
     override fun close() {
         try {
-            discardAllCandidates()
-        } finally {
-            host.close()
+            val generation =
+                try {
+                    captureGeneration()
+                    lastFileSystemGeneration
+                } finally {
+                    try {
+                        discardAllCandidates()
+                    } finally {
+                        host.close()
+                    }
+                }
+            closed.complete(generation)
+        } catch (failure: Throwable) {
+            closed.completeExceptionally(failure)
+            throw failure
         }
     }
 
@@ -207,6 +226,10 @@ internal class ProgramRuntimeActorProcessor(
         val candidates = deploymentCandidates.values.toList()
         deploymentCandidates.clear()
         candidates.forEach(ProgramDeploymentCandidate::close)
+    }
+
+    private fun captureGeneration() {
+        (host.filesystemGeneration() ?: host.lastClosedFileSystemGeneration)?.let { lastFileSystemGeneration = it }
     }
 
     private fun ProgramDeploymentCandidate.closeAndConfirm(): Boolean {

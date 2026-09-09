@@ -202,6 +202,7 @@ data class ProgramRuntimeActorReply(
     val requestId: ProgramRuntimeRequestId,
     val state: ProgramRuntimeState,
     val value: ProgramRuntimeActorValue,
+    val fileSystemGeneration: Long? = null,
 )
 
 sealed interface ProgramRuntimeActorValue {

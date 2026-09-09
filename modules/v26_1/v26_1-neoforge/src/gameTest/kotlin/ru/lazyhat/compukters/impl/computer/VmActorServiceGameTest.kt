@@ -26,10 +26,16 @@ import net.minecraft.gametest.framework.TestData
 import net.minecraft.gametest.framework.TestEnvironmentDefinition
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.MutableComponent
+import ru.lazyhat.compukters.core.device.computer.ActorProgramComputer
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorCommand
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorValue
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEndpoint
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
+import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
+import ru.lazyhat.compukters.lang.runtime.fs.WorldFileSystemStore
+import java.nio.file.Files
+import java.util.concurrent.CompletableFuture
 
 internal class VmActorServiceGameTest(
     testData: TestData<Holder<TestEnvironmentDefinition<*>>>,
@@ -38,24 +44,43 @@ internal class VmActorServiceGameTest(
         val server = helper.level.server
         val service = NeoForgeVmActorServices.service(server)
         val endpoint = VmActorEndpoint(ComputerId.fromLongs(603, 1), 1)
-        helper.assertTrue(service.registerStandalone(endpoint), "actor endpoint was not registered")
-        val reply = service.request(endpoint, ProgramRuntimeActorCommand::TerminalFullState)
+        val rom = ComputerBlockGameTest.processTestRom()
+        val store = WorldFileSystemStore.open(Files.createTempDirectory("compukters-actor-gametest-"))
+        val lease = requireNotNull(service.attachBootable(endpoint, store, rom))
+        val computer = ActorProgramComputer(service, lease, { RedstoneCommitResult.Committed })
+        val boot = computer.turnOn()
         var deliveredOnServer = false
-        val observed = reply.thenAccept { deliveredOnServer = server.isSameThread }
+        val observed = boot.thenAccept { deliveredOnServer = server.isSameThread }
+        var terminal: CompletableFuture<ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorReply>? = null
+        var closed: CompletableFuture<Long?>? = null
         helper
             .startSequence()
             .thenWaitUntil {
                 helper.assertTrue(observed.isDone, "server tick did not deliver the actor reply")
             }.thenExecute {
                 helper.assertTrue(deliveredOnServer, "actor callback ran outside the server thread")
+            }.thenWaitUntil {
+                computer.serverTick(server.tickCount.toLong())
+                helper.assertTrue(computer.state == ProgramRuntimeState.WaitingForInput, "actor shell did not become ready")
+            }.thenExecute {
+                terminal = computer.request(ProgramRuntimeActorCommand::TerminalFullState)
+            }.thenWaitUntil {
+                helper.assertTrue(terminal!!.isDone, "terminal snapshot was not delivered")
+            }.thenExecute {
+                val snapshot = terminal!!.getNow(null).value as ProgramRuntimeActorValue.TerminalStateValue
                 helper.assertTrue(
-                    reply.getNow(null).value is ProgramRuntimeActorValue.TerminalStateValue,
-                    "actor returned an unexpected reply",
+                    snapshot.state != null,
+                    "actor boot did not publish a native terminal",
                 )
             }.thenExecute {
-                service.unregister(endpoint)
+                closed = computer.closeAsync()
             }.thenWaitUntil {
-                helper.assertTrue(service.metrics().registeredActors == 0, "actor did not close on its worker")
+                helper.assertTrue(closed!!.isDone, "actor did not close on its worker")
+            }.thenExecute {
+                val generation = closed!!.getNow(null)
+                helper.assertTrue(generation != null, "actor close did not report its final filesystem generation")
+                store.flush(endpoint.computerId, requireNotNull(generation))
+                store.close()
             }.thenSucceed()
     }
 

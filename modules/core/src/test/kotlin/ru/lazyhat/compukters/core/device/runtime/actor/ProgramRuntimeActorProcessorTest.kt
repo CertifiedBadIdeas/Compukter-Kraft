@@ -18,6 +18,7 @@
 
 package ru.lazyhat.compukters.core.device.runtime.actor
 
+import ru.lazyhat.compukters.core.device.computer.ActorProgramComputer
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandidate
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeHost
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
@@ -56,6 +57,59 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ProgramRuntimeActorProcessorTest {
+    @Test
+    fun `async carrier commits world output on its owner and closes without pumping late replies`() {
+        val owner = Thread.currentThread()
+        val session = RecordingSession()
+        val port = ActorRedstoneHostPort()
+        val host =
+            ProgramRuntimeHost(
+                object : ProgramVmSessionFactory {
+                    override fun open(artifact: ByteArray): ProgramVmSession = session
+
+                    override fun boot(): ProgramVmSession = session
+                },
+                redstoneHostPort = port,
+            )
+        val endpoint = VmActorEndpoint(ComputerId.fromLongs(7, 8), 1)
+        ProgramRuntimeActorService(schedulerConfig()).use { service ->
+            var commits = 0
+            val carrier =
+                ActorProgramComputer(service, requireNotNull(service.attach(endpoint, host, port)), {
+                    assertEquals(owner, Thread.currentThread())
+                    commits++
+                    RedstoneCommitResult.Committed
+                })
+            val boot = carrier.turnOn()
+
+            fun awaitQueuedResult() {
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
+                while (service.metrics().queuedResults == 0 && System.nanoTime() < deadline) Thread.onSpinWait()
+                assertTrue(service.metrics().queuedResults > 0)
+            }
+            awaitQueuedResult()
+            service.pump(1)
+            assertTrue(boot.isDone)
+            session.nextOutcome =
+                VmOutcome.HostRequestBatch(
+                    listOf(VmHostRequest(1, REDSTONE, 6, listOf(VmValue.I32(2), VmValue.I32(7)))),
+                )
+            carrier.serverTick(1)
+            awaitQueuedResult()
+            repeat(10) { carrier.serverTick(it.toLong() + 2) }
+            assertEquals(1, service.metrics().queuedResults)
+            service.pump(1)
+            assertEquals(1, commits)
+            awaitQueuedResult()
+            val closed = carrier.closeAsync()
+            assertEquals(7L, closed.get(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+            assertEquals(1, session.closeCalls)
+            service.pump(32)
+            assertEquals(ProgramRuntimeState.Closed, carrier.state)
+            assertEquals(1, commits)
+        }
+    }
+
     @Test
     fun `prepared deployments keep independent tokens until discarded`() {
         val session = RecordingSession()

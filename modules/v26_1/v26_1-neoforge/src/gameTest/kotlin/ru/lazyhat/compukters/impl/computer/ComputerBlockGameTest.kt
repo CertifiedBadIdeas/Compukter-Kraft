@@ -602,7 +602,7 @@ object ComputerBlockGameTest {
         return output.toString().trimEnd('\n') + '\n'
     }
 
-    private fun processTestRom(): ByteArray {
+    internal fun processTestRom(): ByteArray {
         val programs =
             listOf(
                 "/rom/boot" to resource("/system/programs/boot"),

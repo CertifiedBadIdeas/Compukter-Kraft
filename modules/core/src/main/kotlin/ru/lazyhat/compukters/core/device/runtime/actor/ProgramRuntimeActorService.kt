@@ -39,7 +39,12 @@ class ProgramRuntimeActorService(
     fun registerStandalone(
         endpoint: VmActorEndpoint,
         tickBudget: ProgramTickBudget = ProgramTickBudget(),
-    ): Boolean = register(endpoint, ProgramRuntimeHost(tickBudget))
+    ): Boolean = attachStandalone(endpoint, tickBudget) != null
+
+    fun attachStandalone(
+        endpoint: VmActorEndpoint,
+        tickBudget: ProgramTickBudget = ProgramTickBudget(),
+    ): ProgramRuntimeActorLease? = attach(endpoint, ProgramRuntimeHost(tickBudget))
 
     fun registerBootable(
         endpoint: VmActorEndpoint,
@@ -48,21 +53,38 @@ class ProgramRuntimeActorService(
         tickBudget: ProgramTickBudget = ProgramTickBudget(),
         compilerRouter: CompilerCompletionRouter? = null,
         initialRedstoneOutput: Int = 0,
-    ): Boolean {
-        val redstonePort = ActorRedstoneHostPort()
-        return register(
-            endpoint,
+    ): Boolean = attachBootable(endpoint, store, romImage, tickBudget, compilerRouter, initialRedstoneOutput) != null
+
+    fun attachBootable(
+        endpoint: VmActorEndpoint,
+        store: WorldFileSystemStore,
+        romImage: ByteArray,
+        tickBudget: ProgramTickBudget = ProgramTickBudget(),
+        compilerRouter: CompilerCompletionRouter? = null,
+        initialRedstoneOutput: Int = 0,
+    ): ProgramRuntimeActorLease? {
+        val port = ActorRedstoneHostPort()
+        val host =
             ProgramRuntimeHost(
                 store = store,
                 computerId = endpoint.computerId,
                 romImage = romImage,
                 tickBudget = tickBudget,
                 compilerRouter = compilerRouter,
-                redstoneHostPort = redstonePort,
+                redstoneHostPort = port,
                 initialRedstoneOutput = initialRedstoneOutput,
-            ),
-            redstonePort,
-        )
+            )
+        return attach(endpoint, host, port)
+    }
+
+    internal fun attach(
+        endpoint: VmActorEndpoint,
+        host: ProgramRuntimeHost,
+        port: ActorRedstoneHostPort? = null,
+    ): ProgramRuntimeActorLease? {
+        val processor = ProgramRuntimeActorProcessor(host, port)
+        if (!scheduler.register(endpoint, processor)) return null
+        return ProgramRuntimeActorLease(endpoint, processor.closed) { scheduler.unregister(endpoint) }
     }
 
     fun request(
@@ -119,12 +141,6 @@ class ProgramRuntimeActorService(
         pending.values.forEach { it.completeExceptionally(failure) }
         pending.clear()
     }
-
-    private fun register(
-        endpoint: VmActorEndpoint,
-        host: ProgramRuntimeHost,
-        redstonePort: ActorRedstoneHostPort? = null,
-    ): Boolean = scheduler.register(endpoint, ProgramRuntimeActorProcessor(host, redstonePort))
 
     private data class RequestAddress(
         val endpoint: VmActorEndpoint,
