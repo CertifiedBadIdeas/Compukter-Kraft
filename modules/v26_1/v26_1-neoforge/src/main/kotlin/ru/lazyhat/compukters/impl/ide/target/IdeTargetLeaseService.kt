@@ -65,10 +65,10 @@ internal data class IdeResolvedTarget(
 
 internal class IdeTargetTerminalOperations(
     val machineId: () -> Long?,
-    val fullState: () -> TerminalState?,
-    val changesSince: (Long) -> TerminalUpdate?,
-    val submitKey: (TerminalKey, TerminalKeyAction, Set<TerminalModifier>) -> Boolean,
-    val submitText: (String) -> Boolean,
+    val fullState: suspend () -> TerminalState?,
+    val changesSince: suspend (Long) -> TerminalUpdate?,
+    val submitKey: suspend (TerminalKey, TerminalKeyAction, Set<TerminalModifier>) -> Boolean,
+    val submitText: suspend (String) -> Boolean,
 )
 
 internal class IdeTargetDeploymentOperations(

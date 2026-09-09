@@ -51,17 +51,44 @@ internal object IdeTargetNetwork {
     ) {
         val player = context.player() as? ServerPlayer ?: return
         val transport = transport(player)
-        context.reply(
-            transport.terminals.open(
-                player.uuid,
-                payload.generation,
-                payload.target,
-                player
-                    .level()
-                    .server.tickCount
-                    .toLong(),
-            ),
-        )
+        val pending =
+            transport.operations.submit(player.uuid) {
+                transport.terminals.open(
+                    player.uuid,
+                    payload.generation,
+                    payload.target,
+                    player
+                        .level()
+                        .server.tickCount
+                        .toLong(),
+                )
+            }
+        if (pending == null) {
+            context.reply(
+                IdeTerminalFailedPayload(
+                    payload.generation,
+                    null,
+                    IdeTargetFailureKind.Other,
+                    "Server request capacity is exhausted",
+                    true,
+                ),
+            )
+            return
+        }
+        pending.whenComplete { reply, _ ->
+            if (!transport.operations.closed) {
+                context.reply(
+                    reply
+                        ?: IdeTerminalFailedPayload(
+                            payload.generation,
+                            null,
+                            IdeTargetFailureKind.TargetLost,
+                            "Target terminal is unavailable",
+                            true,
+                        ),
+                )
+            }
+        }
     }
 
     private fun handleTerminalResync(
@@ -69,16 +96,20 @@ internal object IdeTargetNetwork {
         context: IPayloadContext,
     ) {
         val player = context.player() as? ServerPlayer ?: return
-        transport(player)
-            .terminals
-            .resync(
-                player.uuid,
-                payload,
-                player
-                    .level()
-                    .server.tickCount
-                    .toLong(),
-            )?.let(context::reply)
+        val transport = transport(player)
+        transport.operations
+            .submit(player.uuid) {
+                transport.terminals.resync(
+                    player.uuid,
+                    payload,
+                    player
+                        .level()
+                        .server.tickCount
+                        .toLong(),
+                )
+            }?.thenAccept { reply ->
+                if (!transport.operations.closed) reply?.let(context::reply)
+            }
     }
 
     private fun handleTerminalKey(
@@ -86,14 +117,17 @@ internal object IdeTargetNetwork {
         context: IPayloadContext,
     ) {
         val player = context.player() as? ServerPlayer ?: return
-        transport(player).terminals.key(
-            player.uuid,
-            payload,
-            player
-                .level()
-                .server.tickCount
-                .toLong(),
-        )
+        val transport = transport(player)
+        transport.operations.submit(player.uuid) {
+            transport.terminals.key(
+                player.uuid,
+                payload,
+                player
+                    .level()
+                    .server.tickCount
+                    .toLong(),
+            )
+        }
     }
 
     private fun handleTerminalText(
@@ -101,14 +135,17 @@ internal object IdeTargetNetwork {
         context: IPayloadContext,
     ) {
         val player = context.player() as? ServerPlayer ?: return
-        transport(player).terminals.text(
-            player.uuid,
-            payload,
-            player
-                .level()
-                .server.tickCount
-                .toLong(),
-        )
+        val transport = transport(player)
+        transport.operations.submit(player.uuid) {
+            transport.terminals.text(
+                player.uuid,
+                payload,
+                player
+                    .level()
+                    .server.tickCount
+                    .toLong(),
+            )
+        }
     }
 
     private fun handleTerminalClose(

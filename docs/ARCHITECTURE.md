@@ -174,8 +174,10 @@ detach bound the target attachment lifetime; revision conflicts require an expli
 Server-side IDE verification, deployment, canonical input, and filesystem operations may suspend until the runtime
 answers. The request transport admits at most 256 pending operations per server and four per player, including
 suspended work. Verification retains its upload staging reservation while awaiting the runtime, and a candidate
-returned after its target lease ends is closed instead of becoming a ticket. Terminal streaming and the production
-block carrier are still on the synchronous adapter during the actor migration.
+returned after its target lease ends is closed instead of becoming a ticket. The IDE terminal also supports suspended
+open, resync, input, and polling operations. Each viewer has at most one pending poll; replies are checked against the
+current viewer session and machine before publication. The standalone terminal and production block carrier are still
+on the synchronous adapter during the actor migration.
 
 ## Guest programs and APIs
 

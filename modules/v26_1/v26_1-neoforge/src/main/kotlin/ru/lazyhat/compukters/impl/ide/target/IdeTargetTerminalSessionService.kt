@@ -34,13 +34,15 @@ internal class IdeTargetTerminalSessionService(
     private val pendingDeliveries = mutableListOf<IdeTerminalDelivery>()
     private val removalObservation = leases.observeRemovals(::targetRemoved)
     private var closed = false
+    private val polls = IdeServerOperations(maximumPendingPerPlayer = 1)
+    private val pendingOpens = mutableMapOf<UUID, Any>()
 
     constructor(
         leases: IdeTargetLeaseService,
         tokens: () -> UUID = UUID::randomUUID,
     ) : this(leases, tokens, TerminalInputAdmission::accept)
 
-    fun open(
+    suspend fun open(
         player: UUID,
         generation: Long,
         target: IdeTargetReference,
@@ -60,9 +62,20 @@ internal class IdeTargetTerminalSessionService(
         val machineId =
             terminal.machineId()
                 ?: return failure(generation, null, IdeTargetFailureKind.TargetLost, "Target terminal is unavailable", true)
+        val opening = Any()
+        pendingOpens[player] = opening
         val state =
-            terminal.fullState()
-                ?: return failure(generation, null, IdeTargetFailureKind.TargetLost, "Target terminal is unavailable", true)
+            try {
+                terminal.fullState()
+            } catch (error: Throwable) {
+                pendingOpens.remove(player, opening)
+                throw error
+            }
+        if (!pendingOpens.remove(player, opening) || closed ||
+            leases.access(player, attached, tick) !== resolved || terminal.machineId() != machineId || state == null
+        ) {
+            return failure(generation, null, IdeTargetFailureKind.TargetLost, "Target terminal is unavailable", true)
+        }
         remove(player)
         val token = tokens()
         require(token.mostSignificantBits != 0L || token.leastSignificantBits != 0L) { "terminal session token must not be zero" }
@@ -74,59 +87,86 @@ internal class IdeTargetTerminalSessionService(
 
     fun publish(tick: Long): List<IdeTerminalDelivery> {
         checkOpen()
-        val deliveries = pendingDeliveries.toMutableList()
-        pendingDeliveries.clear()
         sessionsByPlayer.keys.toList().forEach { player ->
             val session = sessionsByPlayer[player] ?: return@forEach
             if (!isLive(player, session, tick) || session.terminal.machineId() != session.machineId) {
-                deliveries += IdeTerminalDelivery(player, lost(session))
+                pendingDeliveries += IdeTerminalDelivery(player, lost(session))
                 remove(player)
                 return@forEach
             }
-            when (val update = session.terminal.changesSince(session.revision)) {
-                is TerminalUpdate.Delta -> {
-                    if (update.targetRevision <= session.revision) return@forEach
-                    if (update.baseRevision != session.revision) {
-                        full(session)?.let { payload ->
-                            session.revision = payload.state.revision
-                            deliveries += IdeTerminalDelivery(player, payload)
-                        }
-                    } else {
-                        session.revision = update.targetRevision
-                        deliveries += IdeTerminalDelivery(player, IdeTerminalDeltaPayload(session.token, session.machineId, update))
+            val pending = polls.submit(player) { poll(player, session, tick) } ?: return@forEach
+            // Move admitted sessions to the end so capacity pressure also serves later viewers.
+            if (sessionsByPlayer[player] === session) {
+                sessionsByPlayer.remove(player)
+                sessionsByPlayer[player] = session
+            }
+            pending.whenComplete { delivery, failure ->
+                if (!closed && sessionsByPlayer[player] === session) {
+                    if (failure != null) {
+                        pendingDeliveries += IdeTerminalDelivery(player, lost(session))
+                        remove(player)
+                    } else if (delivery != null) {
+                        pendingDeliveries += IdeTerminalDelivery(player, delivery)
                     }
                 }
-
-                is TerminalUpdate.Full -> {
-                    session.revision = update.state.revision
-                    deliveries += IdeTerminalDelivery(player, IdeTerminalFullPayload(session.token, session.machineId, update.state))
-                }
-
-                is TerminalUpdate.Unchanged,
-                null,
-                -> {}
             }
         }
-        return deliveries
+        return pendingDeliveries.toList().also { pendingDeliveries.clear() }
     }
 
-    fun resync(
+    private suspend fun poll(
+        player: UUID,
+        session: Session,
+        tick: Long,
+    ): CustomPacketPayload? {
+        val update = session.terminal.changesSince(session.revision)
+        if (!isCurrent(player, session, tick)) return null
+        return when (update) {
+            is TerminalUpdate.Delta -> {
+                if (update.targetRevision <= session.revision) return null
+                if (update.baseRevision != session.revision) {
+                    snapshot(player, session, tick)
+                } else {
+                    session.revision = update.targetRevision
+                    IdeTerminalDeltaPayload(session.token, session.machineId, update)
+                }
+            }
+
+            is TerminalUpdate.Full -> {
+                if (update.state.revision < session.revision) return null
+                session.revision = update.state.revision
+                IdeTerminalFullPayload(session.token, session.machineId, update.state)
+            }
+
+            is TerminalUpdate.Unchanged,
+            null,
+            -> {
+                null
+            }
+        }
+    }
+
+    suspend fun resync(
         player: UUID,
         payload: IdeTerminalResyncPayload,
         tick: Long,
     ): CustomPacketPayload? {
         checkOpen()
         val session = matching(player, payload.token, payload.machineId, tick) ?: return null
-        return when (val update = session.terminal.changesSince(payload.revision)) {
+        val update = session.terminal.changesSince(payload.revision)
+        if (!isCurrent(player, session, tick)) return null
+        return when (update) {
             is TerminalUpdate.Delta -> {
+                if (update.targetRevision < session.revision) return snapshot(player, session, tick)
                 IdeTerminalDeltaPayload(session.token, session.machineId, update).also {
-                    session.revision = update.targetRevision
+                    session.revision = maxOf(session.revision, update.targetRevision)
                 }
             }
 
             is TerminalUpdate.Full -> {
+                if (update.state.revision < session.revision) return snapshot(player, session, tick)
                 IdeTerminalFullPayload(session.token, session.machineId, update.state).also {
-                    session.revision = update.state.revision
+                    session.revision = maxOf(session.revision, update.state.revision)
                 }
             }
 
@@ -135,14 +175,12 @@ internal class IdeTargetTerminalSessionService(
             }
 
             null -> {
-                full(session)?.also {
-                    session.revision = it.state.revision
-                }
+                snapshot(player, session, tick)
             }
         }
     }
 
-    fun key(
+    suspend fun key(
         player: UUID,
         payload: IdeTerminalKeyPayload,
         tick: Long,
@@ -153,7 +191,7 @@ internal class IdeTargetTerminalSessionService(
         return session.terminal.submitKey(payload.key, payload.action, payload.modifiers)
     }
 
-    fun text(
+    suspend fun text(
         player: UUID,
         payload: IdeTerminalTextPayload,
         tick: Long,
@@ -176,11 +214,13 @@ internal class IdeTargetTerminalSessionService(
 
     override fun close() {
         if (closed) return
+        closed = true
+        polls.close()
+        pendingOpens.clear()
         removalObservation.close()
         sessionsByPlayer.clear()
         playersByToken.clear()
         pendingDeliveries.clear()
-        closed = true
     }
 
     private fun matching(
@@ -205,13 +245,31 @@ internal class IdeTargetTerminalSessionService(
         tick: Long,
     ): Boolean = leases.access(player, session.attached, tick) === session.resolved
 
-    private fun full(session: Session): IdeTerminalFullPayload? =
+    private suspend fun full(session: Session): IdeTerminalFullPayload? =
         session.terminal.fullState()?.let { IdeTerminalFullPayload(session.token, session.machineId, it) }
+
+    private fun isCurrent(
+        player: UUID,
+        session: Session,
+        tick: Long,
+    ): Boolean =
+        !closed && sessionsByPlayer[player] === session && isLive(player, session, tick) &&
+            session.terminal.machineId() == session.machineId
+
+    private suspend fun snapshot(
+        player: UUID,
+        session: Session,
+        tick: Long,
+    ): IdeTerminalFullPayload? =
+        full(session)?.takeIf { isCurrent(player, session, tick) && it.state.revision >= session.revision }?.also {
+            session.revision = it.state.revision
+        }
 
     private fun targetRemoved(
         player: UUID,
         attached: IdeAttachedTarget,
     ) {
+        pendingOpens.remove(player)
         val session = sessionsByPlayer[player] ?: return
         if (session.attached != attached) return
         pendingDeliveries += IdeTerminalDelivery(player, lost(session))
