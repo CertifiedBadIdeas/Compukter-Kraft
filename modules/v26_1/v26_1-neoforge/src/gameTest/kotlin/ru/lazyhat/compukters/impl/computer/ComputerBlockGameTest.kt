@@ -100,7 +100,8 @@ object ComputerBlockGameTest {
             TestData(
                 environment,
                 Identifier.withDefaultNamespace("bastion/mobs/empty"),
-                200,
+                // GameTestServer runs ticks without pacing; allow real filesystem/compiler workers to finish.
+                10000,
                 0,
                 true,
                 Rotation.NONE,
@@ -133,6 +134,7 @@ object ComputerBlockGameTest {
             helper.setBlock(position, block)
             helper.assertBlockPresent(block, position)
             val entity = helper.getBlockEntity(position, NeoForgeComputerBlockEntity::class.java)
+            var persistenceStep: PersistenceStep? = null
             helper.assertTrue(
                 entity.type === CompuktersRegistry.COMPUTER_BLOCK_ENTITY.get(),
                 "computer block created the wrong block entity type",
@@ -151,8 +153,16 @@ object ComputerBlockGameTest {
                     verifyTwoComputerCompilation(helper)
                     verifyPersistentProgrammingLoop(helper)
                     verifyIdeTargetFileImport(helper)
-                    verifyTombstoneRecovery(helper, position)
-                    verifyTwoComputerWorldRestart(helper, position, position.east())
+                    persistenceStep = verifyTombstoneRecovery(helper, position)
+                }.thenWaitUntil {
+                    helper.assertTrue(persistenceStep!!.ready(), "filesystem destruction or recovery is still pending")
+                }.thenExecute {
+                    persistenceStep!!.verify()
+                    persistenceStep = verifyTwoComputerWorldRestart(helper, position, position.east())
+                }.thenWaitUntil {
+                    helper.assertTrue(persistenceStep!!.ready(), "unloaded computers still own their filesystems")
+                }.thenExecute {
+                    persistenceStep!!.verify()
                 }.thenSucceed()
         }
 
@@ -178,7 +188,7 @@ object ComputerBlockGameTest {
     private fun verifyTombstoneRecovery(
         helper: GameTestHelper,
         position: BlockPos,
-    ) {
+    ): PersistenceStep {
         val block = CompuktersRegistry.COMPUTER.get()
         helper.setBlock(position, block)
         val entity = helper.getBlockEntity(position, NeoForgeComputerBlockEntity::class.java)
@@ -195,18 +205,33 @@ object ComputerBlockGameTest {
         )
         helper.setBlock(position, Blocks.AIR)
 
-        val tombstoneRejected =
-            try {
-                VmSession.openInStore(fixture("filesystem-read.cpkt"), context.store, computerId, emptyRom()).use { }
-                false
-            } catch (_: VmBridgeException) {
-                true
-            }
-        helper.assertTrue(tombstoneRejected, "tombstoned filesystem accepted a new machine")
-
-        NeoForgeWorldFileSystemStores.recover(helper.level, computerId)
-        assertMarker(helper, context.store, computerId, FIRST_MARKER)
+        var recovery: CompletableFuture<Void>? = null
+        return PersistenceStep(
+            ready = {
+                if (recovery == null && NeoForgeWorldFileSystemStores.contextSource.available(helper.level, computerId)) {
+                    val tombstoneRejected =
+                        try {
+                            VmSession.openInStore(fixture("filesystem-read.cpkt"), context.store, computerId, emptyRom()).use { }
+                            false
+                        } catch (_: VmBridgeException) {
+                            true
+                        }
+                    helper.assertTrue(tombstoneRejected, "tombstoned filesystem accepted a new machine")
+                    recovery = NeoForgeWorldFileSystemStores.recover(helper.level, computerId)
+                }
+                recovery?.isDone == true
+            },
+            verify = {
+                recovery!!.getNow(null)
+                assertMarker(helper, context.store, computerId, FIRST_MARKER)
+            },
+        )
     }
+
+    private class PersistenceStep(
+        val ready: () -> Boolean,
+        val verify: () -> Unit,
+    )
 
     private fun verifyForegroundProcessAndReboot(
         helper: GameTestHelper,
@@ -640,7 +665,7 @@ object ComputerBlockGameTest {
         helper: GameTestHelper,
         firstPosition: BlockPos,
         secondPosition: BlockPos,
-    ) {
+    ): PersistenceStep {
         val block = CompuktersRegistry.COMPUTER.get()
         helper.setBlock(firstPosition, block)
         helper.setBlock(secondPosition, block)
@@ -659,33 +684,51 @@ object ComputerBlockGameTest {
         second.prepareTerminal()
         val restoredFirst = reloadComputer(helper, firstPosition, firstId)
         val restoredSecond = reloadComputer(helper, secondPosition, secondId)
-        restoredFirst.prepareTerminal()
-        restoredSecond.prepareTerminal()
+        return PersistenceStep(
+            ready = {
+                // Tickers may already have reattached a ready machine before this sequence runs.
+                (
+                    restoredFirst.terminalFullState() != null ||
+                        NeoForgeWorldFileSystemStores.contextSource.available(
+                            helper.level,
+                            firstId,
+                        )
+                ) &&
+                    (
+                        restoredSecond.terminalFullState() != null ||
+                            NeoForgeWorldFileSystemStores.contextSource.available(helper.level, secondId)
+                    )
+            },
+            verify = {
+                restoredFirst.prepareTerminal()
+                restoredSecond.prepareTerminal()
 
-        NeoForgeWorldFileSystemStores.onLevelSave(LevelEvent.Save(helper.level))
-        helper.assertTrue(
-            firstContext.store.durableGeneration(firstId) == firstGeneration,
-            "world save did not flush the first computer generation",
-        )
-        helper.assertTrue(
-            secondContext.store.durableGeneration(secondId) == secondGeneration,
-            "world save did not flush the second computer generation",
-        )
-        helper.assertTrue(firstContext.store.health() == FileSystemStoreHealth.ACTIVE, "world store was not active before stop")
+                NeoForgeWorldFileSystemStores.onLevelSave(LevelEvent.Save(helper.level))
+                helper.assertTrue(
+                    firstContext.store.durableGeneration(firstId) == firstGeneration,
+                    "world save did not flush the first computer generation",
+                )
+                helper.assertTrue(
+                    secondContext.store.durableGeneration(secondId) == secondGeneration,
+                    "world save did not flush the second computer generation",
+                )
+                helper.assertTrue(firstContext.store.health() == FileSystemStoreHealth.ACTIVE, "world store was not active before stop")
 
-        val stoppedStore = firstContext.store
-        NeoForgeWorldFileSystemStores.onServerStopping(ServerStoppingEvent(helper.level.server))
-        helper.assertTrue(restoredFirst.runtimeState == ProgramComputerState.Closed, "first VM was not drained on stop")
-        helper.assertTrue(restoredSecond.runtimeState == ProgramComputerState.Closed, "second VM was not drained on stop")
-        helper.assertTrue(rejectsAfterClose { stoppedStore.health() }, "closed store still exposed health")
-        helper.assertTrue(
-            rejectsAfterClose { stoppedStore.flush(firstId, firstGeneration) },
-            "closed store accepted a write after worker shutdown",
-        )
+                val stoppedStore = firstContext.store
+                NeoForgeWorldFileSystemStores.onServerStopping(ServerStoppingEvent(helper.level.server))
+                helper.assertTrue(restoredFirst.runtimeState == ProgramComputerState.Closed, "first VM was not drained on stop")
+                helper.assertTrue(restoredSecond.runtimeState == ProgramComputerState.Closed, "second VM was not drained on stop")
+                helper.assertTrue(rejectsAfterClose { stoppedStore.health() }, "closed store still exposed health")
+                helper.assertTrue(
+                    rejectsAfterClose { stoppedStore.flush(firstId, firstGeneration) },
+                    "closed store accepted a write after worker shutdown",
+                )
 
-        val reopened = NeoForgeWorldFileSystemStores.contextSource.create(helper.level, firstId, emptyRom()).store
-        assertMarker(helper, reopened, firstId, FIRST_MARKER)
-        assertMarker(helper, reopened, secondId, SECOND_MARKER)
+                val reopened = NeoForgeWorldFileSystemStores.contextSource.create(helper.level, firstId, emptyRom()).store
+                assertMarker(helper, reopened, firstId, FIRST_MARKER)
+                assertMarker(helper, reopened, secondId, SECOND_MARKER)
+            },
+        )
     }
 
     private fun reloadComputer(

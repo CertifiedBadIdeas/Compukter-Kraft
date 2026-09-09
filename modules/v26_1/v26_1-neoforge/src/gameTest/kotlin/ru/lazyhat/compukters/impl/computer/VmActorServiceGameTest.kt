@@ -95,7 +95,11 @@ internal class VmActorServiceGameTest(
                     reopened.health() == ru.lazyhat.compukters.lang.runtime.fs.FileSystemStoreHealth.ACTIVE,
                     "filesystem store did not reopen after the actor close barrier",
                 )
-                stores.stop(root).getNow(null)
+                closed = stores.stop(root)
+            }.thenWaitUntil {
+                helper.assertTrue(closed!!.isDone, "reopened store did not close on the persistence worker")
+            }.thenExecute {
+                closed!!.getNow(null)
             }.thenSucceed()
     }
 

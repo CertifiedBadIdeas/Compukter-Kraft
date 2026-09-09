@@ -42,6 +42,12 @@ class ComputerFileSystemContext(
 }
 
 fun interface ComputerFileSystemContextSource {
+    /** False while the previous machine's persistence work still owns this identity. */
+    fun available(
+        level: ServerLevel,
+        computerId: ComputerId,
+    ): Boolean = true
+
     fun create(
         level: ServerLevel,
         computerId: ComputerId,

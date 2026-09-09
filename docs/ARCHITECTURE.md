@@ -163,8 +163,13 @@ attachment until the barrier completes and the final generation is flushed; dest
 that point. Store shutdown starts every outstanding drain before waiting for the combined barrier. Ordinary release
 does not wait for VM completion; the server-stopping hook alone permits a bounded ten-second wait. A failed close
 barrier keeps the store unavailable rather than closing storage underneath a possibly live native machine.
-This is a lifetime migration only: the existing native flush/tombstone calls still wait for persistence and must be
-moved behind a bounded asynchronous persistence adapter before the production actor carrier is enabled.
+Native flush, tombstone, recovery, and store close run on one lazy persistence executor per world, outside the
+registry monitor and outside both the server tick and VM actor workers. Admission reserves at most 1024 computer
+identities per world, including pending removal/recovery; each identity owns at most one queued or running token.
+Repeated saves coalesce to the latest requested generation. The identity remains unavailable until final persistence
+completes, so a quickly reloaded block retries attachment on later ticks instead of opening a second machine.
+Persistence failures are logged once, fail outstanding lifecycle futures, and prevent unsafe reattachment or store
+close. Initial store opening and ordinary VM execution still use the legacy synchronous path during actor migration.
 
 The versioned FFM ABI exposes opaque world-store lifecycle operations, machine creation inside a store, stateless
 artifact verification, and dedicated bounded compilation request and completion calls. Kotlin can select a world

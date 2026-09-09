@@ -90,6 +90,7 @@ open class ComputerBlockEntity internal constructor(
     fun terminalFullState(): TerminalState? = carrier?.terminalFullState()
 
     fun prepareTerminal(): TerminalState? {
+        if (carrier == null && !filesystemAvailable()) return null
         val current = carrier ?: createCarrier().also { carrier = it }
         if (current.state == neverStarted()) runtimeState = current.turnOn()
         return current.terminalFullState()
@@ -162,6 +163,7 @@ open class ComputerBlockEntity internal constructor(
     }
 
     internal fun serverTick() {
+        if (carrier == null && !filesystemAvailable()) return
         val current = carrier ?: createCarrier().also { carrier = it }
         if (current.state == neverStarted()) {
             runtimeState = current.turnOn()
@@ -232,6 +234,9 @@ open class ComputerBlockEntity internal constructor(
             }
         return created
     }
+
+    private fun filesystemAvailable(): Boolean =
+        (level as? ServerLevel)?.let { filesystemContextSource?.available(it, identity.id()) } != false
 
     private fun commitRedstoneOutput(packed: Int): RedstoneCommitResult {
         val serverLevel = requireNotNull(level as? ServerLevel) { "redstone output requires a server level" }
