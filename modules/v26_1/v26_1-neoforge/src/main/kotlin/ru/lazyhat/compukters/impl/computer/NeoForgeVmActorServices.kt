@@ -83,6 +83,8 @@ internal object NeoForgeVmActorServices {
 
     fun service(server: MinecraftServer): ProgramRuntimeActorService = registry.service(server)
 
+    fun metrics(server: MinecraftServer): ProgramRuntimeActorMetrics? = registry.metrics(server)
+
     fun onServerStarting(event: ServerStartingEvent) = registry.start(event.server)
 
     fun afterServerTick(event: ServerTickEvent.Post) {

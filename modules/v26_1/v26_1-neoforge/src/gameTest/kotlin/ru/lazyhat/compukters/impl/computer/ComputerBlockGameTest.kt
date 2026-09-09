@@ -59,6 +59,7 @@ import ru.lazyhat.compukters.ide.client.target.IdeTargetVirtualPath
 import ru.lazyhat.compukters.ide.client.workspace.DefaultIdeWorkspace
 import ru.lazyhat.compukters.ide.compiler.profile.TargetCompileProfileIdentity
 import ru.lazyhat.compukters.ide.project.fs.ProjectPath
+import ru.lazyhat.compukters.impl.benchmark.VmBenchmarkGameTest
 import ru.lazyhat.compukters.impl.fs.NeoForgeWorldFileSystemStores
 import ru.lazyhat.compukters.impl.ide.target.IdeClaimResolution
 import ru.lazyhat.compukters.impl.ide.target.IdeResolvedTarget
@@ -122,6 +123,10 @@ object ComputerBlockGameTest {
         event.registerTest(
             Identifier.fromNamespaceAndPath(MOD_ID, "vm_actor_service"),
             VmActorServiceGameTest(testData),
+        )
+        event.registerTest(
+            Identifier.fromNamespaceAndPath(MOD_ID, "vm_benchmark"),
+            VmBenchmarkGameTest(testData),
         )
     }
 
