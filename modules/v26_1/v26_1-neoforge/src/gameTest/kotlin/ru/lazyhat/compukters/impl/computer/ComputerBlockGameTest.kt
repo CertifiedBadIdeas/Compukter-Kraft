@@ -66,6 +66,7 @@ import ru.lazyhat.compukters.impl.ide.target.IdeTargetDeploymentOperations
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetFileSystemOperations
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetFileSystemService
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetLeaseService
+import ru.lazyhat.compukters.impl.ide.target.serverOperation
 import ru.lazyhat.compukters.impl.registry.CompuktersRegistry
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import ru.lazyhat.compukters.lang.runtime.fs.FileSystemStoreHealth
@@ -489,14 +490,13 @@ object ComputerBlockGameTest {
     ): IdeComputerFileAccess =
         object : IdeComputerFileAccess {
             override fun stat(path: IdeTargetVirtualPath): CompletableFuture<IdeFileStatResult> =
-                CompletableFuture.completedFuture(files.stat(owner, target, path, 2))
+                serverOperation { files.stat(owner, target, path, 2) }
 
             override fun list(
                 path: IdeTargetVirtualPath,
                 startAfter: String?,
                 maximumEntries: Int,
-            ): CompletableFuture<IdeFileListResult> =
-                CompletableFuture.completedFuture(files.list(owner, target, path, startAfter, maximumEntries, 2))
+            ): CompletableFuture<IdeFileListResult> = serverOperation { files.list(owner, target, path, startAfter, maximumEntries, 2) }
 
             override fun read(
                 path: IdeTargetVirtualPath,
@@ -504,7 +504,7 @@ object ComputerBlockGameTest {
                 maximumBytes: Int,
                 expectedGeneration: Long,
             ): CompletableFuture<IdeFileReadResult> =
-                CompletableFuture.completedFuture(files.read(owner, target, path, offset, maximumBytes, expectedGeneration, 2))
+                serverOperation { files.read(owner, target, path, offset, maximumBytes, expectedGeneration, 2) }
         }
 
     private fun attachWithoutReadableFileSystem(

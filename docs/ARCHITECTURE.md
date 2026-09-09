@@ -171,6 +171,12 @@ to a target, the client may inspect supported filesystem metadata and content, u
 observe the destination revision, and deploy using a verification ticket plus the expected revision. Heartbeats and
 detach bound the target attachment lifetime; revision conflicts require an explicit retry or user confirmation.
 
+Server-side IDE verification, deployment, canonical input, and filesystem operations may suspend until the runtime
+answers. The request transport admits at most 256 pending operations per server and four per player, including
+suspended work. Verification retains its upload staging reservation while awaiting the runtime, and a candidate
+returned after its target lease ends is closed instead of becoming a ticket. Terminal streaming and the production
+block carrier are still on the synchronous adapter during the actor migration.
+
 ## Guest programs and APIs
 
 Boot, shell, `kotlinc`, `edit`, and `vmbench` are ordinary no-std Kotlin programs packaged as extensionless executables in `/rom`.

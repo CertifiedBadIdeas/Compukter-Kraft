@@ -33,7 +33,7 @@ internal class IdeTargetRequestProcessor(
     private val deployments: IdeTargetDeploymentService,
     private val files: IdeTargetFileSystemService = IdeTargetFileSystemService(leases),
 ) {
-    fun handle(
+    suspend fun handle(
         player: UUID,
         request: IdeTargetRequest,
         tick: Long,
@@ -181,11 +181,11 @@ internal class IdeTargetRequestProcessor(
             is IdeAttachResult.Rejected -> result.failure.failed()
         }
 
-    private inline fun withTarget(
+    private suspend inline fun withTarget(
         player: UUID,
         reference: IdeTargetReference,
         tick: Long,
-        operation: (ru.lazyhat.compukters.ide.client.target.IdeAttachedTarget) -> IdeTargetReply,
+        operation: suspend (ru.lazyhat.compukters.ide.client.target.IdeAttachedTarget) -> IdeTargetReply,
     ): IdeTargetReply {
         val target = leases.attached(player, reference, tick) ?: return targetLost()
         return operation(target)

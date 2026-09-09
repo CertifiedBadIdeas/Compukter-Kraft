@@ -56,6 +56,7 @@ internal class IdeTargetDeploymentService(
     private val ticketLifetimeTicks: Long = DEFAULT_TICKET_LIFETIME_TICKS,
 ) : AutoCloseable {
     private val uploads = mutableMapOf<UUID, Upload>()
+    private val verifying = mutableMapOf<UUID, Upload>()
     private val tickets = mutableMapOf<String, Ticket>()
     private val leaseObservation = leases.observeRemovals(::discard)
     private var reservedBytes = 0L
@@ -140,7 +141,7 @@ internal class IdeTargetDeploymentService(
         return IdeUploadResult.Accepted
     }
 
-    fun verify(
+    suspend fun verify(
         player: UUID,
         target: IdeAttachedTarget,
         tick: Long,
@@ -148,6 +149,7 @@ internal class IdeTargetDeploymentService(
         checkOpen()
         requireTick(tick)
         expire(tick)
+        if (player in verifying) return verifyFailed(IdeTargetFailureKind.Admission, "Artifact verification is already pending")
         val resolved =
             leases.access(player, target, tick)
                 ?: return verifyFailed(IdeTargetFailureKind.TargetLost, "Target lease is stale or unavailable")
@@ -159,6 +161,8 @@ internal class IdeTargetDeploymentService(
         if (sha256(upload.bytes) != upload.hash) {
             return verifyFailed(IdeTargetFailureKind.Upload, "Artifact hash does not match the declared hash")
         }
+        verifying[player] = upload
+        reservedBytes += upload.bytes.size
         val candidate =
             try {
                 resolved.deployment.verifyForDeploy(upload.bytes)
@@ -167,9 +171,16 @@ internal class IdeTargetDeploymentService(
                 return verifyFailed(IdeTargetFailureKind.Verification, "Target VM rejected the artifact")
             } catch (_: VmDeploymentAdmissionException) {
                 return verifyFailed(IdeTargetFailureKind.Admission, "Target VM rejected deployment admission")
+            } finally {
+                verifying.remove(player)
+                reservedBytes -= upload.bytes.size
             }
-        val rawTicket = ticketBytes()
+        if (closed || leases.access(player, target, tick) !== resolved) {
+            candidate.close()
+            return verifyFailed(IdeTargetFailureKind.TargetLost, "Target lease ended during verification")
+        }
         return try {
+            val rawTicket = ticketBytes()
             val ticket = IdeVerificationTicket.of(rawTicket, target, upload.hash, upload.bytes.size)
             val key = key(rawTicket)
             check(key !in tickets) { "verification ticket generator produced a duplicate" }
@@ -190,7 +201,7 @@ internal class IdeTargetDeploymentService(
         }
     }
 
-    fun executableRevision(
+    suspend fun executableRevision(
         player: UUID,
         target: IdeAttachedTarget,
         path: IdeDeploymentPath,
@@ -211,7 +222,7 @@ internal class IdeTargetDeploymentService(
         return IdeRevisionResult.Observed(revision.toIde())
     }
 
-    fun deploy(
+    suspend fun deploy(
         player: UUID,
         target: IdeAttachedTarget,
         path: IdeDeploymentPath,
@@ -269,7 +280,7 @@ internal class IdeTargetDeploymentService(
         }
     }
 
-    fun submitCanonicalLine(
+    suspend fun submitCanonicalLine(
         player: UUID,
         target: IdeAttachedTarget,
         line: CharArray,

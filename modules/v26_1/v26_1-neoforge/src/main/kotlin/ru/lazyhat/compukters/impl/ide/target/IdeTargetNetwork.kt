@@ -22,6 +22,8 @@ import net.neoforged.neoforge.network.PacketDistributor
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent
 import net.neoforged.neoforge.network.handling.IPayloadContext
 import ru.lazyhat.compukters.core.MOD_ID
+import ru.lazyhat.compukters.ide.client.target.IdeTargetFailure
+import ru.lazyhat.compukters.ide.client.target.IdeTargetFailureKind
 import java.util.WeakHashMap
 
 @EventBusSubscriber(modid = MOD_ID)
@@ -129,12 +131,19 @@ internal object IdeTargetNetwork {
         val player = context.player() as? ServerPlayer ?: return
         val server = player.level().server
         val transport = servers.getOrPut(server) { ServerTransport(server) }
-        context.reply(
-            IdeTargetReplyPayload(
-                payload.requestId,
-                transport.processor.handle(player.uuid, payload.request, server.tickCount.toLong()),
-            ),
-        )
+        val pending =
+            transport.operations.submit(player.uuid) {
+                transport.processor.handle(player.uuid, payload.request, server.tickCount.toLong())
+            }
+        if (pending == null) {
+            context.reply(IdeTargetReplyPayload(payload.requestId, requestFailed("Server request capacity is exhausted", true)))
+            return
+        }
+        pending.whenComplete { reply, failure ->
+            if (!transport.operations.closed) {
+                context.reply(IdeTargetReplyPayload(payload.requestId, reply ?: requestFailed("Target request failed", false)))
+            }
+        }
     }
 
     @JvmStatic
@@ -154,6 +163,7 @@ internal object IdeTargetNetwork {
     ) : AutoCloseable {
         private val leases = IdeTargetLeaseService(NeoForgeIdeTargetResolver(server))
         private val deployments = IdeTargetDeploymentService(leases)
+        val operations = IdeServerOperations()
         val terminals = IdeTargetTerminalSessionService(leases)
         val processor = IdeTargetRequestProcessor(leases, deployments)
         private val server = server
@@ -169,9 +179,15 @@ internal object IdeTargetNetwork {
         }
 
         override fun close() {
+            operations.close()
             terminals.close()
             deployments.close()
             leases.close()
         }
     }
+
+    private fun requestFailed(
+        detail: String,
+        retryable: Boolean,
+    ) = IdeTargetReply.Failed(IdeTargetFailure(IdeTargetFailureKind.Other, detail), retryable)
 }

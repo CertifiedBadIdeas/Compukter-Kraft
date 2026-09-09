@@ -35,7 +35,7 @@ import java.util.UUID
 internal class IdeTargetFileSystemService(
     private val leases: IdeTargetLeaseService,
 ) {
-    fun stat(
+    suspend fun stat(
         player: UUID,
         target: IdeAttachedTarget,
         path: IdeTargetVirtualPath,
@@ -46,7 +46,7 @@ internal class IdeTargetFileSystemService(
             IdeFileStatResult.Observed(IdeTargetFileStat(value.fileSystemGeneration, value.metadata.toIde()))
         }
 
-    fun list(
+    suspend fun list(
         player: UUID,
         target: IdeAttachedTarget,
         path: IdeTargetVirtualPath,
@@ -68,7 +68,7 @@ internal class IdeTargetFileSystemService(
             )
         }
 
-    fun read(
+    suspend fun read(
         player: UUID,
         target: IdeAttachedTarget,
         path: IdeTargetVirtualPath,
@@ -84,12 +84,12 @@ internal class IdeTargetFileSystemService(
             IdeFileReadResult.Read(IdeTargetFileChunk(value.generation, value.nextOffset, value.eof, value.bytes))
         }
 
-    private inline fun <T> inspect(
+    private suspend inline fun <T> inspect(
         player: UUID,
         target: IdeAttachedTarget,
         tick: Long,
         failed: (IdeTargetFailure) -> T,
-        operation: (IdeTargetFileSystemOperations) -> T,
+        operation: suspend (IdeTargetFileSystemOperations) -> T,
     ): T {
         val resolved = leases.access(player, target, tick) ?: return failed(targetLost())
         if (!target.capabilities.readableFileSystem) return failed(unsupported())

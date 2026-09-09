@@ -72,18 +72,18 @@ internal class IdeTargetTerminalOperations(
 )
 
 internal class IdeTargetDeploymentOperations(
-    val verifyForDeploy: (ByteArray) -> ProgramDeploymentCandidate?,
-    val executableRevision: (String) -> ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision? = { null },
-    val deploy: (String, ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision, ProgramDeploymentCandidate) ->
+    val verifyForDeploy: suspend (ByteArray) -> ProgramDeploymentCandidate?,
+    val executableRevision: suspend (String) -> ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision? = { null },
+    val deploy: suspend (String, ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision, ProgramDeploymentCandidate) ->
     ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision? = { _, _, _ -> null },
-    val submitCanonicalLine: (CharArray) -> Boolean = { false },
+    val submitCanonicalLine: suspend (CharArray) -> Boolean = { false },
 )
 
 internal class IdeTargetFileSystemOperations(
-    val stat: (ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) -> ru.lazyhat.compukters.lang.runtime.fs.VmFileStat?,
-    val list: (ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath, String?, Int) ->
+    val stat: suspend (ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) -> ru.lazyhat.compukters.lang.runtime.fs.VmFileStat?,
+    val list: suspend (ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath, String?, Int) ->
     ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing?,
-    val read: (ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath, Long, Int, Long) ->
+    val read: suspend (ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath, Long, Int, Long) ->
     ru.lazyhat.compukters.lang.runtime.fs.VmFileChunk?,
 )
 
