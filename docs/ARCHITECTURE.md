@@ -103,6 +103,16 @@ its lifetime; workers are allocated on first use. Each post-tick drains at most 
 callbacks on the server thread. Stopping removes the service before closing it, so late callbacks cannot reopen it.
 Production computers attach one actor identified by `ComputerId` and a machine epoch. A full scheduler rejects a new
 attachment without blocking or failing the server tick; the block remains powered off and retries on a later tick.
+The server config exposes `vm.workers`, `vm.maximum_actors`, `vm.mailbox_capacity`, `vm.messages_per_turn`, and
+`vm.result_capacity_per_worker`; defaults are the available processor count (capped at 64), 1024 actors, 64 commands,
+4 commands per turn, and 256 replies per worker. Increasing queue limits trades bounded memory for burst tolerance;
+increasing messages per turn trades inter-actor latency for locality.
+
+Scheduler snapshots read atomic counters and bounded lane sizes without scanning registered actors. Every five seconds
+the debug log reports registered and runnable actors, mailbox and result depths, worker occupancy, average/maximum
+mailbox latency, average/maximum execution time, deferred world requests, and rejected input/mailbox submissions.
+These are lifetime counters and gauges for the current server service rather than an equal-CPU or delivery-latency
+contract.
 
 `ActorProgramComputer` is the asynchronous carrier implementation for that migration. Its server-side state is an
 observation from actor replies, and terminal, filesystem, deployment, and input requests return futures. It keeps at

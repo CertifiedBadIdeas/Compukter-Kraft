@@ -22,7 +22,10 @@ import net.minecraft.server.MinecraftServer
 import net.neoforged.neoforge.event.server.ServerStartingEvent
 import net.neoforged.neoforge.event.server.ServerStoppingEvent
 import net.neoforged.neoforge.event.tick.ServerTickEvent
+import ru.lazyhat.compukters.core.LOGGER
+import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorMetrics
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorService
+import ru.lazyhat.compukters.impl.config.CompuktersServerConfig
 import java.util.IdentityHashMap
 
 /** Server-thread-owned lifecycle; a started server allocates workers only on first use. */
@@ -54,6 +57,11 @@ internal class VmActorServiceRegistry<S : Any>(
         return servers[server]?.service?.pump(maximumEventsPerTick) ?: 0
     }
 
+    fun metrics(server: S): ProgramRuntimeActorMetrics? {
+        checkOwner(server)
+        return servers[server]?.service?.runtimeMetrics()
+    }
+
     fun stop(server: S) {
         checkOwner(server)
         servers.remove(server)?.service?.close()
@@ -70,6 +78,7 @@ internal object NeoForgeVmActorServices {
             checkOwner = { server ->
                 check(server.isSameThread) { "VM service lifecycle must run on the server thread" }
             },
+            opener = { ProgramRuntimeActorService(CompuktersServerConfig.schedulerConfig()) },
         )
 
     fun service(server: MinecraftServer): ProgramRuntimeActorService = registry.service(server)
@@ -78,7 +87,27 @@ internal object NeoForgeVmActorServices {
 
     fun afterServerTick(event: ServerTickEvent.Post) {
         registry.tick(event.server)
+        if (event.server.tickCount % METRICS_LOG_INTERVAL_TICKS == 0) {
+            registry.metrics(event.server)?.let(::logMetrics)
+        }
     }
 
     fun onServerStopping(event: ServerStoppingEvent) = registry.stop(event.server)
+
+    private fun logMetrics(metrics: ProgramRuntimeActorMetrics) {
+        val scheduler = metrics.scheduler
+        val processed = scheduler.processedMessages.coerceAtLeast(1)
+        LOGGER.debug {
+            "VM actors: registered=${scheduler.registeredActors}, runnable=${scheduler.scheduledActors}, " +
+                "mailbox=${scheduler.queuedMessages}, results=${scheduler.queuedResults}, workers=${scheduler.busyWorkers}, " +
+                "queueAvgUs=${scheduler.totalQueueLatencyNanos / processed / 1_000}, " +
+                "queueMaxUs=${scheduler.maximumQueueLatencyNanos / 1_000}, " +
+                "executionAvgUs=${scheduler.totalExecutionNanos / processed / 1_000}, " +
+                "executionMaxUs=${scheduler.maximumExecutionNanos / 1_000}, " +
+                "worldDeferred=${metrics.deferredWorldRequests}, worldTotal=${metrics.totalDeferredWorldRequests}, " +
+                "inputRejected=${metrics.rejectedInputRequests}, mailboxRejected=${scheduler.mailboxFullRejections}"
+        }
+    }
+
+    private const val METRICS_LOG_INTERVAL_TICKS = 100
 }

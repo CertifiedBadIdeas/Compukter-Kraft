@@ -188,6 +188,14 @@ class VmActorSchedulerTest {
             assertTrue(otherCompleted.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
             release.countDown()
             assertEquals(listOf(0, 1, 2, 9), scheduler.awaitResults(4).map { it.value }.sorted())
+            val metrics = scheduler.metrics()
+            assertEquals(4, metrics.acceptedMessages)
+            assertEquals(4, metrics.processedMessages)
+            assertTrue(metrics.totalQueueLatencyNanos >= metrics.maximumQueueLatencyNanos)
+            assertTrue(metrics.maximumQueueLatencyNanos > 0)
+            assertTrue(metrics.totalExecutionNanos >= metrics.maximumExecutionNanos)
+            assertTrue(metrics.maximumExecutionNanos > 0)
+            assertEquals(1, metrics.mailboxFullRejections)
         }
     }
 
@@ -299,6 +307,44 @@ class VmActorSchedulerTest {
             assertEquals(0, metrics.queuedResults)
             assertEquals(0, calls.get())
             assertFalse(scheduler.register(endpoint(1_001), processor { it }))
+        }
+    }
+
+    @Test
+    fun `one thousand actors complete synthetic compute and world responses off the owner thread`() {
+        val owner = Thread.currentThread()
+        val ranOnOwner = AtomicBoolean()
+        scheduler(workerCount = 4, maximumActors = 1_000, mailboxCapacity = 1).use { scheduler ->
+            val endpoints = List(1_000, ::endpoint)
+            endpoints.forEach { endpoint ->
+                assertTrue(
+                    scheduler.register(
+                        endpoint,
+                        processor { command: Int ->
+                            if (Thread.currentThread() === owner) ranOnOwner.set(true)
+                            -command
+                        },
+                    ),
+                )
+            }
+
+            endpoints.forEachIndexed { index, endpoint ->
+                assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(endpoint, index + 1))
+            }
+            val worldRequests = scheduler.awaitResults(1_000)
+            assertEquals(1_000, worldRequests.size)
+            worldRequests.forEach { request ->
+                assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(request.endpoint, request.value))
+            }
+            assertEquals(1_000, scheduler.awaitResults(1_000).size)
+
+            val metrics = scheduler.metrics()
+            assertFalse(ranOnOwner.get())
+            assertEquals(2_000, metrics.acceptedMessages)
+            assertEquals(2_000, metrics.processedMessages)
+            assertEquals(0, metrics.queuedMessages)
+            assertEquals(0, metrics.queuedResults)
+            assertEquals(0, metrics.mailboxFullRejections)
         }
     }
 

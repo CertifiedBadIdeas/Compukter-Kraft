@@ -66,6 +66,16 @@ class ProgramRuntimeActorServiceTest {
                 VmActorSubmission.STALE_ENDPOINT,
                 assertIs<ProgramRuntimeActorRequestException>(failure.cause).submission,
             )
+
+            val rejectedInput =
+                service.request(endpoint) { requestId ->
+                    ProgramRuntimeActorCommand.SendTerminalText(requestId, "input")
+                }
+            assertFailsWith<ExecutionException> {
+                rejectedInput.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            }
+            assertEquals(1, service.runtimeMetrics().rejectedInputRequests)
+            assertEquals(2, service.metrics().staleEndpointRejections)
         }
     }
 

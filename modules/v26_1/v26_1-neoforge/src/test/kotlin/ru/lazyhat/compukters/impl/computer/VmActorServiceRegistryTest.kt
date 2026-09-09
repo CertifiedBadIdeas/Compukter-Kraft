@@ -28,6 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -42,6 +43,7 @@ class VmActorServiceRegistryTest {
             })
         val server = Any()
         registry.start(server)
+        assertNull(registry.metrics(server))
         repeat(10) { assertEquals(0, registry.tick(server)) }
         assertEquals(0, opened)
         registry.stop(server)
@@ -61,6 +63,7 @@ class VmActorServiceRegistryTest {
         try {
             val runtime = registry.service(first)
             assertSame(runtime, registry.service(first))
+            assertEquals(runtime.runtimeMetrics(), registry.metrics(first))
             val endpoint = VmActorEndpoint(ComputerId.fromLongs(1, 1), 1)
             assertTrue(runtime.registerStandalone(endpoint))
             val firstReply = runtime.request(endpoint, ProgramRuntimeActorCommand::TerminalFullState)

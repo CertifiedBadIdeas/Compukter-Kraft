@@ -33,8 +33,11 @@ class ProgramRuntimeActorService(
     config: VmActorSchedulerConfig = VmActorSchedulerConfig(),
 ) : AutoCloseable {
     private val scheduler = VmActorScheduler<ProgramRuntimeActorCommand, ProgramRuntimeActorReply>(config)
-    private val pending = ConcurrentHashMap<RequestAddress, CompletableFuture<ProgramRuntimeActorReply>>()
+    private val pending = ConcurrentHashMap<RequestAddress, PendingRequest>()
+    private val deferredWorldRequests = ConcurrentHashMap.newKeySet<VmActorEndpoint>()
     private val nextRequestId = AtomicLong()
+    private val totalDeferredWorldRequests = AtomicLong()
+    private val rejectedInputRequests = AtomicLong()
 
     fun registerStandalone(
         endpoint: VmActorEndpoint,
@@ -96,20 +99,23 @@ class ProgramRuntimeActorService(
         require(preparedCommand.requestId == requestId) { "runtime command factory returned a mismatched request id" }
         val address = RequestAddress(endpoint, requestId)
         val future = CompletableFuture<ProgramRuntimeActorReply>()
-        check(pending.putIfAbsent(address, future) == null) { "runtime request id collision" }
+        val pendingRequest = PendingRequest(future, preparedCommand is ProgramRuntimeActorCommand.CompleteRedstoneOutput)
+        check(pending.putIfAbsent(address, pendingRequest) == null) { "runtime request id collision" }
         val submission = scheduler.submit(endpoint, preparedCommand)
         if (submission != VmActorSubmission.ACCEPTED) {
-            pending.remove(address, future)
+            pending.remove(address, pendingRequest)
+            if (preparedCommand.isInput()) rejectedInputRequests.incrementAndGet()
             future.completeExceptionally(ProgramRuntimeActorRequestException(submission))
         } else {
             future.whenComplete { _, _ ->
-                if (future.isCancelled) pending.remove(address, future)
+                if (future.isCancelled) pending.remove(address, pendingRequest)
             }
         }
         return future
     }
 
-    fun unregister(endpoint: VmActorEndpoint): CompletableFuture<Boolean> = scheduler.unregister(endpoint)
+    fun unregister(endpoint: VmActorEndpoint): CompletableFuture<Boolean> =
+        scheduler.unregister(endpoint).whenComplete { _, _ -> deferredWorldRequests.remove(endpoint) }
 
     fun pump(maximumEvents: Int): Int {
         val events = scheduler.drainEvents(maximumEvents)
@@ -117,14 +123,20 @@ class ProgramRuntimeActorService(
             when (event) {
                 is VmActorEvent.Result -> {
                     val reply = event.value
-                    pending.remove(RequestAddress(event.endpoint, reply.requestId))?.complete(reply)
+                    val request = pending.remove(RequestAddress(event.endpoint, reply.requestId)) ?: return@forEach
+                    if (request.completesWorldRequest) deferredWorldRequests.remove(event.endpoint)
+                    if (reply.value is ProgramRuntimeActorValue.RedstoneOutputRequested && deferredWorldRequests.add(event.endpoint)) {
+                        totalDeferredWorldRequests.incrementAndGet()
+                    }
+                    request.future.complete(reply)
                 }
 
                 is VmActorEvent.Failed -> {
                     val failure = ProgramRuntimeActorFailedException(event.endpoint, event.cause)
-                    pending.entries.removeIf { (address, future) ->
+                    deferredWorldRequests.remove(event.endpoint)
+                    pending.entries.removeIf { (address, request) ->
                         if (address.endpoint != event.endpoint) return@removeIf false
-                        future.completeExceptionally(failure)
+                        request.future.completeExceptionally(failure)
                         true
                     }
                 }
@@ -135,11 +147,21 @@ class ProgramRuntimeActorService(
 
     fun metrics(): VmActorSchedulerMetrics = scheduler.metrics()
 
+    fun runtimeMetrics(): ProgramRuntimeActorMetrics =
+        ProgramRuntimeActorMetrics(
+            scheduler = scheduler.metrics(),
+            pendingRequests = pending.size,
+            deferredWorldRequests = deferredWorldRequests.size,
+            totalDeferredWorldRequests = totalDeferredWorldRequests.get(),
+            rejectedInputRequests = rejectedInputRequests.get(),
+        )
+
     override fun close() {
         scheduler.close()
         val failure = ProgramRuntimeActorServiceClosedException()
-        pending.values.forEach { it.completeExceptionally(failure) }
+        pending.values.forEach { it.future.completeExceptionally(failure) }
         pending.clear()
+        deferredWorldRequests.clear()
     }
 
     private data class RequestAddress(
@@ -147,8 +169,20 @@ class ProgramRuntimeActorService(
         val requestId: ProgramRuntimeRequestId,
     )
 
+    private data class PendingRequest(
+        val future: CompletableFuture<ProgramRuntimeActorReply>,
+        val completesWorldRequest: Boolean,
+    )
+
     private companion object {
         fun incrementRequestId(previous: Long): Long = if (previous == Long.MAX_VALUE) 1 else previous + 1
+
+        fun ProgramRuntimeActorCommand.isInput(): Boolean =
+            this is ProgramRuntimeActorCommand.SendTerminalKey ||
+                this is ProgramRuntimeActorCommand.SendTerminalText ||
+                this is ProgramRuntimeActorCommand.SubmitCanonicalLine ||
+                this is ProgramRuntimeActorCommand.SubmitRedstoneInput ||
+                this is ProgramRuntimeActorCommand.CompleteRedstoneOutput
     }
 }
 

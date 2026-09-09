@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Runs independently addressed stateful processors without ever executing one processor concurrently.
@@ -53,6 +54,15 @@ class VmActorScheduler<C : Any, R : Any>(
     private val scheduledActors = AtomicInteger()
     private val queuedMessages = AtomicInteger()
     private val busyWorkers = AtomicInteger()
+    private val acceptedMessages = AtomicLong()
+    private val processedMessages = AtomicLong()
+    private val totalQueueLatencyNanos = AtomicLong()
+    private val maximumQueueLatencyNanos = AtomicLong()
+    private val totalExecutionNanos = AtomicLong()
+    private val maximumExecutionNanos = AtomicLong()
+    private val mailboxFullRejections = AtomicLong()
+    private val staleEndpointRejections = AtomicLong()
+    private val closedRejections = AtomicLong()
     private val drainCursor = AtomicInteger()
     private val workers =
         List(config.workerCount) { index ->
@@ -81,16 +91,28 @@ class VmActorScheduler<C : Any, R : Any>(
         endpoint: VmActorEndpoint,
         command: C,
     ): VmActorSubmission {
-        if (!accepting.get()) return VmActorSubmission.CLOSED
-        val actor = actors[endpoint.computerId] ?: return VmActorSubmission.STALE_ENDPOINT
+        if (!accepting.get()) {
+            closedRejections.incrementAndGet()
+            return VmActorSubmission.CLOSED
+        }
+        val actor =
+            actors[endpoint.computerId] ?: run {
+                staleEndpointRejections.incrementAndGet()
+                return VmActorSubmission.STALE_ENDPOINT
+            }
         var schedule = false
         synchronized(actor.lock) {
             if (actor.endpoint != endpoint || actor.closing || actor.closed) {
+                staleEndpointRejections.incrementAndGet()
                 return VmActorSubmission.STALE_ENDPOINT
             }
-            if (actor.mailbox.size >= config.mailboxCapacity) return VmActorSubmission.MAILBOX_FULL
-            actor.mailbox.addLast(command)
+            if (actor.mailbox.size >= config.mailboxCapacity) {
+                mailboxFullRejections.incrementAndGet()
+                return VmActorSubmission.MAILBOX_FULL
+            }
+            actor.mailbox.addLast(QueuedCommand(command, System.nanoTime()))
             queuedMessages.incrementAndGet()
+            acceptedMessages.incrementAndGet()
             if (!actor.scheduled) {
                 actor.scheduled = true
                 scheduledActors.incrementAndGet()
@@ -145,6 +167,15 @@ class VmActorScheduler<C : Any, R : Any>(
             queuedMessages = queuedMessages.get(),
             busyWorkers = busyWorkers.get(),
             queuedResults = resultLanes.sumOf { it.size },
+            acceptedMessages = acceptedMessages.get(),
+            processedMessages = processedMessages.get(),
+            totalQueueLatencyNanos = totalQueueLatencyNanos.get(),
+            maximumQueueLatencyNanos = maximumQueueLatencyNanos.get(),
+            totalExecutionNanos = totalExecutionNanos.get(),
+            maximumExecutionNanos = maximumExecutionNanos.get(),
+            mailboxFullRejections = mailboxFullRejections.get(),
+            staleEndpointRejections = staleEndpointRejections.get(),
+            closedRejections = closedRejections.get(),
         )
 
     override fun close() {
@@ -216,16 +247,25 @@ class VmActorScheduler<C : Any, R : Any>(
 
     private fun runTurn(actor: ActorCell<C, R>) {
         repeat(config.messagesPerTurn) {
-            val command =
+            val queued =
                 synchronized(actor.lock) {
                     actor.mailbox.removeFirstOrNull()?.also { queuedMessages.decrementAndGet() }
                 } ?: return@repeat
+            val queueLatency = (System.nanoTime() - queued.enqueuedAtNanos).coerceAtLeast(0)
+            totalQueueLatencyNanos.addAndGet(queueLatency)
+            maximumQueueLatencyNanos.accumulateAndGet(queueLatency) { previous, current -> maxOf(previous, current) }
+            val startedAt = System.nanoTime()
             val result =
                 try {
-                    actor.processor.process(command)
+                    actor.processor.process(queued.command)
                 } catch (cause: Throwable) {
                     failActor(actor, cause)
                     return
+                } finally {
+                    val elapsed = (System.nanoTime() - startedAt).coerceAtLeast(0)
+                    processedMessages.incrementAndGet()
+                    totalExecutionNanos.addAndGet(elapsed)
+                    maximumExecutionNanos.accumulateAndGet(elapsed) { previous, current -> maxOf(previous, current) }
                 }
             if (result != null) {
                 val sequence = ++actor.resultSequence
@@ -315,11 +355,16 @@ class VmActorScheduler<C : Any, R : Any>(
         val homeLane: Int,
     ) {
         val lock = Any()
-        val mailbox = ArrayDeque<C>()
+        val mailbox = ArrayDeque<QueuedCommand<C>>()
         val closeBarrier = CompletableFuture<Boolean>()
         var scheduled = false
         var closing = false
         var closed = false
         var resultSequence = 0L
     }
+
+    private data class QueuedCommand<C : Any>(
+        val command: C,
+        val enqueuedAtNanos: Long,
+    )
 }
