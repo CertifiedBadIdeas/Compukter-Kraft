@@ -22,11 +22,8 @@ import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorComman
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorReply
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorService
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorValue
-import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeRequestId
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEndpoint
-import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEvent
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
-import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSubmission
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramTickBudget
@@ -46,7 +43,6 @@ class ProgramRuntimeActorIntegrationTest {
         VmRuntime.loadNativeLibrary(Path.of(requiredProperty("compukters.ffi.library")))
         val artifact = Path.of(requiredProperty("compukters.programRuntime.artifact")).readBytes()
         val endpoint = VmActorEndpoint(ComputerId.fromLongs(30, 40), 1)
-        var nextRequestId = 0L
         ProgramRuntimeActorService(
             VmActorSchedulerConfig(
                 workerCount = 1,
@@ -58,47 +54,42 @@ class ProgramRuntimeActorIntegrationTest {
         ).use { scheduler ->
             assertEquals(true, scheduler.registerStandalone(endpoint, ProgramTickBudget(64, 64, 4)))
             val started =
-                scheduler.request(
+                scheduler.awaitRequest(
                     endpoint,
-                    ProgramRuntimeActorCommand.Start(ProgramRuntimeRequestId(++nextRequestId), artifact),
-                )
+                ) { requestId ->
+                    ProgramRuntimeActorCommand.Start(requestId, artifact)
+                }
             assertEquals(ProgramStartResult.Started, assertIs<ProgramRuntimeActorValue.Start>(started.value).result)
 
             var state = started.state
             var worldTick = 0L
             while (state != ProgramRuntimeState.WaitingForInput && worldTick < MAXIMUM_TICKS) {
                 val advanced =
-                    scheduler.request(
+                    scheduler.awaitRequest(
                         endpoint,
-                        ProgramRuntimeActorCommand.Advance(
-                            ProgramRuntimeRequestId(++nextRequestId),
-                            worldTick++,
-                        ),
-                    )
+                    ) { requestId -> ProgramRuntimeActorCommand.Advance(requestId, worldTick++) }
                 state = advanced.state
             }
             assertEquals(ProgramRuntimeState.WaitingForInput, state)
 
             val terminal =
-                scheduler.request(
+                scheduler.awaitRequest(
                     endpoint,
-                    ProgramRuntimeActorCommand.TerminalFullState(ProgramRuntimeRequestId(++nextRequestId)),
-                )
+                ) { requestId -> ProgramRuntimeActorCommand.TerminalFullState(requestId) }
             assertEquals(">\n", terminalText(requireNotNull(assertIs<ProgramRuntimeActorValue.TerminalStateValue>(terminal.value).state)))
             assertEquals(true, scheduler.unregister(endpoint).get(TIMEOUT_SECONDS, TimeUnit.SECONDS))
         }
     }
 
-    private fun ProgramRuntimeActorService.request(
+    private fun ProgramRuntimeActorService.awaitRequest(
         endpoint: VmActorEndpoint,
-        command: ProgramRuntimeActorCommand,
+        command: (ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeRequestId) -> ProgramRuntimeActorCommand,
     ): ProgramRuntimeActorReply {
-        assertEquals(VmActorSubmission.ACCEPTED, submit(endpoint, command))
+        val future = request(endpoint, command)
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
         while (System.nanoTime() < deadline) {
-            drainEvents(1).singleOrNull()?.let { event ->
-                return assertIs<VmActorEvent.Result<ProgramRuntimeActorReply>>(event).value
-            }
+            pump(1)
+            if (future.isDone) return future.get()
             Thread.onSpinWait()
         }
         error("runtime actor reply timed out")

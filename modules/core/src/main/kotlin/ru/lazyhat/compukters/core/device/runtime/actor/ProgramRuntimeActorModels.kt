@@ -20,6 +20,7 @@ package ru.lazyhat.compukters.core.device.runtime.actor
 
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
+import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
 import ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing
 import ru.lazyhat.compukters.lang.runtime.fs.VmFileChunk
 import ru.lazyhat.compukters.lang.runtime.fs.VmFileStat
@@ -177,6 +178,16 @@ sealed interface ProgramRuntimeActorCommand {
         val packet: Int,
     ) : ProgramRuntimeActorCommand
 
+    data class CompleteRedstoneOutput(
+        override val requestId: ProgramRuntimeRequestId,
+        val packed: Int,
+        val result: RedstoneCommitResult,
+    ) : ProgramRuntimeActorCommand {
+        init {
+            require(result != RedstoneCommitResult.Deferred) { "redstone completion cannot be deferred" }
+        }
+    }
+
     data class Shutdown(
         override val requestId: ProgramRuntimeRequestId,
     ) : ProgramRuntimeActorCommand
@@ -239,6 +250,10 @@ sealed interface ProgramRuntimeActorValue {
 
     data class DeployedRevision(
         val revision: VmExecutableRevision?,
+    ) : ProgramRuntimeActorValue
+
+    data class RedstoneOutputRequested(
+        val packed: Int,
     ) : ProgramRuntimeActorValue
 
     data class Rejected(

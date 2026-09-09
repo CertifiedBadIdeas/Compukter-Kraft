@@ -65,6 +65,32 @@ import kotlin.test.assertTrue
 
 class ProgramRuntimeHostTest {
     @Test
+    fun `deferred redstone commit suspends advancement until the matching host completion`() {
+        val request = redstoneSide(1, 2, 7)
+        val candidate = RedstoneWire.replaceOutput(0, 2, 7)
+        val session = ScriptedSession(outcomes = listOf(VmOutcome.HostRequestBatch(listOf(request)), VmOutcome.Halted(null)))
+        val host =
+            ProgramRuntimeHost(
+                sessionFactory = ProgramVmSessionFactory { session },
+                redstoneHostPort = RedstoneHostPort { RedstoneCommitResult.Deferred },
+            )
+        host.start(byteArrayOf(1))
+        session.confirmedOutputs.clear()
+
+        assertEquals(ProgramRuntimeState.Running, host.serverTick())
+        assertEquals(emptyList(), session.responses)
+        assertEquals(1, session.advances.size)
+        assertEquals(ProgramRuntimeState.Running, host.serverTick())
+        assertEquals(1, session.advances.size)
+        assertFalse(host.completeRedstoneOutput(candidate + 1, RedstoneCommitResult.Committed))
+
+        assertTrue(host.completeRedstoneOutput(candidate, RedstoneCommitResult.Committed))
+        assertEquals(listOf(candidate), session.confirmedOutputs)
+        assertEquals(listOf(response(1, 1, HostResponse.UnitSuccess)), session.responses)
+        assertEquals(ProgramRuntimeState.Halted(null), host.serverTick())
+    }
+
+    @Test
     fun `redstone batch commits once confirms before every success and stops this tick`() {
         val events = mutableListOf<String>()
         val requests =

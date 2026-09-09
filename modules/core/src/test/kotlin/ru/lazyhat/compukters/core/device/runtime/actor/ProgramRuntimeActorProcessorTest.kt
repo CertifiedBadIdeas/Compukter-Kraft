@@ -24,6 +24,7 @@ import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramVmSession
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramVmSessionFactory
+import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
 import ru.lazyhat.compukters.lang.runtime.capability.HostResponse
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryEntry
@@ -33,6 +34,8 @@ import ru.lazyhat.compukters.lang.runtime.fs.VmFileKind
 import ru.lazyhat.compukters.lang.runtime.fs.VmFileMetadata
 import ru.lazyhat.compukters.lang.runtime.fs.VmFileStat
 import ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath
+import ru.lazyhat.compukters.lang.runtime.vm.CapabilityIdentity
+import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalCell
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
@@ -41,8 +44,10 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalPosition
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
+import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequest
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequestIdentity
 import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
+import ru.lazyhat.compukters.lang.runtime.vm.VmValue
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -51,6 +56,39 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ProgramRuntimeActorProcessorTest {
+    @Test
+    fun `redstone output crosses the actor boundary as a deferred world request`() {
+        val session = RecordingSession()
+        session.nextOutcome =
+            VmOutcome.HostRequestBatch(
+                listOf(VmHostRequest(1, REDSTONE, 6, listOf(VmValue.I32(2), VmValue.I32(7)))),
+            )
+        val port = ActorRedstoneHostPort()
+        val host = ProgramRuntimeHost(ProgramVmSessionFactory { session }, redstoneHostPort = port)
+        val endpoint = VmActorEndpoint(ComputerId.fromLongs(5, 6), 1)
+        val expected = RedstoneWire.replaceOutput(0, 2, 7)
+        VmActorScheduler<ProgramRuntimeActorCommand, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
+            assertTrue(scheduler.register(endpoint, ProgramRuntimeActorProcessor(host, port)))
+            scheduler.submit(endpoint, ProgramRuntimeActorCommand.Start(request(1), byteArrayOf(1)))
+            scheduler.awaitReplies(1)
+            scheduler.submit(endpoint, ProgramRuntimeActorCommand.Advance(request(2), 100))
+
+            val request = assertIs<ProgramRuntimeActorValue.RedstoneOutputRequested>(scheduler.awaitReplies(1).single().value)
+            assertEquals(expected, request.packed)
+
+            scheduler.submit(
+                endpoint,
+                ProgramRuntimeActorCommand.CompleteRedstoneOutput(
+                    request(3),
+                    request.packed,
+                    RedstoneCommitResult.Committed,
+                ),
+            )
+            assertTrue(assertIs<ProgramRuntimeActorValue.Accepted>(scheduler.awaitReplies(1).single().value).accepted)
+            assertTrue(session.calls.any { it.startsWith("resume:") })
+        }
+    }
+
     @Test
     fun `runtime operations and native resources remain on one worker-owned actor`() {
         val session = RecordingSession()
@@ -188,12 +226,16 @@ class ProgramRuntimeActorProcessorTest {
         var verifiedArtifact: ByteArray? = null
         var canonicalLine: String? = null
         var closeCalls = 0
+        var nextOutcome: VmOutcome = VmOutcome.SliceExhausted
 
         override fun advance(
             guestBudget: Int,
             maintenanceBudget: Int,
             hostRequestBudget: Int,
-        ): VmOutcome = record("advance") { VmOutcome.SliceExhausted }
+        ): VmOutcome =
+            record("advance") {
+                nextOutcome.also { nextOutcome = VmOutcome.SliceExhausted }
+            }
 
         override fun resume(
             identity: VmHostRequestIdentity,
@@ -301,6 +343,7 @@ class ProgramRuntimeActorProcessorTest {
     }
 
     private companion object {
+        val REDSTONE = CapabilityIdentity("compukter", "redstone", 1, 0)
         const val TIMEOUT_SECONDS = 5L
     }
 }

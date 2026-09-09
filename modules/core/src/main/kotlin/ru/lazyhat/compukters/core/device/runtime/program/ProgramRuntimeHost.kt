@@ -74,6 +74,7 @@ class ProgramRuntimeHost internal constructor(
     private var vmEpoch = 0L
     private var activeVmEpoch = 0L
     private var pendingCompilation: ComputerCompilationAddress? = null
+    private var pendingRedstoneCommit: PendingRedstoneCommit? = null
     private var confirmedRedstoneOutput = RedstoneWire.requireOutputRegister(initialRedstoneOutput)
     private var lastRedstoneInput = 0
     var state: ProgramRuntimeState = ProgramRuntimeState.Idle
@@ -121,6 +122,7 @@ class ProgramRuntimeHost internal constructor(
             applyCompilationCompletion(activeSession)
             return state
         }
+        if (pendingRedstoneCommit != null) return state
         advanceForTick(activeSession)
         if (session !== activeSession) return state
         try {
@@ -353,6 +355,42 @@ class ProgramRuntimeHost internal constructor(
         }
     }
 
+    fun completeRedstoneOutput(
+        packed: Int,
+        result: RedstoneCommitResult,
+    ): Boolean {
+        val validated = RedstoneWire.requireOutputRegister(packed)
+        if (result == RedstoneCommitResult.Deferred) return false
+        val pending = pendingRedstoneCommit ?: return false
+        if (pending.packed != validated || session !== pending.session) return false
+        pendingRedstoneCommit = null
+        val response =
+            when (result) {
+                RedstoneCommitResult.Committed -> {
+                    confirmedRedstoneOutput = validated
+                    try {
+                        pending.session.confirmRedstoneOutput(validated)
+                    } catch (error: VmBridgeException) {
+                        finish(ProgramRuntimeState.Failed(ProgramFailure.Bridge(error.bridgeDetail())))
+                        return true
+                    }
+                    HostResponse.UnitSuccess
+                }
+
+                is RedstoneCommitResult.Failed -> {
+                    HostResponse.Failure(result.kind, result.code)
+                }
+
+                RedstoneCommitResult.Deferred -> {
+                    error("deferred redstone completion was rejected")
+                }
+            }
+        for (request in pending.requests) {
+            if (!resume(request, response)) break
+        }
+        return true
+    }
+
     fun shutdown() {
         if (state == ProgramRuntimeState.Closed) return
         releaseSession()
@@ -408,6 +446,11 @@ class ProgramRuntimeHost internal constructor(
 
                     is RedstoneCommitResult.Failed -> {
                         HostResponse.Failure(result.kind, result.code)
+                    }
+
+                    RedstoneCommitResult.Deferred -> {
+                        pendingRedstoneCommit = PendingRedstoneCommit(activeSession, batch.packed, requests)
+                        return
                     }
                 }
             }
@@ -475,6 +518,7 @@ class ProgramRuntimeHost internal constructor(
     private fun releaseSession() {
         pendingCompilation?.let { compilerRouter?.cancel(it) }
         pendingCompilation = null
+        pendingRedstoneCommit = null
         activeVmEpoch = 0
         try {
             session?.close()
@@ -493,4 +537,10 @@ class ProgramRuntimeHost internal constructor(
         fun isRedstoneOutputRequest(request: VmHostRequest): Boolean =
             request.capability == REDSTONE_CAPABILITY && request.operation in 6..7
     }
+
+    private data class PendingRedstoneCommit(
+        val session: ProgramVmSession,
+        val packed: Int,
+        val requests: List<VmHostRequest>,
+    )
 }

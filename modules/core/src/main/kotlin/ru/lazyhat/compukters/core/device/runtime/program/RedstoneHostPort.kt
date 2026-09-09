@@ -27,6 +27,8 @@ fun interface RedstoneHostPort {
 sealed interface RedstoneCommitResult {
     data object Committed : RedstoneCommitResult
 
+    data object Deferred : RedstoneCommitResult
+
     data class Failed(
         val kind: HostFailureKind,
         val code: Long,

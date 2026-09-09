@@ -33,6 +33,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentWrongMachineException
 
 internal class ProgramRuntimeActorProcessor(
     private val host: ProgramRuntimeHost,
+    private val redstonePort: ActorRedstoneHostPort? = null,
 ) : VmActorProcessor<ProgramRuntimeActorCommand, ProgramRuntimeActorReply> {
     private val deploymentCandidates = mutableMapOf<ProgramDeploymentToken, ProgramDeploymentCandidate>()
     private var nextDeploymentToken = 0L
@@ -79,7 +80,10 @@ internal class ProgramRuntimeActorProcessor(
 
             is ProgramRuntimeActorCommand.Advance -> {
                 host.serverTick()
-                ProgramRuntimeActorValue.None
+                redstonePort
+                    ?.takeRequestedOutput()
+                    ?.let(ProgramRuntimeActorValue::RedstoneOutputRequested)
+                    ?: ProgramRuntimeActorValue.None
             }
 
             is ProgramRuntimeActorCommand.TerminalFullState -> {
@@ -139,6 +143,10 @@ internal class ProgramRuntimeActorProcessor(
 
             is ProgramRuntimeActorCommand.SubmitRedstoneInput -> {
                 ProgramRuntimeActorValue.Accepted(host.submitRedstoneInput(command.packet))
+            }
+
+            is ProgramRuntimeActorCommand.CompleteRedstoneOutput -> {
+                ProgramRuntimeActorValue.Accepted(host.completeRedstoneOutput(command.packed, command.result))
             }
 
             is ProgramRuntimeActorCommand.Shutdown -> {
