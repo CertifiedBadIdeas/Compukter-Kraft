@@ -192,7 +192,10 @@ class ProgramRuntimeHostIntegrationTest {
 
         submit(host, "help")
         pressEnter(host)
-        assertEquals("> help\nhelp echo clear pwd ls stat kotlinc edit\n>\n", terminalText(requireNotNull(host.terminalFullState())))
+        assertEquals(
+            "> help\nhelp echo clear pwd ls stat kotlinc edit vmbench\n>\n",
+            terminalText(requireNotNull(host.terminalFullState())),
+        )
 
         submit(host, "pwd")
         pressEnter(host)

@@ -43,7 +43,7 @@ private fun dispatchWords(words: Array<String>) {
     if (words.size == 0) return
     val command = words[0]
     if (command == "help") {
-        println("help echo clear pwd ls stat kotlinc edit")
+        println("help echo clear pwd ls stat kotlinc edit vmbench")
     } else if (command == "echo") {
         var index = 1
         while (index < words.size) {

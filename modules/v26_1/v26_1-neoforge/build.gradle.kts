@@ -550,7 +550,7 @@ val verifyPackagedCompukterFfi =
                 "NeoForge computer classes are missing from ${archive.name}"
             }
             check(
-                listOf("boot", "shell", "kotlinc", "edit")
+                listOf("boot", "shell", "kotlinc", "edit", "vmbench")
                     .all { program -> "system/programs/$program" in entries },
             ) {
                 "packaged extensionless system programs are missing from ${archive.name}"

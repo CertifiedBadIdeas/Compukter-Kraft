@@ -32,17 +32,20 @@ class SystemRomImageTest {
         val shell = byteArrayOf(1, 2, 3, 4)
         val kotlinc = byteArrayOf(5, 6, 7)
         val edit = byteArrayOf(10, 11, 12)
-        val first = SystemRomImage.encodePrograms(boot, shell, kotlinc, edit)
+        val vmbench = byteArrayOf(13, 14)
+        val first = SystemRomImage.encodePrograms(boot, shell, kotlinc, edit, vmbench)
         boot.fill(0)
         shell.fill(0)
         kotlinc.fill(0)
         edit.fill(0)
+        vmbench.fill(0)
         val second =
             SystemRomImage.encodePrograms(
                 byteArrayOf(9, 8),
                 byteArrayOf(1, 2, 3, 4),
                 byteArrayOf(5, 6, 7),
                 byteArrayOf(10, 11, 12),
+                byteArrayOf(13, 14),
             )
         assertContentEquals(first, second)
 
@@ -52,11 +55,12 @@ class SystemRomImageTest {
         assertContentEquals("CPKTROM\u0000".encodeToByteArray(), ByteArray(8).also(buffer::get))
         assertEquals(1, buffer.short.toInt())
         assertEquals(0, buffer.short.toInt())
-        assertEquals(4, buffer.int)
+        assertEquals(5, buffer.int)
         assertEntry(buffer, "/rom/boot", byteArrayOf(9, 8))
         assertEntry(buffer, "/rom/edit", byteArrayOf(10, 11, 12))
         assertEntry(buffer, "/rom/kotlinc", byteArrayOf(5, 6, 7))
         assertEntry(buffer, "/rom/shell", byteArrayOf(1, 2, 3, 4))
+        assertEntry(buffer, "/rom/vmbench", byteArrayOf(13, 14))
         assertEquals(0, buffer.remaining())
     }
 

@@ -236,6 +236,35 @@ object ComputerBlockGameTest {
                 "shell did not resume after the foreground child",
             )
 
+            enterCommand(computer, "vmbench cpu 2")
+            advanceUntilInput(computer)
+            helper.assertTrue(
+                terminalText(computer.terminalFullState()).endsWith(
+                    "> vmbench cpu 2\n" +
+                        "vmbench cpu: rounds=2, iterations per round=1024\n" +
+                        "vmbench cpu: checksum=-365826314\n>\n",
+                ),
+                "vmbench did not execute the deterministic CPU workload",
+            )
+
+            enterCommand(computer, "vmbench cpu 0")
+            advanceUntilInput(computer)
+            helper.assertTrue(
+                terminalText(computer.terminalFullState()).endsWith(
+                    "> vmbench cpu 0\nusage: vmbench cpu <rounds 1..1000000>\n>\n",
+                ),
+                "vmbench did not reject an invalid round count",
+            )
+
+            enterCommand(computer, "vmbench memory 2")
+            advanceUntilInput(computer)
+            helper.assertTrue(
+                terminalText(computer.terminalFullState()).endsWith(
+                    "> vmbench memory 2\nusage: vmbench cpu <rounds 1..1000000>\n>\n",
+                ),
+                "vmbench did not reject an invalid workload mode",
+            )
+
             helper.assertTrue(computer.reboot() == ProgramComputerState.Running, "computer reboot did not start a new boot stack")
             advanceUntilInput(computer)
             helper.assertTrue(
@@ -577,6 +606,7 @@ object ComputerBlockGameTest {
                 "/rom/hello" to fixture("process-terminal-child.cpkt"),
                 "/rom/kotlinc" to resource("/system/programs/kotlinc"),
                 "/rom/shell" to resource("/system/programs/shell"),
+                "/rom/vmbench" to resource("/system/programs/vmbench"),
             )
         val payloadSize =
             programs.fold(16) { size, (path, artifact) ->

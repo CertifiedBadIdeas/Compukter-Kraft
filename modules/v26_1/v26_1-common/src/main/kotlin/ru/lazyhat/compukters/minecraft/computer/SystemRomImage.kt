@@ -24,13 +24,20 @@ import java.security.MessageDigest
 
 internal object SystemRomImage {
     fun packaged(): ByteArray =
-        encodePrograms(SystemProgramImage.boot(), SystemProgramImage.shell(), SystemProgramImage.kotlinc(), SystemProgramImage.edit())
+        encodePrograms(
+            SystemProgramImage.boot(),
+            SystemProgramImage.shell(),
+            SystemProgramImage.kotlinc(),
+            SystemProgramImage.edit(),
+            SystemProgramImage.vmbench(),
+        )
 
     fun encodePrograms(
         bootArtifact: ByteArray,
         shellArtifact: ByteArray,
         kotlincArtifact: ByteArray,
         editArtifact: ByteArray,
+        vmbenchArtifact: ByteArray,
     ): ByteArray {
         val programs =
             listOf(
@@ -38,6 +45,7 @@ internal object SystemRomImage {
                 "/rom/shell" to shellArtifact,
                 "/rom/kotlinc" to kotlincArtifact,
                 "/rom/edit" to editArtifact,
+                "/rom/vmbench" to vmbenchArtifact,
             ).sortedBy { it.first }
         programs.forEach { (path, artifact) ->
             require(artifact.isNotEmpty()) { "system program $path must not be empty" }

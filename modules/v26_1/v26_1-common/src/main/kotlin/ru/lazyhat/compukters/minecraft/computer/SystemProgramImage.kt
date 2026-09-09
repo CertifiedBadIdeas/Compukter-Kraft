@@ -27,6 +27,8 @@ internal object SystemProgramImage {
 
     fun edit(): ByteArray = load(EDIT_RESOURCE, "edit")
 
+    fun vmbench(): ByteArray = load(VMBENCH_RESOURCE, "vmbench")
+
     private fun load(
         resource: String,
         name: String,
@@ -39,4 +41,5 @@ internal object SystemProgramImage {
     private const val SHELL_RESOURCE = "/system/programs/shell"
     private const val KOTLINC_RESOURCE = "/system/programs/kotlinc"
     private const val EDIT_RESOURCE = "/system/programs/edit"
+    private const val VMBENCH_RESOURCE = "/system/programs/vmbench"
 }
