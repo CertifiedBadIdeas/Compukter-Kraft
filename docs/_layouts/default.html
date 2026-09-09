@@ -6,7 +6,6 @@
     <meta name="theme-color" content="#11151d">
     <meta name="description" content="{{ page.description | default: site.description | escape }}">
     <title>{% if page.title %}{{ page.title | escape }} · {% endif %}{{ site.title | escape }}</title>
-    {% if page.source_links_base %}<base href="{{ page.source_links_base }}">{% endif %}
     <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
   </head>
   <body>
