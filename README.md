@@ -35,6 +35,8 @@ See [Redstone GPIO](docs/REDSTONE.md) for local-side input waits, persistent
 weak/direct outputs, and tick-boundary behavior.
 See [Verification](docs/VERIFICATION.md) for focused checks, complete local
 verification, and the separate tagged universal release gate.
+See the [in-world VM benchmark guide](docs/VM-BENCHMARK.md) for profiling the
+server-tick cost of multiple simultaneously runnable computers.
 
 ## Minecraft development
 

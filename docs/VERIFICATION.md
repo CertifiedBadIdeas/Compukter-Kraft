@@ -23,6 +23,10 @@ Run evidence after the last relevant change. Record the exact command and result
 scope. For a multi-stage implementation, focused checks protect each stage; `verifyLocalFull` is required after all
 stages are integrated.
 
+Use the [in-world VM benchmark](https://certifiedbadideas.github.io/Compukters/VM-BENCHMARK/) for repeatable manual
+profiles of aggregate runnable-computer cost. Its results are environment-specific performance evidence, not a
+replacement for deterministic runtime and conformance checks.
+
 ## Verification levels
 
 | Command | Claim it supports | It does not establish |

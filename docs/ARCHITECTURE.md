@@ -160,7 +160,7 @@ detach bound the target attachment lifetime; revision conflicts require an expli
 
 ## Guest programs and APIs
 
-Boot, shell, `kotlinc`, and `edit` are ordinary no-std Kotlin programs packaged as extensionless executables in `/rom`.
+Boot, shell, `kotlinc`, `edit`, and `vmbench` are ordinary no-std Kotlin programs packaged as extensionless executables in `/rom`.
 Shell owns line editing, authoritative echo, prompts, and direct built-ins. A non-absolute external command resolves
 first to `/home/<name>` and, only when that path is absent, falls back to `/rom/<name>`; an absolute command is used as
 given.
@@ -180,6 +180,11 @@ Ctrl+X exits directly when clean or opens a Y/N/Escape save prompt when dirty. T
 belong to the computer filesystem, while terminal state belongs only to the current VM lifetime. The playable
 in-computer loop is `edit demo.kt` -> `kotlinc demo.kt` -> `demo`; source and artifact survive machine reload and remain
 isolated by `ComputerId`.
+
+`/rom/vmbench cpu <rounds>` runs the documented deterministic, allocation-free integer/branch workload through the
+ordinary foreground process and VM quota path. It exists to measure aggregate in-world runtime cost and does not own a
+timing capability, privileged execution budget, or benchmark-only host path. See the
+[in-world VM benchmark guide](https://certifiedbadideas.github.io/Compukters/VM-BENCHMARK/) for the controlled scaling procedure.
 
 Terminal, standard output and error, redstone, process, filesystem, and compiler declarations live in the
 `guest-platform` bundle as separately identifiable modules. Compilation and IDE analysis resolve the same module graph
