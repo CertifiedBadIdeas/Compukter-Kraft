@@ -28,6 +28,7 @@ import net.neoforged.neoforge.common.NeoForge
 import ru.lazyhat.compukters.core.LOGGER
 import ru.lazyhat.compukters.core.MOD_ID
 import ru.lazyhat.compukters.impl.compiler.NeoForgeCompilerServices
+import ru.lazyhat.compukters.impl.computer.NeoForgeVmActorServices
 import ru.lazyhat.compukters.impl.config.CompuktersClientConfig
 import ru.lazyhat.compukters.impl.fs.NeoForgeWorldFileSystemStores
 import ru.lazyhat.compukters.impl.ide.IdeClientBootstrap
@@ -48,6 +49,9 @@ class CompuktersMod(
         eventBus.addListener(IdeTargetNetwork::register)
         if (FMLEnvironment.getDist() == Dist.CLIENT) IdeClientBootstrap.register(eventBus)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onLevelSave)
+        NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::onServerStarting)
+        NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::afterServerTick)
+        NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::onServerStopping)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onServerStopping)
         NeoForge.EVENT_BUS.addListener(NeoForgeCompilerServices::onServerStopping)
         modContainer.registerConfig(ModConfig.Type.CLIENT, CompuktersClientConfig.SPEC)

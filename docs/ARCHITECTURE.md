@@ -98,6 +98,12 @@ I/O run outside the server tick thread.
 
 ## Runtime ownership
 
+The asynchronous actor migration (#603) has a server-scoped service registered with NeoForge. Server startup records
+its lifetime; workers are allocated on first use. Each post-tick drains at most 256 actor results and runs reply
+callbacks on the server thread. Stopping removes the service before closing it, so late callbacks cannot reopen it.
+The production computer carrier still uses the synchronous host below until terminal, deployment, filesystem, and
+save/unload operations have all been adapted to actor ownership.
+
 `ProgramRuntimeHost` owns one current Rust `ComputerMachine`, advances it with bounded guest and maintenance budgets,
 commits terminal changes once per active server tick, and exposes typed full/delta states and failures through JDK 25
 FFM. It does not own a second grid or output transcript. It is loader-independent and server-thread confined.
