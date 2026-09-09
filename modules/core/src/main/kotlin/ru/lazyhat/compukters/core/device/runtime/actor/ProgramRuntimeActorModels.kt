@@ -180,6 +180,7 @@ sealed interface ProgramRuntimeActorCommand {
 
     data class CompleteRedstoneOutput(
         override val requestId: ProgramRuntimeRequestId,
+        val outputRequestId: ProgramRuntimeRequestId,
         val packed: Int,
         val result: RedstoneCommitResult,
     ) : ProgramRuntimeActorCommand {

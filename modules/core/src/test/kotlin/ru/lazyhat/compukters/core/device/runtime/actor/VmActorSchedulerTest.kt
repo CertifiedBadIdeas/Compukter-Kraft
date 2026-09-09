@@ -31,6 +31,81 @@ import kotlin.test.assertTrue
 
 class VmActorSchedulerTest {
     @Test
+    fun `worker migration cannot reorder actor replies`() {
+        val firstEntered = CountDownLatch(1)
+        val releaseFirst = CountDownLatch(1)
+        val otherBlocked = CountDownLatch(1)
+        val releaseOther = CountDownLatch(1)
+        val originalBlocked = CountDownLatch(1)
+        val releaseOriginal = CountDownLatch(1)
+        val firstWorker = AtomicInteger(-1)
+        val secondWorker = AtomicInteger(-1)
+        val target = endpoint(100)
+
+        fun workerIndex() =
+            Thread
+                .currentThread()
+                .name
+                .substringAfterLast('-')
+                .toInt()
+
+        fun blocker(
+            entered: CountDownLatch,
+            release: CountDownLatch,
+        ) = object : VmActorProcessor<Int, Int> {
+            override fun process(command: Int): Int? {
+                entered.countDown()
+                check(release.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+                return null
+            }
+        }
+        scheduler(workerCount = 2, messagesPerTurn = 1).use { scheduler ->
+            try {
+                assertTrue(
+                    scheduler.register(
+                        target,
+                        processor { command: Int ->
+                            if (command == 1) {
+                                firstWorker.set(workerIndex())
+                                firstEntered.countDown()
+                                check(releaseFirst.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+                            } else {
+                                secondWorker.set(workerIndex())
+                            }
+                            command
+                        },
+                    ),
+                )
+                assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(target, 1))
+                assertTrue(firstEntered.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+                assertTrue(scheduler.register(endpoint(101), blocker(otherBlocked, releaseOther)))
+                assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(endpoint(101), 0))
+                assertTrue(otherBlocked.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+                // Start draining at the second worker's lane to expose worker-based publication order.
+                repeat(1 - firstWorker.get()) { assertTrue(scheduler.drainEvents(1).isEmpty()) }
+                releaseFirst.countDown()
+                val firstDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
+                while (scheduler.metrics().queuedResults < 1 && System.nanoTime() < firstDeadline) Thread.onSpinWait()
+                assertEquals(1, scheduler.metrics().queuedResults)
+                assertTrue(scheduler.register(endpoint(102), blocker(originalBlocked, releaseOriginal)))
+                assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(endpoint(102), 0))
+                assertTrue(originalBlocked.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+                releaseOther.countDown()
+                assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(target, 2))
+                val secondDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
+                while (scheduler.metrics().queuedResults < 2 && System.nanoTime() < secondDeadline) Thread.onSpinWait()
+                assertEquals(2, scheduler.metrics().queuedResults)
+                assertEquals(1 - firstWorker.get(), secondWorker.get())
+                assertEquals(listOf(1, 2), scheduler.awaitResults(2).map { it.value })
+            } finally {
+                releaseFirst.countDown()
+                releaseOther.countDown()
+                releaseOriginal.countDown()
+            }
+        }
+    }
+
+    @Test
     fun `a burst keeps one actor single flight and preserves accepted order`() {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)

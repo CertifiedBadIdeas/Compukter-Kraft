@@ -37,6 +37,7 @@ internal class ProgramRuntimeActorProcessor(
 ) : VmActorProcessor<ProgramRuntimeActorCommand, ProgramRuntimeActorReply> {
     private val deploymentCandidates = mutableMapOf<ProgramDeploymentToken, ProgramDeploymentCandidate>()
     private var nextDeploymentToken = 0L
+    private var pendingRedstoneRequest: ProgramRuntimeRequestId? = null
 
     override fun process(command: ProgramRuntimeActorCommand): ProgramRuntimeActorReply {
         val value =
@@ -69,11 +70,13 @@ internal class ProgramRuntimeActorProcessor(
     private fun execute(command: ProgramRuntimeActorCommand): ProgramRuntimeActorValue =
         when (command) {
             is ProgramRuntimeActorCommand.Start -> {
+                pendingRedstoneRequest = null
                 discardAllCandidates()
                 ProgramRuntimeActorValue.Start(host.start(command.artifactBytes()))
             }
 
             is ProgramRuntimeActorCommand.StartBoot -> {
+                pendingRedstoneRequest = null
                 discardAllCandidates()
                 ProgramRuntimeActorValue.Start(host.startBoot())
             }
@@ -82,7 +85,10 @@ internal class ProgramRuntimeActorProcessor(
                 host.serverTick()
                 redstonePort
                     ?.takeRequestedOutput()
-                    ?.let(ProgramRuntimeActorValue::RedstoneOutputRequested)
+                    ?.let { packed ->
+                        pendingRedstoneRequest = command.requestId
+                        ProgramRuntimeActorValue.RedstoneOutputRequested(packed)
+                    }
                     ?: ProgramRuntimeActorValue.None
             }
 
@@ -146,16 +152,22 @@ internal class ProgramRuntimeActorProcessor(
             }
 
             is ProgramRuntimeActorCommand.CompleteRedstoneOutput -> {
-                ProgramRuntimeActorValue.Accepted(host.completeRedstoneOutput(command.packed, command.result))
+                val accepted =
+                    pendingRedstoneRequest == command.outputRequestId &&
+                        host.completeRedstoneOutput(command.packed, command.result)
+                if (accepted) pendingRedstoneRequest = null
+                ProgramRuntimeActorValue.Accepted(accepted)
             }
 
             is ProgramRuntimeActorCommand.Shutdown -> {
+                pendingRedstoneRequest = null
                 discardAllCandidates()
                 host.shutdown()
                 ProgramRuntimeActorValue.None
             }
 
             is ProgramRuntimeActorCommand.Reboot -> {
+                pendingRedstoneRequest = null
                 discardAllCandidates()
                 host.shutdown()
                 ProgramRuntimeActorValue.Start(host.startBoot())
@@ -166,7 +178,8 @@ internal class ProgramRuntimeActorProcessor(
         val candidate =
             host.verifyForDeploy(command.artifactBytes())
                 ?: return ProgramRuntimeActorValue.DeploymentPrepared(null)
-        val token = ProgramDeploymentToken(Math.incrementExact(nextDeploymentToken))
+        nextDeploymentToken = Math.incrementExact(nextDeploymentToken)
+        val token = ProgramDeploymentToken(nextDeploymentToken)
         deploymentCandidates[token] = candidate
         return ProgramRuntimeActorValue.DeploymentPrepared(token)
     }

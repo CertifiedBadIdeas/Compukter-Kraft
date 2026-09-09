@@ -43,6 +43,7 @@ class VmActorScheduler<C : Any, R : Any>(
             ArrayBlockingQueue<ActorCell<C, R>>(config.maximumActors)
         }
     private val resultLanes =
+        // Keep an actor's results ordered even when a different worker steals its next turn.
         List(config.workerCount) {
             ArrayBlockingQueue<VmActorEvent<R>>(config.resultCapacityPerWorker)
         }
@@ -194,7 +195,7 @@ class VmActorScheduler<C : Any, R : Any>(
                 val actor = nextActor(workerIndex) ?: continue
                 busyWorkers.incrementAndGet()
                 try {
-                    runTurn(actor, workerIndex)
+                    runTurn(actor)
                 } finally {
                     busyWorkers.decrementAndGet()
                 }
@@ -213,10 +214,7 @@ class VmActorScheduler<C : Any, R : Any>(
         return readyLanes[workerIndex].poll(config.idlePollMillis, TimeUnit.MILLISECONDS)
     }
 
-    private fun runTurn(
-        actor: ActorCell<C, R>,
-        workerIndex: Int,
-    ) {
+    private fun runTurn(actor: ActorCell<C, R>) {
         repeat(config.messagesPerTurn) {
             val command =
                 synchronized(actor.lock) {
@@ -226,12 +224,12 @@ class VmActorScheduler<C : Any, R : Any>(
                 try {
                     actor.processor.process(command)
                 } catch (cause: Throwable) {
-                    failActor(actor, workerIndex, cause)
+                    failActor(actor, cause)
                     return
                 }
             if (result != null) {
                 val sequence = ++actor.resultSequence
-                publish(workerIndex, VmActorEvent.Result(actor.endpoint, sequence, result))
+                publish(actor.homeLane, VmActorEvent.Result(actor.endpoint, sequence, result))
             }
         }
 
@@ -249,15 +247,12 @@ class VmActorScheduler<C : Any, R : Any>(
             }
         }
         when {
-            close -> closeActor(actor, workerIndex)
+            close -> closeActor(actor)
             reschedule -> enqueue(actor)
         }
     }
 
-    private fun closeActor(
-        actor: ActorCell<C, R>,
-        workerIndex: Int,
-    ) {
+    private fun closeActor(actor: ActorCell<C, R>) {
         synchronized(actor.lock) {
             if (actor.closed) return
             actor.closed = true
@@ -270,13 +265,12 @@ class VmActorScheduler<C : Any, R : Any>(
             actor.closeBarrier.complete(true)
         } else {
             actor.closeBarrier.completeExceptionally(failure)
-            publish(workerIndex, VmActorEvent.Failed(actor.endpoint, failure))
+            publish(actor.homeLane, VmActorEvent.Failed(actor.endpoint, failure))
         }
     }
 
     private fun failActor(
         actor: ActorCell<C, R>,
-        workerIndex: Int,
         cause: Throwable,
     ) {
         synchronized(actor.lock) {
@@ -291,7 +285,7 @@ class VmActorScheduler<C : Any, R : Any>(
         runCatching(actor.processor::close).exceptionOrNull()?.let(cause::addSuppressed)
         removeActor(actor)
         actor.closeBarrier.completeExceptionally(cause)
-        publish(workerIndex, VmActorEvent.Failed(actor.endpoint, cause))
+        publish(actor.homeLane, VmActorEvent.Failed(actor.endpoint, cause))
     }
 
     private fun removeActor(actor: ActorCell<C, R>) {

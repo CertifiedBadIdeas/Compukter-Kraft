@@ -57,6 +57,65 @@ import kotlin.test.assertTrue
 
 class ProgramRuntimeActorProcessorTest {
     @Test
+    fun `prepared deployments keep independent tokens until discarded`() {
+        val session = RecordingSession()
+        val host = ProgramRuntimeHost(ProgramVmSessionFactory { session })
+        ProgramRuntimeActorProcessor(host).use { processor ->
+            processor.process(ProgramRuntimeActorCommand.Start(request(1), byteArrayOf(1)))
+            val first =
+                assertIs<ProgramRuntimeActorValue.DeploymentPrepared>(
+                    processor.process(ProgramRuntimeActorCommand.PrepareDeployment(request(2), byteArrayOf(2))).value,
+                )
+            val second =
+                assertIs<ProgramRuntimeActorValue.DeploymentPrepared>(
+                    processor.process(ProgramRuntimeActorCommand.PrepareDeployment(request(3), byteArrayOf(3))).value,
+                )
+            assertTrue(first.token != second.token)
+            for ((index, prepared) in listOf(first, second).withIndex()) {
+                val discarded =
+                    processor.process(
+                        ProgramRuntimeActorCommand.DiscardDeployment(request(4L + index), requireNotNull(prepared.token)),
+                    )
+                assertTrue(assertIs<ProgramRuntimeActorValue.Accepted>(discarded.value).accepted)
+            }
+        }
+    }
+
+    @Test
+    fun `stale redstone acknowledgement cannot complete a newer identical output`() {
+        val session = RecordingSession()
+        val port = ActorRedstoneHostPort()
+        val host = ProgramRuntimeHost(ProgramVmSessionFactory { session }, redstoneHostPort = port)
+        ProgramRuntimeActorProcessor(host, port).use { processor ->
+            processor.process(ProgramRuntimeActorCommand.Start(request(1), byteArrayOf(1)))
+
+            fun output(id: Long): Int {
+                session.nextOutcome =
+                    VmOutcome.HostRequestBatch(
+                        listOf(VmHostRequest(id, REDSTONE, 6, listOf(VmValue.I32(2), VmValue.I32(7)))),
+                    )
+                return assertIs<ProgramRuntimeActorValue.RedstoneOutputRequested>(
+                    processor.process(ProgramRuntimeActorCommand.Advance(request(id), id)).value,
+                ).packed
+            }
+            val packed = output(2)
+            processor.process(ProgramRuntimeActorCommand.Shutdown(request(3)))
+            processor.process(ProgramRuntimeActorCommand.Start(request(4), byteArrayOf(1)))
+            assertEquals(packed, output(5))
+            val stale =
+                processor.process(
+                    ProgramRuntimeActorCommand.CompleteRedstoneOutput(request(6), request(2), packed, RedstoneCommitResult.Committed),
+                )
+            assertEquals(false, assertIs<ProgramRuntimeActorValue.Accepted>(stale.value).accepted)
+            val current =
+                processor.process(
+                    ProgramRuntimeActorCommand.CompleteRedstoneOutput(request(7), request(5), packed, RedstoneCommitResult.Committed),
+                )
+            assertTrue(assertIs<ProgramRuntimeActorValue.Accepted>(current.value).accepted)
+        }
+    }
+
+    @Test
     fun `redstone output crosses the actor boundary as a deferred world request`() {
         val session = RecordingSession()
         session.nextOutcome =
@@ -80,6 +139,7 @@ class ProgramRuntimeActorProcessorTest {
                 endpoint,
                 ProgramRuntimeActorCommand.CompleteRedstoneOutput(
                     request(3),
+                    request(2),
                     request.packed,
                     RedstoneCommitResult.Committed,
                 ),
@@ -213,7 +273,7 @@ class ProgramRuntimeActorProcessorTest {
 
     private class RecordingSession : ProgramVmSession {
         val calls = mutableListOf<String>()
-        val candidate = RecordingCandidate(calls)
+        var candidate = RecordingCandidate(calls)
         val terminal =
             TerminalState(
                 revision = 1,
@@ -290,6 +350,7 @@ class ProgramRuntimeActorProcessorTest {
         override fun verifyForDeploy(artifact: ByteArray): ProgramDeploymentCandidate =
             record("verifyForDeploy") {
                 verifiedArtifact = artifact.copyOf()
+                candidate = RecordingCandidate(calls)
                 candidate
             }
 
