@@ -25,11 +25,13 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalChange
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import ru.lazyhat.compukters.lang.runtime.vm.VmBridgeException
+import ru.lazyhat.compukters.lang.runtime.vm.VmCanonicalLineException
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentAdmissionException
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentConflictException
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentFileSystemException
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentProfileChangedException
 import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentWrongMachineException
+import ru.lazyhat.compukters.lang.runtime.vm.VmVerificationException
 import java.util.concurrent.CompletableFuture
 
 internal class ProgramRuntimeActorProcessor(
@@ -48,6 +50,10 @@ internal class ProgramRuntimeActorProcessor(
                 execute(command).also { captureGeneration() }
             } catch (failure: VmFileSystemReadException) {
                 ProgramRuntimeActorValue.Rejected(ProgramRuntimeActorFailure.FileSystem(failure.failure))
+            } catch (_: VmVerificationException) {
+                ProgramRuntimeActorValue.Rejected(ProgramRuntimeActorFailure.Verification)
+            } catch (failure: VmCanonicalLineException) {
+                ProgramRuntimeActorValue.Rejected(ProgramRuntimeActorFailure.CanonicalLine(failure.failure))
             } catch (_: VmDeploymentConflictException) {
                 deploymentFailure(ProgramDeploymentFailure.CONFLICT)
             } catch (_: VmDeploymentWrongMachineException) {

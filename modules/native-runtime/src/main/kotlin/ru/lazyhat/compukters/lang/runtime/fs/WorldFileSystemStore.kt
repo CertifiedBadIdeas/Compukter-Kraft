@@ -25,53 +25,74 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 class WorldFileSystemStore private constructor(
     handle: Long,
     private val bridge: LowLevelVmBridge,
 ) : AutoCloseable {
     private val handle = AtomicLong(handle)
+    private val operationLock = ReentrantLock(true)
 
-    fun health(): FileSystemStoreHealth = decodeNative { StoreWireDecoder(bridge.storeHealth(requireHandle())).health() }
+    fun health(): FileSystemStoreHealth =
+        operationLock.withLock {
+            decodeNative { StoreWireDecoder(bridge.storeHealth(requireHandle())).health() }
+        }
 
     fun durableGeneration(id: ComputerId): Long =
-        decodeNative {
-            StoreWireDecoder(bridge.storeDurableGeneration(requireHandle(), id.toByteArray())).generation()
+        operationLock.withLock {
+            decodeNative {
+                StoreWireDecoder(bridge.storeDurableGeneration(requireHandle(), id.toByteArray())).generation()
+            }
         }
 
     fun flush(
         id: ComputerId,
         generation: Long,
-    ) {
+    ) = operationLock.withLock {
         require(generation >= 0) { "filesystem generation must not be negative" }
         bridge.storeFlush(requireHandle(), id.toByteArray(), generation)
     }
 
-    fun tombstone(id: ComputerId) = bridge.storeTombstone(requireHandle(), id.toByteArray())
+    fun tombstone(id: ComputerId) =
+        operationLock.withLock {
+            bridge.storeTombstone(requireHandle(), id.toByteArray())
+        }
 
-    fun recover(id: ComputerId) = bridge.storeRecover(requireHandle(), id.toByteArray())
+    fun recover(id: ComputerId) =
+        operationLock.withLock {
+            bridge.storeRecover(requireHandle(), id.toByteArray())
+        }
 
     internal fun createMachine(
         id: ComputerId,
         romImage: ByteArray,
         artifact: ByteArray,
-    ): Pair<LowLevelVmBridge, ByteArray> = bridge to bridge.createInStore(requireHandle(), id.toByteArray(), romImage, artifact)
+    ): Pair<LowLevelVmBridge, ByteArray> =
+        operationLock.withLock {
+            bridge to bridge.createInStore(requireHandle(), id.toByteArray(), romImage, artifact)
+        }
 
     internal fun createBootMachine(
         id: ComputerId,
         romImage: ByteArray,
-    ): Pair<LowLevelVmBridge, ByteArray> = bridge to bridge.createBootInStore(requireHandle(), id.toByteArray(), romImage)
-
-    override fun close() {
-        val closing = handle.getAndSet(CLOSED)
-        if (closing == CLOSED) return
-        try {
-            bridge.storeClose(closing)
-        } catch (error: Throwable) {
-            handle.compareAndSet(CLOSED, closing)
-            throw error
+    ): Pair<LowLevelVmBridge, ByteArray> =
+        operationLock.withLock {
+            bridge to bridge.createBootInStore(requireHandle(), id.toByteArray(), romImage)
         }
-    }
+
+    override fun close() =
+        operationLock.withLock {
+            val closing = handle.getAndSet(CLOSED)
+            if (closing == CLOSED) return
+            try {
+                bridge.storeClose(closing)
+            } catch (error: Throwable) {
+                handle.compareAndSet(CLOSED, closing)
+                throw error
+            }
+        }
 
     private fun requireHandle(): Long = handle.get().takeIf { it != CLOSED } ?: error("filesystem store is closed")
 

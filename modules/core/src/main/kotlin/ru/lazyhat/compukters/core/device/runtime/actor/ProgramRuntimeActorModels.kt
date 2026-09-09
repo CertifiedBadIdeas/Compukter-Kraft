@@ -31,6 +31,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalModifier
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
+import ru.lazyhat.compukters.lang.runtime.vm.VmCanonicalLineFailure
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import java.util.Collections
 
@@ -274,6 +275,12 @@ sealed interface ProgramRuntimeActorFailure {
 
     data class Bridge(
         val detail: String,
+    ) : ProgramRuntimeActorFailure
+
+    data object Verification : ProgramRuntimeActorFailure
+
+    data class CanonicalLine(
+        val failure: VmCanonicalLineFailure,
     ) : ProgramRuntimeActorFailure
 
     data class Deployment(

@@ -44,11 +44,14 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalModifier
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalPosition
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
+import ru.lazyhat.compukters.lang.runtime.vm.VmCanonicalLineException
+import ru.lazyhat.compukters.lang.runtime.vm.VmCanonicalLineFailure
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequest
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequestIdentity
 import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
 import ru.lazyhat.compukters.lang.runtime.vm.VmValue
+import ru.lazyhat.compukters.lang.runtime.vm.VmVerificationException
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -57,6 +60,27 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ProgramRuntimeActorProcessorTest {
+    @Test
+    fun `request rejection does not terminate the runtime actor`() {
+        val session = RecordingSession()
+        val processor = ProgramRuntimeActorProcessor(ProgramRuntimeHost(ProgramVmSessionFactory { session }))
+        processor.use {
+            processor.process(ProgramRuntimeActorCommand.Start(request(1), byteArrayOf(1)))
+            session.rejectVerification = true
+            val verification = processor.process(ProgramRuntimeActorCommand.PrepareDeployment(request(2), byteArrayOf(2)))
+            assertEquals(ProgramRuntimeActorFailure.Verification, assertIs<ProgramRuntimeActorValue.Rejected>(verification.value).failure)
+            session.rejectCanonicalLine = true
+            val canonical = processor.process(ProgramRuntimeActorCommand.SubmitCanonicalLine(request(3), charArrayOf('x')))
+            assertEquals(
+                ProgramRuntimeActorFailure.CanonicalLine(VmCanonicalLineFailure.INPUT_BUSY),
+                assertIs<ProgramRuntimeActorValue.Rejected>(canonical.value).failure,
+            )
+            assertIs<ProgramRuntimeActorValue.TerminalStateValue>(
+                processor.process(ProgramRuntimeActorCommand.TerminalFullState(request(4))).value,
+            )
+        }
+    }
+
     @Test
     fun `async carrier commits world output on its owner and closes without pumping late replies`() {
         val owner = Thread.currentThread()
@@ -341,6 +365,8 @@ class ProgramRuntimeActorProcessorTest {
         var canonicalLine: String? = null
         var closeCalls = 0
         var nextOutcome: VmOutcome = VmOutcome.SliceExhausted
+        var rejectVerification = false
+        var rejectCanonicalLine = false
 
         override fun advance(
             guestBudget: Int,
@@ -403,6 +429,7 @@ class ProgramRuntimeActorProcessorTest {
 
         override fun verifyForDeploy(artifact: ByteArray): ProgramDeploymentCandidate =
             record("verifyForDeploy") {
+                if (rejectVerification) throw VmVerificationException()
                 verifiedArtifact = artifact.copyOf()
                 candidate = RecordingCandidate(calls)
                 candidate
@@ -422,6 +449,7 @@ class ProgramRuntimeActorProcessorTest {
 
         override fun submitCanonicalLine(line: CharArray) =
             record("submitCanonicalLine") {
+                if (rejectCanonicalLine) throw VmCanonicalLineException(VmCanonicalLineFailure.INPUT_BUSY)
                 canonicalLine = line.concatToString()
             }
 

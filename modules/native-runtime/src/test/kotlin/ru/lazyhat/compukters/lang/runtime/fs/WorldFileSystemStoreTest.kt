@@ -23,12 +23,40 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmBridgeException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class WorldFileSystemStoreTest {
+    @Test
+    fun `one store serializes concurrent native handle operations`() {
+        val bridge = FakeBridge()
+        val entered = CountDownLatch(1)
+        val unblock = CountDownLatch(1)
+        bridge.healthEntered = entered
+        bridge.healthUnblock = unblock
+        val store = WorldFileSystemStore.open(Path.of("/tmp/compukters-store-concurrency"), bridge)
+        val first = thread { store.health() }
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+        val second = thread { store.durableGeneration(ComputerId.fromLongs(1, 2)) }
+        try {
+            Thread.sleep(10)
+            assertEquals(1, bridge.maximumConcurrentCalls.get())
+        } finally {
+            unblock.countDown()
+            first.join()
+            second.join()
+            store.close()
+        }
+        assertEquals(1, bridge.maximumConcurrentCalls.get())
+    }
+
     @Test
     fun `computer identity is nonzero defensive and big endian`() {
         val source = ByteArray(16) { (it + 1).toByte() }
@@ -113,6 +141,10 @@ class WorldFileSystemStoreTest {
         val recoveries = mutableListOf<Pair<Long, ByteArray>>()
         val closedStores = mutableListOf<Long>()
         var closeFailures = 0
+        var healthEntered: CountDownLatch? = null
+        var healthUnblock: CountDownLatch? = null
+        val maximumConcurrentCalls = AtomicInteger()
+        private val concurrentCalls = AtomicInteger()
 
         override fun storeOpen(
             rootUtf8: ByteArray,
@@ -123,12 +155,27 @@ class WorldFileSystemStoreTest {
             return openResult.copyOf()
         }
 
-        override fun storeHealth(handle: Long): ByteArray = bytes(1, 0)
+        override fun storeHealth(handle: Long): ByteArray =
+            nativeCall {
+                healthEntered?.countDown()
+                healthUnblock?.await(5, TimeUnit.SECONDS)
+                bytes(1, 0)
+            }
 
         override fun storeDurableGeneration(
             handle: Long,
             id: ByteArray,
-        ): ByteArray = bytes(1, long(7))
+        ): ByteArray = nativeCall { bytes(1, long(7)) }
+
+        private fun <T> nativeCall(operation: () -> T): T {
+            val active = concurrentCalls.incrementAndGet()
+            maximumConcurrentCalls.accumulateAndGet(active, ::maxOf)
+            return try {
+                operation()
+            } finally {
+                concurrentCalls.decrementAndGet()
+            }
+        }
 
         override fun storeFlush(
             handle: Long,
