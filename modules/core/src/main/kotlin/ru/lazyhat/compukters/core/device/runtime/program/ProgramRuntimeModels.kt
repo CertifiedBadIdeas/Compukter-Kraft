@@ -38,6 +38,62 @@ data class ProgramTickBudget(
     }
 }
 
+sealed interface ProgramResourceSnapshot {
+    val state: ProgramRuntimeState
+    val configuredBudget: ProgramTickBudget
+
+    data class Available(
+        override val state: ProgramRuntimeState,
+        override val configuredBudget: ProgramTickBudget,
+        val grantedGuestUnits: Long,
+        val grantedMaintenanceUnits: Long,
+        val fixedGuestUnits: Long,
+        val dynamicGuestUnits: Long,
+        val maintenanceUnits: Long,
+        val enteredBlocks: Long,
+        val executedInstructions: Long,
+        val heapCapacityBytes: Long,
+        val heapUsedBytes: Long,
+        val liveObjects: Long,
+        val mutableExecutionResidentBytes: Long,
+        val filesystemLogicalBytes: Long,
+        val filesystemLogicalCapacityBytes: Long,
+        val filesystemNodes: Long,
+        val filesystemNodeCapacity: Long,
+        val countersSaturated: Boolean,
+    ) : ProgramResourceSnapshot {
+        init {
+            require(
+                listOf(
+                    grantedGuestUnits,
+                    grantedMaintenanceUnits,
+                    fixedGuestUnits,
+                    dynamicGuestUnits,
+                    maintenanceUnits,
+                    enteredBlocks,
+                    executedInstructions,
+                    heapCapacityBytes,
+                    heapUsedBytes,
+                    liveObjects,
+                    mutableExecutionResidentBytes,
+                    filesystemLogicalBytes,
+                    filesystemLogicalCapacityBytes,
+                    filesystemNodes,
+                    filesystemNodeCapacity,
+                ).all { it >= 0 },
+            ) { "resource snapshot values must not be negative" }
+            require(heapUsedBytes <= heapCapacityBytes) { "heap usage exceeds capacity" }
+            require(filesystemLogicalBytes <= filesystemLogicalCapacityBytes) { "filesystem usage exceeds capacity" }
+            require(filesystemNodes <= filesystemNodeCapacity) { "filesystem node usage exceeds capacity" }
+        }
+    }
+
+    data class Unavailable(
+        override val state: ProgramRuntimeState,
+        override val configuredBudget: ProgramTickBudget,
+    ) : ProgramResourceSnapshot
+}
+
 sealed interface ProgramRuntimeState {
     data object Idle : ProgramRuntimeState
 

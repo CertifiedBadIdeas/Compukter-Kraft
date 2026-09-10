@@ -20,6 +20,7 @@ package ru.lazyhat.compukters.core.device.runtime.actor
 
 import ru.lazyhat.compukters.core.device.computer.ActorProgramComputer
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandidate
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeHost
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
@@ -50,6 +51,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequest
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequestIdentity
 import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
+import ru.lazyhat.compukters.lang.runtime.vm.VmResourceSnapshot
 import ru.lazyhat.compukters.lang.runtime.vm.VmValue
 import ru.lazyhat.compukters.lang.runtime.vm.VmVerificationException
 import java.util.concurrent.TimeUnit
@@ -60,6 +62,46 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ProgramRuntimeActorProcessorTest {
+    @Test
+    fun `carrier requests resource snapshots only on the actor worker and rejects them after close`() {
+        val owner = Thread.currentThread()
+        val session = RecordingSession()
+        val host =
+            ProgramRuntimeHost(
+                object : ProgramVmSessionFactory {
+                    override fun open(artifact: ByteArray): ProgramVmSession = session
+
+                    override fun boot(): ProgramVmSession = session
+                },
+            )
+        val endpoint = VmActorEndpoint(ComputerId.fromLongs(70, 80), 1)
+        ProgramRuntimeActorService(schedulerConfig()).use { service ->
+            val carrier =
+                ActorProgramComputer(
+                    service,
+                    requireNotNull(service.attach(endpoint, host)),
+                    { RedstoneCommitResult.Committed },
+                )
+            val boot = carrier.turnOn()
+            awaitQueuedResult(service)
+            service.pump(1)
+            assertTrue(boot.isDone)
+            assertTrue(session.calls.none { it.startsWith("resourceSnapshot:") })
+
+            val requested = carrier.resourceSnapshot()
+            awaitQueuedResult(service)
+            assertTrue(session.calls.single { it.startsWith("resourceSnapshot:") }.substringAfter(':') != owner.name)
+            service.pump(1)
+            val snapshot =
+                assertIs<ProgramRuntimeActorValue.ResourceSnapshotValue>(requested.get().value).snapshot
+            assertIs<ProgramResourceSnapshot.Available>(snapshot)
+
+            carrier.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            assertTrue(carrier.resourceSnapshot().isCompletedExceptionally)
+            assertEquals(1, session.calls.count { it.startsWith("resourceSnapshot:") })
+        }
+    }
+
     @Test
     fun `request rejection does not terminate the runtime actor`() {
         val session = RecordingSession()
@@ -338,6 +380,12 @@ class ProgramRuntimeActorProcessorTest {
 
     private fun request(value: Long) = ProgramRuntimeRequestId(value)
 
+    private fun awaitQueuedResult(service: ProgramRuntimeActorService) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
+        while (service.metrics().queuedResults == 0 && System.nanoTime() < deadline) Thread.onSpinWait()
+        assertTrue(service.metrics().queuedResults > 0)
+    }
+
     private fun VmActorScheduler<ProgramRuntimeActorCommand, ProgramRuntimeActorReply>.awaitReplies(
         count: Int,
     ): List<ProgramRuntimeActorReply> {
@@ -412,6 +460,11 @@ class ProgramRuntimeActorProcessorTest {
         override fun sendTerminalText(value: String) = record("sendTerminalText") { }
 
         override fun filesystemGeneration(): Long = record("filesystemGeneration") { 7 }
+
+        override fun resourceSnapshot(): VmResourceSnapshot =
+            record("resourceSnapshot") {
+                VmResourceSnapshot(1, 2, 3, 4, 5, 100, 40, 6, 30, 80, 100, 7, 10, false)
+            }
 
         override fun fileStat(path: VmVirtualPath): VmFileStat = record("fileStat") { VmFileStat(7, metadata()) }
 

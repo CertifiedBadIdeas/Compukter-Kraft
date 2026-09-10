@@ -18,6 +18,7 @@
 
 package ru.lazyhat.compukters.core.device.runtime.actor
 
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
@@ -106,6 +107,10 @@ sealed interface ProgramRuntimeActorCommand {
     ) : ProgramRuntimeActorCommand
 
     data class FileSystemGeneration(
+        override val requestId: ProgramRuntimeRequestId,
+    ) : ProgramRuntimeActorCommand
+
+    data class ResourceSnapshot(
         override val requestId: ProgramRuntimeRequestId,
     ) : ProgramRuntimeActorCommand
 
@@ -227,6 +232,10 @@ sealed interface ProgramRuntimeActorValue {
 
     data class FileSystemGeneration(
         val generation: Long?,
+    ) : ProgramRuntimeActorValue
+
+    data class ResourceSnapshotValue(
+        val snapshot: ProgramResourceSnapshot,
     ) : ProgramRuntimeActorValue
 
     data class FileStatValue(

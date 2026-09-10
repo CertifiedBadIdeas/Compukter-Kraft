@@ -81,6 +81,8 @@ class ActorProgramComputer(
         return lifecycleRequest(ProgramRuntimeActorCommand::Shutdown)
     }
 
+    fun resourceSnapshot(): CompletableFuture<ProgramRuntimeActorReply> = request(ProgramRuntimeActorCommand::ResourceSnapshot)
+
     /** Terminal, filesystem, deployment and input operations retain their typed actor command/reply contract. */
     fun request(command: (ProgramRuntimeRequestId) -> ProgramRuntimeActorCommand): CompletableFuture<ProgramRuntimeActorReply> =
         send { id ->

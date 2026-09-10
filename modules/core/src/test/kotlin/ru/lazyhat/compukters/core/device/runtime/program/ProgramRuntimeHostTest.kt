@@ -52,6 +52,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmFault
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequest
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequestIdentity
 import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
+import ru.lazyhat.compukters.lang.runtime.vm.VmResourceSnapshot
 import ru.lazyhat.compukters.lang.runtime.vm.VmStartException
 import ru.lazyhat.compukters.lang.runtime.vm.VmValue
 import ru.lazyhat.compukters.lang.runtime.vm.VmVerificationException
@@ -59,11 +60,80 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ProgramRuntimeHostTest {
+    @Test
+    fun `resource snapshots are pull based and include only budgets granted to native advances`() {
+        val session =
+            ScriptedSession(
+                outcomes = listOf(VmOutcome.WaitingForTerminalEvent),
+                resourceSnapshotResult = vmResourceSnapshot(),
+            )
+        val budget = ProgramTickBudget(8, 4, 2, 3)
+        val host = host(session, budget)
+
+        assertEquals(
+            ProgramResourceSnapshot.Unavailable(ProgramRuntimeState.Idle, budget),
+            host.resourceSnapshot(),
+        )
+        assertEquals(ProgramStartResult.Started, host.start(byteArrayOf(1)))
+        assertEquals(0, session.resourceSnapshotCalls)
+        assertEquals(
+            ProgramRuntimeState.Running,
+            assertIs<ProgramResourceSnapshot.Available>(host.resourceSnapshot()).state,
+        )
+        assertEquals(1, session.resourceSnapshotCalls)
+
+        assertEquals(ProgramRuntimeState.WaitingForInput, host.serverTick())
+        val snapshot = assertIs<ProgramResourceSnapshot.Available>(host.resourceSnapshot())
+        assertEquals(ProgramRuntimeState.WaitingForInput, snapshot.state)
+        assertEquals(budget, snapshot.configuredBudget)
+        assertEquals(8, snapshot.grantedGuestUnits)
+        assertEquals(4, snapshot.grantedMaintenanceUnits)
+        assertEquals(11, snapshot.fixedGuestUnits)
+        assertEquals(23, snapshot.executedInstructions)
+        assertEquals(100, snapshot.heapCapacityBytes)
+        assertEquals(40, snapshot.heapUsedBytes)
+        assertEquals(80, snapshot.filesystemLogicalBytes)
+        assertEquals(100, snapshot.filesystemLogicalCapacityBytes)
+
+        host.shutdown()
+        assertEquals(
+            ProgramResourceSnapshot.Unavailable(ProgramRuntimeState.Idle, budget),
+            host.resourceSnapshot(),
+        )
+        assertEquals(2, session.resourceSnapshotCalls)
+    }
+
+    @Test
+    fun `granted resource budget diagnostics saturate without overflowing`() {
+        val budgets = GrantedResourceBudgets(Long.MAX_VALUE - 1, Long.MAX_VALUE - 2)
+
+        budgets.grant(2, 2)
+        budgets.grant(1, 1)
+
+        assertEquals(
+            GrantedResourceBudgetSnapshot(Long.MAX_VALUE, Long.MAX_VALUE, true),
+            budgets.snapshot(),
+        )
+    }
+
+    @Test
+    fun `resource snapshot bridge failure terminates the active session without a partial value`() {
+        val session = ScriptedSession(resourceSnapshotError = VmBridgeException("snapshot failed"))
+        val host = host(session)
+        host.start(byteArrayOf(1))
+
+        assertFailsWith<VmBridgeException> { host.resourceSnapshot() }
+
+        assertEquals(ProgramRuntimeState.Failed(ProgramFailure.Bridge("snapshot failed")), host.state)
+        assertEquals(1, session.closeCalls)
+    }
+
     @Test
     fun `deferred redstone commit suspends advancement until the matching host completion`() {
         val request = redstoneSide(1, 2, 7)
@@ -841,6 +911,8 @@ class ProgramRuntimeHostTest {
         private val completionError: VmBridgeException? = null,
         private val closeEvent: (() -> Unit)? = null,
         private val lifecycleEvents: MutableList<String>? = null,
+        private val resourceSnapshotResult: VmResourceSnapshot = vmResourceSnapshot(),
+        private val resourceSnapshotError: VmBridgeException? = null,
     ) : ProgramVmSession {
         private val outcomes = ArrayDeque(outcomes)
         val advances = mutableListOf<AdvanceBudget>()
@@ -857,6 +929,7 @@ class ProgramRuntimeHostTest {
         val canonicalLines = mutableListOf<String>()
         val redstoneInputs = mutableListOf<Int>()
         val confirmedOutputs = mutableListOf<Int>()
+        var resourceSnapshotCalls = 0
 
         override fun advance(
             guestBudget: Int,
@@ -928,6 +1001,12 @@ class ProgramRuntimeHostTest {
         }
 
         override fun filesystemGeneration(): Long = filesystemGeneration
+
+        override fun resourceSnapshot(): VmResourceSnapshot {
+            resourceSnapshotCalls++
+            resourceSnapshotError?.let { throw it }
+            return resourceSnapshotResult
+        }
 
         override fun fileStat(path: VmVirtualPath): VmFileStat = error("unexpected fileStat($path)")
 
@@ -1035,6 +1114,24 @@ class ProgramRuntimeHostTest {
                 cells = List(51 * 19) { TerminalCell(' '.code, 15, 0) },
                 cursor = TerminalPosition(0, 0),
                 cursorVisible = true,
+            )
+
+        fun vmResourceSnapshot(): VmResourceSnapshot =
+            VmResourceSnapshot(
+                fixedGuestUnits = 11,
+                dynamicGuestUnits = 12,
+                maintenanceUnits = 13,
+                enteredBlocks = 17,
+                executedInstructions = 23,
+                heapCapacityBytes = 100,
+                heapUsedBytes = 40,
+                liveObjects = 5,
+                mutableExecutionResidentBytes = 30,
+                filesystemLogicalBytes = 80,
+                filesystemLogicalCapacityBytes = 100,
+                filesystemNodes = 6,
+                filesystemNodeCapacity = 10,
+                countersSaturated = false,
             )
     }
 }

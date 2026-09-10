@@ -24,6 +24,7 @@ import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorServic
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorValue
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEndpoint
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramTickBudget
@@ -36,6 +37,7 @@ import kotlin.io.path.readBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class ProgramRuntimeActorIntegrationTest {
     @Test
@@ -71,6 +73,20 @@ class ProgramRuntimeActorIntegrationTest {
                 state = advanced.state
             }
             assertEquals(ProgramRuntimeState.WaitingForInput, state)
+
+            val resources =
+                scheduler.awaitRequest(
+                    endpoint,
+                ) { requestId -> ProgramRuntimeActorCommand.ResourceSnapshot(requestId) }
+            val snapshot =
+                assertIs<ProgramResourceSnapshot.Available>(
+                    assertIs<ProgramRuntimeActorValue.ResourceSnapshotValue>(resources.value).snapshot,
+                )
+            assertEquals(ProgramRuntimeState.WaitingForInput, snapshot.state)
+            assertTrue(snapshot.grantedGuestUnits > 0)
+            assertTrue(snapshot.executedInstructions > 0)
+            assertTrue(snapshot.heapCapacityBytes > 0)
+            assertTrue(snapshot.filesystemLogicalCapacityBytes > 0)
 
             val terminal =
                 scheduler.awaitRequest(

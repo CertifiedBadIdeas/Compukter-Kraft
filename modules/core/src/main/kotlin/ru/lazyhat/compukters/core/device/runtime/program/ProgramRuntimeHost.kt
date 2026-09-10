@@ -40,6 +40,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmCompilationRequest
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequest
 import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
+import ru.lazyhat.compukters.lang.runtime.vm.VmResourceSnapshot
 import ru.lazyhat.compukters.lang.runtime.vm.VmStartException
 import ru.lazyhat.compukters.lang.runtime.vm.VmVerificationException
 
@@ -79,6 +80,7 @@ class ProgramRuntimeHost internal constructor(
         private set
     private var confirmedRedstoneOutput = RedstoneWire.requireOutputRegister(initialRedstoneOutput)
     private var lastRedstoneInput = 0
+    private val grantedBudgets = GrantedResourceBudgets()
     var state: ProgramRuntimeState = ProgramRuntimeState.Idle
         private set
 
@@ -97,6 +99,7 @@ class ProgramRuntimeHost internal constructor(
         vmEpoch = openingEpoch
         return try {
             session = open()
+            grantedBudgets.reset()
             requireNotNull(session).confirmRedstoneOutput(confirmedRedstoneOutput)
             requireNotNull(session).submitRedstoneInput(RedstoneWire.withAllInputSidesChanged(lastRedstoneInput))
             activeVmEpoch = openingEpoch
@@ -140,6 +143,7 @@ class ProgramRuntimeHost internal constructor(
         repeat(tickBudget.maximumAdvancesPerTick) {
             val outcome =
                 try {
+                    grantedBudgets.grant(tickBudget.guestBudgetPerAdvance, tickBudget.maintenanceBudgetPerAdvance)
                     activeSession.advance(
                         tickBudget.guestBudgetPerAdvance,
                         tickBudget.maintenanceBudgetPerAdvance,
@@ -302,6 +306,18 @@ class ProgramRuntimeHost internal constructor(
     fun sendTerminalText(value: String): Boolean = terminalInput { sendTerminalText(value) }
 
     fun filesystemGeneration(): Long? = session?.filesystemGeneration()
+
+    fun resourceSnapshot(): ProgramResourceSnapshot {
+        val activeSession = session ?: return ProgramResourceSnapshot.Unavailable(state, tickBudget)
+        return try {
+            val native = activeSession.resourceSnapshot()
+            val granted = grantedBudgets.snapshot()
+            native.toProgramSnapshot(state, tickBudget, granted)
+        } catch (error: VmBridgeException) {
+            finish(ProgramRuntimeState.Failed(ProgramFailure.Bridge(error.bridgeDetail())))
+            throw error
+        }
+    }
 
     fun fileStat(path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) = session?.fileStat(path)
 
@@ -550,3 +566,78 @@ class ProgramRuntimeHost internal constructor(
         val requests: List<VmHostRequest>,
     )
 }
+
+internal class GrantedResourceBudgets(
+    initialGuestUnits: Long = 0,
+    initialMaintenanceUnits: Long = 0,
+    initialSaturated: Boolean = false,
+) {
+    private var guestUnits = initialGuestUnits
+    private var maintenanceUnits = initialMaintenanceUnits
+    private var saturated = initialSaturated
+
+    init {
+        require(initialGuestUnits >= 0) { "initial Guest budget must not be negative" }
+        require(initialMaintenanceUnits >= 0) { "initial maintenance budget must not be negative" }
+    }
+
+    fun grant(
+        guest: Int,
+        maintenance: Int,
+    ) {
+        guestUnits = add(guestUnits, guest)
+        maintenanceUnits = add(maintenanceUnits, maintenance)
+    }
+
+    fun reset() {
+        guestUnits = 0
+        maintenanceUnits = 0
+        saturated = false
+    }
+
+    fun snapshot(): GrantedResourceBudgetSnapshot = GrantedResourceBudgetSnapshot(guestUnits, maintenanceUnits, saturated)
+
+    private fun add(
+        current: Long,
+        granted: Int,
+    ): Long {
+        require(granted >= 0) { "granted resource budget must not be negative" }
+        if (current > Long.MAX_VALUE - granted) {
+            saturated = true
+            return Long.MAX_VALUE
+        }
+        return current + granted
+    }
+}
+
+internal data class GrantedResourceBudgetSnapshot(
+    val guestUnits: Long,
+    val maintenanceUnits: Long,
+    val saturated: Boolean,
+)
+
+private fun VmResourceSnapshot.toProgramSnapshot(
+    state: ProgramRuntimeState,
+    configuredBudget: ProgramTickBudget,
+    granted: GrantedResourceBudgetSnapshot,
+): ProgramResourceSnapshot.Available =
+    ProgramResourceSnapshot.Available(
+        state = state,
+        configuredBudget = configuredBudget,
+        grantedGuestUnits = granted.guestUnits,
+        grantedMaintenanceUnits = granted.maintenanceUnits,
+        fixedGuestUnits = fixedGuestUnits,
+        dynamicGuestUnits = dynamicGuestUnits,
+        maintenanceUnits = maintenanceUnits,
+        enteredBlocks = enteredBlocks,
+        executedInstructions = executedInstructions,
+        heapCapacityBytes = heapCapacityBytes,
+        heapUsedBytes = heapUsedBytes,
+        liveObjects = liveObjects,
+        mutableExecutionResidentBytes = mutableExecutionResidentBytes,
+        filesystemLogicalBytes = filesystemLogicalBytes,
+        filesystemLogicalCapacityBytes = filesystemLogicalCapacityBytes,
+        filesystemNodes = filesystemNodes,
+        filesystemNodeCapacity = filesystemNodeCapacity,
+        countersSaturated = countersSaturated || granted.saturated,
+    )

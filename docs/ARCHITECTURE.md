@@ -125,6 +125,11 @@ barrier does not depend on server result pumping and may complete on a worker th
 `ProgramRuntimeHost` owns one current Rust `ComputerMachine`, advances it with bounded guest and maintenance budgets,
 commits terminal changes once per active server tick, and exposes typed full/delta states and failures through JDK 25
 FFM. It does not own a second grid or output transcript. It is loader-independent and confined to its actor worker.
+An explicit actor request can also compose one immutable resource snapshot from host lifecycle/configuration and the
+native machine's semantic work, Guest heap, admitted mutable execution-resident, and filesystem quota counters. The
+host counts Guest and maintenance budgets only when it actually invokes native advancement; both host and native
+counters saturate explicitly instead of overflowing. These values describe VM work and granted capacity, not host CPU
+percentage. No sampling loop, history buffer, heap-content scan, or unsolicited FFM call runs for unobserved computers.
 
 The Minecraft carrier owns exactly one actor endpoint and submits at most one advance for each server tick. Rust starts
 `/rom/boot`, compiled from `system/programs/boot.kt`; boot delegates to `/rom/shell`, compiled from

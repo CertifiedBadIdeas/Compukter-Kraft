@@ -123,6 +123,10 @@ internal class ProgramRuntimeActorProcessor(
                 ProgramRuntimeActorValue.FileSystemGeneration(host.filesystemGeneration())
             }
 
+            is ProgramRuntimeActorCommand.ResourceSnapshot -> {
+                ProgramRuntimeActorValue.ResourceSnapshotValue(host.resourceSnapshot())
+            }
+
             is ProgramRuntimeActorCommand.FileStat -> {
                 ProgramRuntimeActorValue.FileStatValue(host.fileStat(command.path))
             }

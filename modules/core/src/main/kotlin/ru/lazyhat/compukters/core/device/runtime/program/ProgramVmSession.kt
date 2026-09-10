@@ -35,6 +35,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmDeploymentCandidate
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequestIdentity
 import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
+import ru.lazyhat.compukters.lang.runtime.vm.VmResourceSnapshot
 import ru.lazyhat.compukters.lang.runtime.vm.VmSession
 
 internal interface ProgramVmSession : AutoCloseable {
@@ -74,6 +75,8 @@ internal interface ProgramVmSession : AutoCloseable {
     fun sendTerminalText(value: String)
 
     fun filesystemGeneration(): Long
+
+    fun resourceSnapshot(): VmResourceSnapshot = error("resource snapshot is unavailable")
 
     fun fileStat(path: VmVirtualPath): VmFileStat
 
@@ -184,6 +187,8 @@ private class NativeProgramVmSession(
     override fun sendTerminalText(value: String) = session.sendTerminalText(value)
 
     override fun filesystemGeneration(): Long = session.filesystemGeneration()
+
+    override fun resourceSnapshot(): VmResourceSnapshot = session.resourceSnapshot()
 
     override fun fileStat(path: VmVirtualPath): VmFileStat = session.fileStat(path)
 
