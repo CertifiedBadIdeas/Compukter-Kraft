@@ -23,7 +23,7 @@ import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
 
 object CompuktersServerConfig {
     private val builder = ModConfigSpec.Builder()
-    private val defaultWorkers = Runtime.getRuntime().availableProcessors().coerceIn(1, MAXIMUM_WORKERS)
+    private val defaultWorkers = VmActorSchedulerConfig.defaultWorkerCount()
 
     private val workerCount =
         builder

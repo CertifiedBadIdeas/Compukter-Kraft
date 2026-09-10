@@ -31,6 +31,17 @@ import kotlin.test.assertTrue
 
 class VmActorSchedulerTest {
     @Test
+    fun `default worker count scales with processors and remains bounded`() {
+        val defaults =
+            listOf(1, 2, 4, 8, 16, 32, 64).associateWith(VmActorSchedulerConfig::defaultWorkerCount)
+
+        assertEquals(
+            mapOf(1 to 2, 2 to 2, 4 to 2, 8 to 4, 16 to 8, 32 to 8, 64 to 8),
+            defaults,
+        )
+    }
+
+    @Test
     fun `worker migration cannot reorder actor replies`() {
         val firstEntered = CountDownLatch(1)
         val releaseFirst = CountDownLatch(1)

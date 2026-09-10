@@ -104,9 +104,10 @@ callbacks on the server thread. Stopping removes the service before closing it, 
 Production computers attach one actor identified by `ComputerId` and a machine epoch. A full scheduler rejects a new
 attachment without blocking or failing the server tick; the block remains powered off and retries on a later tick.
 The server config exposes `vm.workers`, `vm.maximum_actors`, `vm.mailbox_capacity`, `vm.messages_per_turn`, and
-`vm.result_capacity_per_worker`; defaults are the available processor count (capped at 64), 4096 actors, 64 commands,
-4 commands per turn, and 256 replies per worker. Increasing queue limits trades bounded memory for burst tolerance;
-increasing messages per turn trades inter-actor latency for locality.
+`vm.result_capacity_per_worker`; defaults are half of the available processors clamped to 2..8, 4096 actors, 64
+commands, 4 commands per turn, and 256 replies per worker. Operators may explicitly configure up to 64 workers.
+Increasing queue limits trades bounded memory for burst tolerance; increasing messages per turn trades inter-actor
+latency for locality.
 
 Scheduler snapshots read atomic counters and bounded lane sizes without scanning registered actors. Every five seconds
 the debug log reports registered and runnable actors, mailbox and result depths, worker occupancy, average/maximum

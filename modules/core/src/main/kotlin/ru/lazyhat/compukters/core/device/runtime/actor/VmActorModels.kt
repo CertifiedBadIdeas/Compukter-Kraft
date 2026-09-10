@@ -52,7 +52,7 @@ sealed interface VmActorEvent<out R : Any> {
 }
 
 data class VmActorSchedulerConfig(
-    val workerCount: Int = Runtime.getRuntime().availableProcessors().coerceAtLeast(1),
+    val workerCount: Int = defaultWorkerCount(),
     val maximumActors: Int = DEFAULT_MAXIMUM_ACTORS,
     val mailboxCapacity: Int = 64,
     val messagesPerTurn: Int = 4,
@@ -72,6 +72,14 @@ data class VmActorSchedulerConfig(
 
     companion object {
         const val DEFAULT_MAXIMUM_ACTORS = 4_096
+
+        fun defaultWorkerCount(availableProcessors: Int = Runtime.getRuntime().availableProcessors()): Int {
+            require(availableProcessors > 0) { "available processor count must be positive" }
+            return (availableProcessors / 2).coerceIn(MINIMUM_DEFAULT_WORKERS, MAXIMUM_DEFAULT_WORKERS)
+        }
+
+        private const val MINIMUM_DEFAULT_WORKERS = 2
+        private const val MAXIMUM_DEFAULT_WORKERS = 8
     }
 }
 
