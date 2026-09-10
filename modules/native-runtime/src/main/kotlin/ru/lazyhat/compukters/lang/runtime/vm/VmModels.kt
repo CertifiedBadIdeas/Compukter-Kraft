@@ -255,6 +255,46 @@ sealed interface VmOutcome {
     ) : VmOutcome
 }
 
+data class VmResourceSnapshot(
+    val fixedGuestUnits: Long,
+    val dynamicGuestUnits: Long,
+    val maintenanceUnits: Long,
+    val enteredBlocks: Long,
+    val executedInstructions: Long,
+    val heapCapacityBytes: Long,
+    val heapUsedBytes: Long,
+    val liveObjects: Long,
+    val mutableExecutionResidentBytes: Long,
+    val filesystemLogicalBytes: Long,
+    val filesystemLogicalCapacityBytes: Long,
+    val filesystemNodes: Long,
+    val filesystemNodeCapacity: Long,
+    val countersSaturated: Boolean,
+) {
+    init {
+        require(
+            listOf(
+                fixedGuestUnits,
+                dynamicGuestUnits,
+                maintenanceUnits,
+                enteredBlocks,
+                executedInstructions,
+                heapCapacityBytes,
+                heapUsedBytes,
+                liveObjects,
+                mutableExecutionResidentBytes,
+                filesystemLogicalBytes,
+                filesystemLogicalCapacityBytes,
+                filesystemNodes,
+                filesystemNodeCapacity,
+            ).all { it >= 0 },
+        ) { "resource snapshot values must not be negative" }
+        require(heapUsedBytes <= heapCapacityBytes) { "heap usage exceeds capacity" }
+        require(filesystemLogicalBytes <= filesystemLogicalCapacityBytes) { "filesystem usage exceeds capacity" }
+        require(filesystemNodes <= filesystemNodeCapacity) { "filesystem node usage exceeds capacity" }
+    }
+}
+
 class VmVerificationException : IllegalArgumentException("native VM rejected the artifact")
 
 class VmAdmissionException(

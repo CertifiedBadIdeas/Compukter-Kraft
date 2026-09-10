@@ -33,12 +33,32 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class FfmBridgeIntegrationTest {
     @Test
     fun `JDK 25 FFM reads the native ABI version`() {
         FfmBridge.open(Path.of(requiredProperty("compukter.ffi.library"))).use { bridge ->
-            assertEquals(9, bridge.abiVersion())
+            assertEquals(10, bridge.abiVersion())
+        }
+    }
+
+    @Test
+    fun `resource snapshot crosses the real FFM boundary`() {
+        FfmBridge.open(Path.of(requiredProperty("compukter.ffi.library"))).use { bridge ->
+            val artifact = Path.of(requiredProperty("compukters.shell.artifact")).readBytes()
+            VmSession.open(artifact, bridge).use { session ->
+                val initial = session.resourceSnapshot()
+                session.advance(64, 64, Int.MAX_VALUE)
+                val advanced = session.resourceSnapshot()
+
+                assertTrue(initial.heapCapacityBytes > 0)
+                assertTrue(initial.filesystemLogicalCapacityBytes > 0)
+                assertTrue(initial.filesystemNodeCapacity > 0)
+                assertTrue(advanced.fixedGuestUnits >= initial.fixedGuestUnits)
+                assertTrue(advanced.dynamicGuestUnits >= initial.dynamicGuestUnits)
+                assertTrue(advanced.executedInstructions > initial.executedInstructions)
+            }
         }
     }
 

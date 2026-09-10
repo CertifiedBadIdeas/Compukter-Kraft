@@ -402,6 +402,70 @@ class VmSessionTest {
     }
 
     @Test
+    fun `resource snapshot decodes every bounded counter`() {
+        val bridge = FakeBridge(createResult = bytes(0, long(11)))
+        val session = VmSession.open(byteArrayOf(1), bridge)
+        bridge.resourceSnapshotResult =
+            resourceSnapshot(
+                flags = 1,
+                fixedGuestUnits = 1,
+                dynamicGuestUnits = 2,
+                maintenanceUnits = 3,
+                enteredBlocks = 4,
+                executedInstructions = 5,
+                heapCapacityBytes = 100,
+                heapUsedBytes = 40,
+                liveObjects = 6,
+                mutableExecutionResidentBytes = 7,
+                filesystemLogicalBytes = 80,
+                filesystemLogicalCapacityBytes = 100,
+                filesystemNodes = 9,
+                filesystemNodeCapacity = 10,
+            )
+
+        assertEquals(
+            VmResourceSnapshot(
+                fixedGuestUnits = 1,
+                dynamicGuestUnits = 2,
+                maintenanceUnits = 3,
+                enteredBlocks = 4,
+                executedInstructions = 5,
+                heapCapacityBytes = 100,
+                heapUsedBytes = 40,
+                liveObjects = 6,
+                mutableExecutionResidentBytes = 7,
+                filesystemLogicalBytes = 80,
+                filesystemLogicalCapacityBytes = 100,
+                filesystemNodes = 9,
+                filesystemNodeCapacity = 10,
+                countersSaturated = true,
+            ),
+            session.resourceSnapshot(),
+        )
+    }
+
+    @Test
+    fun `malformed resource snapshots are bridge failures`() {
+        val bridge = FakeBridge(createResult = bytes(0, long(11)))
+        val session = VmSession.open(byteArrayOf(1), bridge)
+        val valid = resourceSnapshot()
+
+        listOf(
+            valid.copyOfRange(0, valid.lastIndex),
+            valid + 0,
+            valid.copyOf().also { it[0] = 2 },
+            valid.copyOf().also { it[1] = 2 },
+            valid.copyOf().also { ByteBuffer.wrap(it, 2, Long.SIZE_BYTES).order(ByteOrder.LITTLE_ENDIAN).putLong(-1) },
+            resourceSnapshot(heapCapacityBytes = 1, heapUsedBytes = 2),
+            resourceSnapshot(filesystemLogicalCapacityBytes = 1, filesystemLogicalBytes = 2),
+            resourceSnapshot(filesystemNodeCapacity = 1, filesystemNodes = 2),
+        ).forEach { malformed ->
+            bridge.resourceSnapshotResult = malformed
+            assertFailsWith<VmBridgeException> { session.resourceSnapshot() }
+        }
+    }
+
+    @Test
     fun `terminal state and inputs use immutable bounded bridge values`() {
         val bridge = FakeBridge(createResult = bytes(0, long(11)))
         val session = VmSession.open(byteArrayOf(1), bridge)
@@ -531,11 +595,14 @@ class VmSessionTest {
         var revisionResult: ByteArray = byteArrayOf(99)
         var deployResult: ByteArray = byteArrayOf(99)
         var deployFailure: RuntimeException? = null
+        var resourceSnapshotResult: ByteArray = resourceSnapshot()
 
         override fun openTerminalTransport(): TerminalWireTransport =
             terminalTransportFactory?.invoke() ?: super<LowLevelVmBridge>.openTerminalTransport()
 
         override fun filesystemGeneration(handle: Long): ByteArray = bytes(1, long(3))
+
+        override fun resourceSnapshot(handle: Long): ByteArray = resourceSnapshotResult
 
         override fun verifyForDeploy(
             handle: Long,
@@ -814,6 +881,40 @@ private fun long(value: Long): ByteArray =
         .order(ByteOrder.LITTLE_ENDIAN)
         .putLong(value)
         .array()
+
+private fun resourceSnapshot(
+    flags: Int = 0,
+    fixedGuestUnits: Long = 0,
+    dynamicGuestUnits: Long = 0,
+    maintenanceUnits: Long = 0,
+    enteredBlocks: Long = 0,
+    executedInstructions: Long = 0,
+    heapCapacityBytes: Long = 0,
+    heapUsedBytes: Long = 0,
+    liveObjects: Long = 0,
+    mutableExecutionResidentBytes: Long = 0,
+    filesystemLogicalBytes: Long = 0,
+    filesystemLogicalCapacityBytes: Long = 0,
+    filesystemNodes: Int = 0,
+    filesystemNodeCapacity: Int = 0,
+): ByteArray =
+    bytes(
+        1,
+        flags,
+        long(fixedGuestUnits),
+        long(dynamicGuestUnits),
+        long(maintenanceUnits),
+        long(enteredBlocks),
+        long(executedInstructions),
+        long(heapCapacityBytes),
+        long(heapUsedBytes),
+        long(liveObjects),
+        long(mutableExecutionResidentBytes),
+        long(filesystemLogicalBytes),
+        long(filesystemLogicalCapacityBytes),
+        int(filesystemNodes),
+        int(filesystemNodeCapacity),
+    )
 
 private fun int(value: Int): ByteArray =
     ByteBuffer

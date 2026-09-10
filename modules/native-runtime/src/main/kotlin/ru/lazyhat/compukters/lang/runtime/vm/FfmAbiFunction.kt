@@ -146,6 +146,10 @@ internal enum class FfmAbiFunction(
         "compukter_filesystem_generation",
         status(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
     ),
+    RESOURCE_SNAPSHOT(
+        "compukter_resource_snapshot",
+        status(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.ADDRESS),
+    ),
     FILESYSTEM_STAT(
         "compukter_filesystem_stat",
         status(

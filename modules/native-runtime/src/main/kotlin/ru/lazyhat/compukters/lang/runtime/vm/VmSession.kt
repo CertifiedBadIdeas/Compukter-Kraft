@@ -149,6 +149,9 @@ class VmSession private constructor(
 
     fun filesystemGeneration(): Long = decodeNative { GenerationWireDecoder(bridge.filesystemGeneration(requireHandle())).generation() }
 
+    fun resourceSnapshot(): VmResourceSnapshot =
+        decodeNative { ResourceSnapshotWireDecoder(bridge.resourceSnapshot(requireHandle())).snapshot() }
+
     fun fileStat(path: VmVirtualPath): VmFileStat =
         decodeNative {
             FileInspectionWireDecoder(bridge.fileStat(requireHandle(), path.value.encodeToByteArray())).stat()
@@ -470,6 +473,43 @@ private class GenerationWireDecoder(
         require(!buffer.hasRemaining()) { "native filesystem generation contains trailing bytes" }
         return generation
     }
+}
+
+private class ResourceSnapshotWireDecoder(
+    bytes: ByteArray,
+) {
+    private val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+
+    fun snapshot(): VmResourceSnapshot {
+        require(u8() == 1) { "unsupported resource snapshot wire version" }
+        val flags = u8()
+        require(flags and 0xfe == 0) { "invalid resource snapshot flags" }
+        val snapshot =
+            VmResourceSnapshot(
+                fixedGuestUnits = nonNegativeLong(),
+                dynamicGuestUnits = nonNegativeLong(),
+                maintenanceUnits = nonNegativeLong(),
+                enteredBlocks = nonNegativeLong(),
+                executedInstructions = nonNegativeLong(),
+                heapCapacityBytes = nonNegativeLong(),
+                heapUsedBytes = nonNegativeLong(),
+                liveObjects = nonNegativeLong(),
+                mutableExecutionResidentBytes = nonNegativeLong(),
+                filesystemLogicalBytes = nonNegativeLong(),
+                filesystemLogicalCapacityBytes = nonNegativeLong(),
+                filesystemNodes = unsignedInt(),
+                filesystemNodeCapacity = unsignedInt(),
+                countersSaturated = flags and 1 != 0,
+            )
+        require(!buffer.hasRemaining()) { "resource snapshot contains trailing bytes" }
+        return snapshot
+    }
+
+    private fun nonNegativeLong(): Long = buffer.long.also { require(it >= 0) { "resource snapshot value exceeds JVM range" } }
+
+    private fun unsignedInt(): Long = buffer.int.toLong() and 0xffff_ffffL
+
+    private fun u8(): Int = buffer.get().toInt() and 0xff
 }
 
 private class ExecutableRevisionWireDecoder(

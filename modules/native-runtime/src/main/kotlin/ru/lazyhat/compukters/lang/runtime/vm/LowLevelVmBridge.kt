@@ -70,6 +70,8 @@ internal interface LowLevelVmBridge {
 
     fun filesystemGeneration(handle: Long): ByteArray = error("filesystem generation is unavailable")
 
+    fun resourceSnapshot(handle: Long): ByteArray = error("resource snapshot is unavailable")
+
     fun fileStat(
         handle: Long,
         pathUtf8: ByteArray,
