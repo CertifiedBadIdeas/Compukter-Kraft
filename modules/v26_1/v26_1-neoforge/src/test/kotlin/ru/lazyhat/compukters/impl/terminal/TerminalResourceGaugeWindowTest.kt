@@ -23,9 +23,24 @@ import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramTickBudget
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class TerminalResourceGaugeWindowTest {
+    @Test
+    fun `poll schedule admits one immediate sample and one per interval`() {
+        val schedule = TerminalResourcePollSchedule(intervalTicks = 10)
+
+        assertTrue(schedule.isDue(0))
+        schedule.submitted(0)
+        assertFalse(schedule.isDue(9))
+        assertTrue(schedule.isDue(10))
+        schedule.submitted(10)
+        assertFalse(schedule.isDue(19))
+        assertTrue(schedule.isDue(20))
+    }
+
     @Test
     fun `consecutive samples expose semantic budget delta and current capacities`() {
         val window = TerminalResourceGaugeWindow()

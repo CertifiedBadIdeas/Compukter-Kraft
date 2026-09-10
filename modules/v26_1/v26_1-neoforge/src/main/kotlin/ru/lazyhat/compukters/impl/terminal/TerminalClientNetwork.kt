@@ -47,6 +47,10 @@ object TerminalClientNetwork {
                 current.requestResync()
             }
         }
+        event.register(TerminalResourcePayload.TYPE) resourceHandler@{ payload, _ ->
+            val current = currentTerminal() ?: return@resourceHandler
+            current.update(payload)
+        }
     }
 }
 

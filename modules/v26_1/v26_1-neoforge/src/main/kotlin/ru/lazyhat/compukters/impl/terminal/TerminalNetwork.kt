@@ -31,6 +31,7 @@ import net.neoforged.neoforge.network.PacketDistributor
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent
 import net.neoforged.neoforge.network.handling.IPayloadContext
 import ru.lazyhat.compukters.core.MOD_ID
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.impl.network.ServerOperationScope
 import ru.lazyhat.compukters.impl.network.awaitServerResult
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
@@ -46,9 +47,10 @@ object TerminalNetwork {
     private val polls = ServerOperationScope(maximumPending = 256, maximumPendingPerPlayer = 1)
 
     fun register(event: RegisterPayloadHandlersEvent) {
-        val registrar = event.registrar("2")
+        val registrar = event.registrar("3")
         registrar.playToClient(TerminalFullPayload.TYPE, TerminalFullPayload.STREAM_CODEC)
         registrar.playToClient(TerminalDeltaPayload.TYPE, TerminalDeltaPayload.STREAM_CODEC)
+        registrar.playToClient(TerminalResourcePayload.TYPE, TerminalResourcePayload.STREAM_CODEC)
         registrar.playToServer(TerminalResyncPayload.TYPE, TerminalResyncPayload.STREAM_CODEC, ::handleResync)
         registrar.playToServer(TerminalClosePayload.TYPE, TerminalClosePayload.STREAM_CODEC, ::handleClose)
         registrar.playToServer(TerminalKeyPayload.TYPE, TerminalKeyPayload.STREAM_CODEC, ::handleKey)
@@ -85,6 +87,7 @@ object TerminalNetwork {
     @JvmStatic
     @SubscribeEvent
     fun afterServerTick(event: ServerTickEvent.Post) {
+        val worldTick = event.server.tickCount.toLong()
         viewers.keys.toList().forEach { playerId ->
             val viewer = viewers[playerId] ?: return@forEach
             val player = event.server.playerList.getPlayer(playerId)
@@ -95,24 +98,44 @@ object TerminalNetwork {
             }
             val entity = level.getBlockEntity(viewer.position) as? ComputerBlockEntity ?: return@forEach
             val machineId = entity.terminalMachineId ?: return@forEach
+            val includeResources = viewer.resourceSchedule.isDue(worldTick)
             val pending =
                 polls.submit(playerId) {
-                    if (machineId == viewer.machineId) {
-                        entity.terminalChangesSinceAsync(viewer.revision).awaitServerResult()
-                    } else {
-                        entity.terminalFullStateAsync().awaitServerResult()?.let(TerminalUpdate::Full)
-                    }
+                    val update =
+                        if (machineId == viewer.machineId) {
+                            entity.terminalChangesSinceAsync(viewer.revision).awaitServerResult()
+                        } else {
+                            entity.terminalFullStateAsync().awaitServerResult()?.let(TerminalUpdate::Full)
+                        }
+                    val resources =
+                        if (includeResources) {
+                            try {
+                                entity.resourceSnapshotAsync().awaitServerResult()
+                            } catch (_: Exception) {
+                                null
+                            }
+                        } else {
+                            null
+                        }
+                    PollResult(update, resources)
                 } ?: return@forEach
+            if (includeResources) viewer.resourceSchedule.submitted(worldTick)
             // Round-robin when the shared limit is full.
             if (viewers[playerId] === viewer) {
                 viewers.remove(playerId)
                 viewers[playerId] = viewer
             }
-            pending.whenComplete { update, failure ->
+            pending.whenComplete { result, failure ->
                 if (failure != null || viewers[playerId] !== viewer || !player.isValidViewer(level, viewer.position)) return@whenComplete
                 val currentMachine = entity.terminalMachineId ?: return@whenComplete
                 if (currentMachine != machineId) return@whenComplete
-                publish(player, entity.blockPos, viewer, currentMachine, update)
+                publish(player, entity.blockPos, viewer, currentMachine, result.update)
+                if (includeResources) {
+                    PacketDistributor.sendToPlayer(
+                        player,
+                        TerminalResourcePayload(entity.blockPos, currentMachine, viewer.resourceWindow.accept(result.resources)),
+                    )
+                }
             }
         }
     }
@@ -142,13 +165,14 @@ object TerminalNetwork {
 
             is TerminalUpdate.Full -> {
                 if (update.state.revision < viewer.revision && machineId == viewer.machineId) return
+                if (viewer.machineId != machineId) viewer.resourceWindow.reset()
                 viewer.machineId = machineId
                 viewer.revision = update.state.revision
                 PacketDistributor.sendToPlayer(player, TerminalFullPayload(position, machineId, update.state, false))
             }
 
             is TerminalUpdate.Unchanged, null -> {
-                Unit
+                return
             }
         }
     }
@@ -247,6 +271,14 @@ object TerminalNetwork {
         val position: BlockPos,
         var machineId: Long,
         var revision: Long,
+    ) {
+        val resourceSchedule = TerminalResourcePollSchedule()
+        val resourceWindow = TerminalResourceGaugeWindow()
+    }
+
+    private data class PollResult(
+        val update: TerminalUpdate?,
+        val resources: ProgramResourceSnapshot?,
     )
 
     private const val MAXIMUM_DISTANCE_SQUARED = 64.0

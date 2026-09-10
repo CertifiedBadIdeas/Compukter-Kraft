@@ -46,6 +46,9 @@ internal class TerminalScreen(
         private set
 
     private val replica = TerminalReplica(initial.state)
+    private val resourceReplica = TerminalResourceReplica(initial.machineId)
+    internal val resourceGauges: TerminalResourceGauges
+        get() = resourceReplica.gauges
     private val pressedKeys = mutableSetOf<Int>()
     private var fontProfile = CompuktersClientConfig.selectedFont()
     private lateinit var ideButton: Button
@@ -97,12 +100,18 @@ internal class TerminalScreen(
     fun update(payload: TerminalFullPayload): Boolean {
         if (payload.position != position || payload.machineId <= 0) return false
         if (!replica.replace(payload.state)) return false
+        resourceReplica.replaceMachine(payload.machineId)
         machineId = payload.machineId
         return true
     }
 
     fun update(payload: TerminalDeltaPayload): Boolean =
         payload.position == position && payload.machineId == machineId && replica.apply(payload.delta)
+
+    fun update(payload: TerminalResourcePayload): Boolean {
+        if (payload.position != position) return false
+        return resourceReplica.update(payload.machineId, payload.gauges)
+    }
 
     fun requestResync() {
         transport.send(TerminalResyncPayload(position, machineId, replica.state.revision))

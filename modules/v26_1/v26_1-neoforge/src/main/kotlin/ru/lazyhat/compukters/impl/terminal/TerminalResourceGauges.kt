@@ -63,15 +63,48 @@ internal data class TerminalResourceGauges(
     }
 }
 
+internal class TerminalResourceReplica(
+    initialMachineId: Long,
+) {
+    private var machineId = initialMachineId
+    var gauges: TerminalResourceGauges = TerminalResourceGauges.unavailable()
+        private set
+
+    init {
+        require(initialMachineId > 0) { "terminal machine id must be positive" }
+    }
+
+    fun replaceMachine(machineId: Long) {
+        require(machineId > 0) { "terminal machine id must be positive" }
+        if (this.machineId == machineId) return
+        this.machineId = machineId
+        gauges = TerminalResourceGauges.unavailable()
+    }
+
+    fun update(
+        machineId: Long,
+        gauges: TerminalResourceGauges,
+    ): Boolean {
+        if (this.machineId != machineId) return false
+        this.gauges = gauges
+        return true
+    }
+}
+
 internal class TerminalResourceGaugeWindow {
     private var previous: ProgramResourceSnapshot.Available? = null
 
-    fun accept(snapshot: ProgramResourceSnapshot): TerminalResourceGauges =
+    fun accept(snapshot: ProgramResourceSnapshot?): TerminalResourceGauges =
         when (snapshot) {
             is ProgramResourceSnapshot.Available -> acceptAvailable(snapshot)
             is ProgramResourceSnapshot.Unavailable -> {
                 previous = null
                 TerminalResourceGauges.unavailable(snapshot.state.activity())
+            }
+
+            null -> {
+                previous = null
+                TerminalResourceGauges.unavailable()
             }
         }
 
@@ -118,6 +151,26 @@ internal class TerminalResourceGaugeWindow {
         val budgetBasisPoints: Int?,
         val maintenanceUnits: Long,
     )
+}
+
+internal class TerminalResourcePollSchedule(
+    private val intervalTicks: Long = 10,
+) {
+    private var nextTick = 0L
+
+    init {
+        require(intervalTicks > 0) { "resource poll interval must be positive" }
+    }
+
+    fun isDue(worldTick: Long): Boolean {
+        require(worldTick >= 0) { "world tick must not be negative" }
+        return worldTick >= nextTick
+    }
+
+    fun submitted(worldTick: Long) {
+        require(isDue(worldTick)) { "resource poll was submitted before it was due" }
+        nextTick = if (worldTick > Long.MAX_VALUE - intervalTicks) Long.MAX_VALUE else worldTick + intervalTicks
+    }
 }
 
 private fun ProgramRuntimeState.activity(): TerminalResourceActivity =

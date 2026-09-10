@@ -59,6 +59,14 @@ class TerminalPayloadsTest {
                 ),
             )
         assertEquals(delta, roundTrip(TerminalDeltaPayload.STREAM_CODEC, delta))
+
+        val resources =
+            TerminalResourcePayload(
+                POSITION,
+                9,
+                TerminalResourceGauges(6_250, 40, 100, 3, 4, TerminalResourceActivity.COLLECTING, false),
+            )
+        assertEquals(resources, roundTrip(TerminalResourcePayload.STREAM_CODEC, resources))
     }
 
     @Test
@@ -104,6 +112,26 @@ class TerminalPayloadsTest {
         assertFailsWith<IllegalArgumentException> {
             roundTrip(TerminalFullPayload.STREAM_CODEC, TerminalFullPayload(POSITION, 1, invalidCount, false))
         }
+        assertFailsWith<IllegalArgumentException> {
+            TerminalResourceGauges(10_001, 0, 1, 0, 1, TerminalResourceActivity.ACTIVE, false)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            TerminalResourceGauges(null, 2, 1, 0, 1, TerminalResourceActivity.ACTIVE, false)
+        }
+    }
+
+    @Test
+    fun `terminal resource replica accepts only its exact machine identity`() {
+        val replica = TerminalResourceReplica(initialMachineId = 9)
+        val accepted = TerminalResourcePayload(POSITION, 9, gauges())
+        val stale = TerminalResourcePayload(POSITION, 8, gauges().copy(vmBudgetBasisPoints = 1))
+
+        assertTrue(replica.update(accepted.machineId, accepted.gauges))
+        assertFalse(replica.update(stale.machineId, stale.gauges))
+        assertEquals(accepted.gauges, replica.gauges)
+
+        replica.replaceMachine(10)
+        assertEquals(TerminalResourceGauges.unavailable(), replica.gauges)
     }
 
     @Test
@@ -146,5 +174,7 @@ class TerminalPayloadsTest {
                 TerminalPosition(0, 0),
                 true,
             )
+
+        fun gauges(): TerminalResourceGauges = TerminalResourceGauges(5_000, 1, 2, 3, 4, TerminalResourceActivity.ACTIVE, false)
     }
 }
