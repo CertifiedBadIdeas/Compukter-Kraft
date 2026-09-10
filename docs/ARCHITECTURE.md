@@ -110,9 +110,9 @@ increasing messages per turn trades inter-actor latency for locality.
 
 Scheduler snapshots read atomic counters and bounded lane sizes without scanning registered actors. Every five seconds
 the debug log reports registered and runnable actors, mailbox and result depths, worker occupancy, average/maximum
-mailbox latency, average/maximum execution time, deferred world requests, and rejected input/mailbox submissions.
-These are lifetime counters and gauges for the current server service rather than an equal-CPU or delivery-latency
-contract.
+command-queue latency, average/maximum execution time, completed-result latency, the last server pump size and duration,
+deferred world requests, and rejected input/mailbox submissions. These are lifetime counters and gauges for the current
+server service rather than an equal-CPU or delivery-latency contract.
 
 `ActorProgramComputer` is the asynchronous carrier implementation for that migration. Its server-side state is an
 observation from actor replies, and terminal, filesystem, deployment, and input requests return futures. It keeps at

@@ -90,6 +90,9 @@ data class VmActorSchedulerMetrics(
     val mailboxFullRejections: Long,
     val staleEndpointRejections: Long,
     val closedRejections: Long,
+    val drainedEvents: Long,
+    val totalResultLatencyNanos: Long,
+    val maximumResultLatencyNanos: Long,
 )
 
 data class ProgramRuntimeActorMetrics(
@@ -98,6 +101,8 @@ data class ProgramRuntimeActorMetrics(
     val deferredWorldRequests: Int,
     val totalDeferredWorldRequests: Long,
     val rejectedInputRequests: Long,
+    val lastPumpEvents: Int,
+    val lastPumpNanos: Long,
 )
 
 interface VmActorProcessor<in C : Any, out R : Any> : AutoCloseable {

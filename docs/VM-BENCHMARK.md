@@ -56,9 +56,10 @@ It has no persistent filesystem or block entity and is closed through the actor 
 explicit stop, or server shutdown.
 
 `status` reports admitted, active, completed, failed, and closing actors; elapsed ticks and current smoothed Minecraft
-MSPT; worker, mailbox, and result occupancy; average queue and execution time; and mailbox rejection deltas. Admission
-may be lower than requested when ordinary computers already occupy the configured actor capacity. Run `stop` before
-changing the workload, and wait for `STOPPED` before starting another fleet.
+MSPT; worker, mailbox, and result occupancy; average command-queue, execution, and completed-result latency; the last
+server pump size and duration; and mailbox rejection deltas. Admission may be lower than requested when ordinary
+computers already occupy the configured actor capacity. Run `stop` before changing the workload, and wait for `STOPPED`
+before starting another fleet.
 
 For an initial saturation profile, record an idle baseline and compare equal intervals at 1, 10, 100, 500, 1000, and
 4096 actors. Use enough rounds that the fleet remains active for the complete observation interval. Scheduler

@@ -46,6 +46,12 @@ class ProgramRuntimeActorServiceTest {
             assertEquals(1, service.pump(1))
             val reply = future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
             assertNull(assertIs<ProgramRuntimeActorValue.TerminalStateValue>(reply.value).state)
+            val metrics = service.runtimeMetrics()
+            assertEquals(1, metrics.scheduler.drainedEvents)
+            assertTrue(metrics.scheduler.totalResultLatencyNanos > 0)
+            assertTrue(metrics.scheduler.maximumResultLatencyNanos > 0)
+            assertEquals(1, metrics.lastPumpEvents)
+            assertTrue(metrics.lastPumpNanos > 0)
         }
     }
 

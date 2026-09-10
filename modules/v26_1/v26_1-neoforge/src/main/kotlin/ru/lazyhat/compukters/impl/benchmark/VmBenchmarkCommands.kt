@@ -202,13 +202,18 @@ internal object VmBenchmarkCommands {
 
     private fun HeadlessVmBenchmarkSnapshot.describe(): String {
         val processed = (metrics.scheduler.processedMessages - baseline.scheduler.processedMessages).coerceAtLeast(1)
+        val drained = (metrics.scheduler.drainedEvents - baseline.scheduler.drainedEvents).coerceAtLeast(1)
         val queueNanos = (metrics.scheduler.totalQueueLatencyNanos - baseline.scheduler.totalQueueLatencyNanos).coerceAtLeast(0)
         val executionNanos = (metrics.scheduler.totalExecutionNanos - baseline.scheduler.totalExecutionNanos).coerceAtLeast(0)
+        val resultNanos =
+            (metrics.scheduler.totalResultLatencyNanos - baseline.scheduler.totalResultLatencyNanos).coerceAtLeast(0)
         return "Headless VM benchmark: $status; actors=$activeActors active/$completedActors completed/$failedActors failed/" +
             "$admittedActors admitted ($requestedActors requested), closing=$closingActors, rounds=$rounds, " +
             "ticks=$elapsedTicks, MSPT=${"%.3f".format(Locale.ROOT, currentMspt)}, mailbox=${metrics.scheduler.queuedMessages}, " +
             "results=${metrics.scheduler.queuedResults}, workers=${metrics.scheduler.busyWorkers}, " +
             "queueAvgUs=${queueNanos / processed / 1_000}, executionAvgUs=${executionNanos / processed / 1_000}, " +
+            "resultAvgUs=${resultNanos / drained / 1_000}, drainedLast=${metrics.lastPumpEvents}, " +
+            "pumpLastUs=${metrics.lastPumpNanos / 1_000}, " +
             "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}"
     }
 

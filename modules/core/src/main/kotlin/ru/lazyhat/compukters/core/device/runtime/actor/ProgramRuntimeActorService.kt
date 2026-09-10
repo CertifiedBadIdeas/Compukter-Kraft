@@ -26,6 +26,7 @@ import ru.lazyhat.compukters.core.device.runtime.program.RedstoneHostPort
 import ru.lazyhat.compukters.lang.runtime.fs.WorldFileSystemStore
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /** Owns runtime actors and is the only supported cross-thread entry point to their native sessions. */
@@ -38,6 +39,8 @@ class ProgramRuntimeActorService(
     private val nextRequestId = AtomicLong()
     private val totalDeferredWorldRequests = AtomicLong()
     private val rejectedInputRequests = AtomicLong()
+    private val lastPumpEvents = AtomicInteger()
+    private val lastPumpNanos = AtomicLong()
 
     fun registerStandalone(
         endpoint: VmActorEndpoint,
@@ -118,6 +121,7 @@ class ProgramRuntimeActorService(
         scheduler.unregister(endpoint).whenComplete { _, _ -> deferredWorldRequests.remove(endpoint) }
 
     fun pump(maximumEvents: Int): Int {
+        val startedAt = System.nanoTime()
         val events = scheduler.drainEvents(maximumEvents)
         events.forEach { event ->
             when (event) {
@@ -142,6 +146,8 @@ class ProgramRuntimeActorService(
                 }
             }
         }
+        lastPumpEvents.set(events.size)
+        lastPumpNanos.set((System.nanoTime() - startedAt).coerceAtLeast(0))
         return events.size
     }
 
@@ -154,6 +160,8 @@ class ProgramRuntimeActorService(
             deferredWorldRequests = deferredWorldRequests.size,
             totalDeferredWorldRequests = totalDeferredWorldRequests.get(),
             rejectedInputRequests = rejectedInputRequests.get(),
+            lastPumpEvents = lastPumpEvents.get(),
+            lastPumpNanos = lastPumpNanos.get(),
         )
 
     override fun close() {

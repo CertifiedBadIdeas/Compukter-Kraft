@@ -46,7 +46,7 @@ class VmActorScheduler<C : Any, R : Any>(
     private val resultLanes =
         // Keep an actor's results ordered even when a different worker steals its next turn.
         List(config.workerCount) {
-            ArrayBlockingQueue<VmActorEvent<R>>(config.resultCapacityPerWorker)
+            ArrayBlockingQueue<QueuedEvent<R>>(config.resultCapacityPerWorker)
         }
     private val accepting = AtomicBoolean(true)
     private val workersRunning = AtomicBoolean(true)
@@ -63,6 +63,9 @@ class VmActorScheduler<C : Any, R : Any>(
     private val mailboxFullRejections = AtomicLong()
     private val staleEndpointRejections = AtomicLong()
     private val closedRejections = AtomicLong()
+    private val drainedEvents = AtomicLong()
+    private val totalResultLatencyNanos = AtomicLong()
+    private val maximumResultLatencyNanos = AtomicLong()
     private val drainCursor = AtomicInteger()
     private val workers =
         List(config.workerCount) { index ->
@@ -147,16 +150,24 @@ class VmActorScheduler<C : Any, R : Any>(
         val drained = ArrayList<VmActorEvent<R>>(maximumEvents)
         var emptyLanes = 0
         var laneIndex = Math.floorMod(drainCursor.getAndIncrement(), resultLanes.size)
+        var latencyTotal = 0L
+        var latencyMaximum = 0L
         while (drained.size < maximumEvents && emptyLanes < resultLanes.size) {
-            val event = resultLanes[laneIndex].poll()
-            if (event == null) {
+            val queued = resultLanes[laneIndex].poll()
+            if (queued == null) {
                 emptyLanes++
             } else {
-                drained += event
+                val latency = (System.nanoTime() - queued.completedAtNanos).coerceAtLeast(0)
+                latencyTotal += latency
+                latencyMaximum = maxOf(latencyMaximum, latency)
+                drained += queued.event
                 emptyLanes = 0
             }
             laneIndex = (laneIndex + 1) % resultLanes.size
         }
+        drainedEvents.addAndGet(drained.size.toLong())
+        totalResultLatencyNanos.addAndGet(latencyTotal)
+        maximumResultLatencyNanos.accumulateAndGet(latencyMaximum) { previous, current -> maxOf(previous, current) }
         return drained
     }
 
@@ -176,12 +187,15 @@ class VmActorScheduler<C : Any, R : Any>(
             mailboxFullRejections = mailboxFullRejections.get(),
             staleEndpointRejections = staleEndpointRejections.get(),
             closedRejections = closedRejections.get(),
+            drainedEvents = drainedEvents.get(),
+            totalResultLatencyNanos = totalResultLatencyNanos.get(),
+            maximumResultLatencyNanos = maximumResultLatencyNanos.get(),
         )
 
     override fun close() {
         if (!accepting.compareAndSet(true, false)) return
         val barriers = actors.values.map { requestClose(it) }
-        resultLanes.forEach(ArrayBlockingQueue<VmActorEvent<R>>::clear)
+        resultLanes.forEach(ArrayBlockingQueue<QueuedEvent<R>>::clear)
         val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(config.shutdownTimeoutMillis)
         try {
             val remaining = (deadline - System.nanoTime()).coerceAtLeast(0)
@@ -344,8 +358,9 @@ class VmActorScheduler<C : Any, R : Any>(
         workerIndex: Int,
         event: VmActorEvent<R>,
     ) {
+        val queued = QueuedEvent(event, System.nanoTime())
         while (accepting.get()) {
-            if (resultLanes[workerIndex].offer(event, config.idlePollMillis, TimeUnit.MILLISECONDS)) return
+            if (resultLanes[workerIndex].offer(queued, config.idlePollMillis, TimeUnit.MILLISECONDS)) return
         }
     }
 
@@ -366,5 +381,10 @@ class VmActorScheduler<C : Any, R : Any>(
     private data class QueuedCommand<C : Any>(
         val command: C,
         val enqueuedAtNanos: Long,
+    )
+
+    private data class QueuedEvent<R : Any>(
+        val event: VmActorEvent<R>,
+        val completedAtNanos: Long,
     )
 }

@@ -99,6 +99,7 @@ internal object NeoForgeVmActorServices {
     private fun logMetrics(metrics: ProgramRuntimeActorMetrics) {
         val scheduler = metrics.scheduler
         val processed = scheduler.processedMessages.coerceAtLeast(1)
+        val drained = scheduler.drainedEvents.coerceAtLeast(1)
         LOGGER.debug {
             "VM actors: registered=${scheduler.registeredActors}, runnable=${scheduler.scheduledActors}, " +
                 "mailbox=${scheduler.queuedMessages}, results=${scheduler.queuedResults}, workers=${scheduler.busyWorkers}, " +
@@ -106,6 +107,9 @@ internal object NeoForgeVmActorServices {
                 "queueMaxUs=${scheduler.maximumQueueLatencyNanos / 1_000}, " +
                 "executionAvgUs=${scheduler.totalExecutionNanos / processed / 1_000}, " +
                 "executionMaxUs=${scheduler.maximumExecutionNanos / 1_000}, " +
+                "resultAvgUs=${scheduler.totalResultLatencyNanos / drained / 1_000}, " +
+                "resultMaxUs=${scheduler.maximumResultLatencyNanos / 1_000}, " +
+                "drainedLast=${metrics.lastPumpEvents}, pumpLastUs=${metrics.lastPumpNanos / 1_000}, " +
                 "worldDeferred=${metrics.deferredWorldRequests}, worldTotal=${metrics.totalDeferredWorldRequests}, " +
                 "inputRejected=${metrics.rejectedInputRequests}, mailboxRejected=${scheduler.mailboxFullRejections}"
         }

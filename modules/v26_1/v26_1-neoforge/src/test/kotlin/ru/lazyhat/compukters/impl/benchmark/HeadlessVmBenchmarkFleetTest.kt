@@ -135,11 +135,16 @@ class HeadlessVmBenchmarkFleetTest {
                         mailboxFullRejections = 0,
                         staleEndpointRejections = 0,
                         closedRejections = 0,
+                        drainedEvents = 0,
+                        totalResultLatencyNanos = 0,
+                        maximumResultLatencyNanos = 0,
                     ),
                 pendingRequests = 0,
                 deferredWorldRequests = 0,
                 totalDeferredWorldRequests = 0,
                 rejectedInputRequests = 0,
+                lastPumpEvents = 0,
+                lastPumpNanos = 0,
             )
     }
 }
