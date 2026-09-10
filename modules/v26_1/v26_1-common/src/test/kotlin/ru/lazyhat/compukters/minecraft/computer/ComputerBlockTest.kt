@@ -121,6 +121,9 @@ class ComputerBlockTest {
 
         override fun terminalChangesSinceAsync(revision: Long) = CompletableFuture.completedFuture<TerminalUpdate?>(null)
 
+        override fun resourceSnapshotAsync() =
+            CompletableFuture.completedFuture<ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot?>(null)
+
         override fun sendTerminalKeyAsync(
             key: TerminalKey,
             action: TerminalKeyAction,

@@ -32,6 +32,9 @@ import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStateSink
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStopReason
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandidate
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramTickBudget
 import ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath
 import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalCell
@@ -51,6 +54,18 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ComputerBlockEntityTest {
+    @Test
+    fun `resource snapshot is requested only from an attached carrier`() {
+        val fixture = fixture()
+        assertNull(fixture.entity.resourceSnapshotAsync().getNow(null))
+        fixture.entity.prepareTerminalAsync()
+        val expected = ProgramResourceSnapshot.Unavailable(ProgramRuntimeState.Idle, ProgramTickBudget())
+        fixture.carriers.single().resourceSnapshot = expected
+
+        assertEquals(expected, fixture.entity.resourceSnapshotAsync().getNow(null))
+        assertEquals(1, fixture.carriers.single().resourceSnapshotCalls)
+    }
+
     @Test
     fun `output register persists exactly and malformed reserved bits sanitize to zero`() {
         val fresh = fixture()
@@ -311,6 +326,8 @@ class ComputerBlockEntityTest {
         val deploymentPaths = mutableListOf<String>()
         val canonicalLines = mutableListOf<String>()
         val redstoneInputs = mutableListOf<Int>()
+        var resourceSnapshot: ProgramResourceSnapshot? = null
+        var resourceSnapshotCalls = 0
 
         override fun turnOn(): ProgramComputerState {
             turnOnCalls++
@@ -336,6 +353,11 @@ class ComputerBlockEntityTest {
 
         override fun terminalChangesSinceAsync(revision: Long): CompletableFuture<TerminalUpdate?> =
             CompletableFuture.completedFuture(update)
+
+        override fun resourceSnapshotAsync(): CompletableFuture<ProgramResourceSnapshot?> {
+            resourceSnapshotCalls++
+            return CompletableFuture.completedFuture(resourceSnapshot)
+        }
 
         override fun sendTerminalKeyAsync(
             key: TerminalKey,

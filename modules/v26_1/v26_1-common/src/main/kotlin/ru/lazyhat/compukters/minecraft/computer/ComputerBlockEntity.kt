@@ -29,6 +29,7 @@ import net.minecraft.world.level.storage.ValueOutput
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStopReason
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandidate
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneHostPort
 import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
@@ -100,6 +101,9 @@ open class ComputerBlockEntity internal constructor(
 
     fun terminalChangesSinceAsync(revision: Long): CompletableFuture<TerminalUpdate?> =
         carrier?.terminalChangesSinceAsync(revision) ?: CompletableFuture.completedFuture(null)
+
+    fun resourceSnapshotAsync(): CompletableFuture<ProgramResourceSnapshot?> =
+        carrier?.resourceSnapshotAsync() ?: CompletableFuture.completedFuture(null)
 
     fun submitTerminalKeyAsync(
         key: TerminalKey,

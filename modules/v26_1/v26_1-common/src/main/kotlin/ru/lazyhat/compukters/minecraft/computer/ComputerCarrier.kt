@@ -30,6 +30,7 @@ import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorFailur
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorValue
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEndpoint
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandidate
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneHostPort
 import ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing
@@ -62,6 +63,8 @@ internal interface ComputerCarrier : AutoCloseable {
     fun terminalFullStateAsync(): CompletableFuture<TerminalState?>
 
     fun terminalChangesSinceAsync(revision: Long): CompletableFuture<TerminalUpdate?>
+
+    fun resourceSnapshotAsync(): CompletableFuture<ProgramResourceSnapshot?>
 
     fun sendTerminalKeyAsync(
         key: TerminalKey,
@@ -183,6 +186,11 @@ private class ActorComputerCarrier(
     override fun terminalChangesSinceAsync(revision: Long) =
         request({ ProgramRuntimeActorCommand.TerminalChangesSince(it, revision) }) {
             (it as ProgramRuntimeActorValue.TerminalUpdateValue).update
+        }
+
+    override fun resourceSnapshotAsync(): CompletableFuture<ProgramResourceSnapshot?> =
+        request(ProgramRuntimeActorCommand::ResourceSnapshot) {
+            (it as ProgramRuntimeActorValue.ResourceSnapshotValue).snapshot
         }
 
     override fun sendTerminalKeyAsync(
