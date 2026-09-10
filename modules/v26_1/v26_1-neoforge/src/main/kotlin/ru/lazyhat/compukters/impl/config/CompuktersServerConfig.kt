@@ -32,7 +32,12 @@ object CompuktersServerConfig {
     private val maximumActors =
         builder
             .comment("Maximum number of resident VM actors per server")
-            .defineInRange("vm.maximum_actors", 1_024, 1, 16_384)
+            .defineInRange(
+                "vm.maximum_actors",
+                VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS,
+                1,
+                16_384,
+            )
     private val mailboxCapacity =
         builder
             .comment("Maximum accepted commands waiting for one VM actor")

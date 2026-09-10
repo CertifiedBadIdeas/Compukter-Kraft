@@ -28,6 +28,7 @@ import net.minecraft.server.MinecraftServer
 import net.neoforged.neoforge.event.RegisterCommandsEvent
 import net.neoforged.neoforge.event.server.ServerStoppingEvent
 import net.neoforged.neoforge.event.tick.ServerTickEvent
+import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
 import ru.lazyhat.compukters.impl.computer.NeoForgeVmActorServices
 import ru.lazyhat.compukters.minecraft.computer.HeadlessVmBenchmarkArtifact
 import java.util.IdentityHashMap
@@ -211,6 +212,6 @@ internal object VmBenchmarkCommands {
             "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}"
     }
 
-    private const val MAXIMUM_ACTORS = 1_000
+    private const val MAXIMUM_ACTORS = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS
     private const val MAXIMUM_ROUNDS = 1_000_000
 }

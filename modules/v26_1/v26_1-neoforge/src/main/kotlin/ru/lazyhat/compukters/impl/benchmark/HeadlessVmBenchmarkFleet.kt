@@ -24,6 +24,7 @@ import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorMetric
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorService
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorValue
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEndpoint
+import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import java.util.UUID
@@ -214,7 +215,7 @@ internal class HeadlessVmBenchmarkFleet(
     }
 
     private companion object {
-        const val MAXIMUM_ACTORS = 1_000
+        const val MAXIMUM_ACTORS = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS
         const val MAXIMUM_ROUNDS = 1_000_000
 
         fun benchmarkEndpoint(

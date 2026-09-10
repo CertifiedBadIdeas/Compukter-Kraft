@@ -104,7 +104,7 @@ callbacks on the server thread. Stopping removes the service before closing it, 
 Production computers attach one actor identified by `ComputerId` and a machine epoch. A full scheduler rejects a new
 attachment without blocking or failing the server tick; the block remains powered off and retries on a later tick.
 The server config exposes `vm.workers`, `vm.maximum_actors`, `vm.mailbox_capacity`, `vm.messages_per_turn`, and
-`vm.result_capacity_per_worker`; defaults are the available processor count (capped at 64), 1024 actors, 64 commands,
+`vm.result_capacity_per_worker`; defaults are the available processor count (capped at 64), 4096 actors, 64 commands,
 4 commands per turn, and 256 replies per worker. Increasing queue limits trades bounded memory for burst tolerance;
 increasing messages per turn trades inter-actor latency for locality.
 
@@ -233,9 +233,10 @@ isolated by `ComputerId`.
 ordinary foreground process and VM quota path. It exists to measure aggregate in-world runtime cost and does not own a
 timing capability, privileged execution budget, or benchmark-only host path. See the
 [in-world VM benchmark guide](https://certifiedbadideas.github.io/Compukters/VM-BENCHMARK/) for the controlled scaling procedure.
-An operator-only harness can run an internal headless artifact through the same verified session and actor scheduler,
-or dispatch the ordinary `/rom/vmbench` command to at most 1000 loaded physical computers in a bounded area. The
-harness owns no persistent computer identity, never loads chunks, and does not provide a guest-visible fleet protocol.
+An operator-only harness can run up to 4096 internal headless artifacts through the same verified session and actor
+scheduler, or dispatch the ordinary `/rom/vmbench` command to at most 1000 loaded physical computers in a bounded
+area. The harness owns no persistent computer identity, never loads chunks, and does not provide a guest-visible fleet
+protocol.
 
 Terminal, standard output and error, redstone, process, filesystem, and compiler declarations live in the
 `guest-platform` bundle as separately identifiable modules. Compilation and IDE analysis resolve the same module graph

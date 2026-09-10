@@ -42,10 +42,10 @@ workload is running, so a long run will leave the displayed start line unchanged
 
 ## Profile the actor scheduler
 
-With cheats or server-operator permission, start up to 1000 ephemeral benchmark VMs:
+With cheats or server-operator permission, start up to 4096 ephemeral benchmark VMs:
 
 ```text
-/compukters vmbench start <count 1..1000> <rounds 1..1000000>
+/compukters vmbench start <count 1..4096> <rounds 1..1000000>
 /compukters vmbench status
 /compukters vmbench stop
 ```
@@ -60,9 +60,9 @@ MSPT; worker, mailbox, and result occupancy; average queue and execution time; a
 may be lower than requested when ordinary computers already occupy the configured actor capacity. Run `stop` before
 changing the workload, and wait for `STOPPED` before starting another fleet.
 
-For an initial saturation profile, record an idle baseline and compare equal intervals at 1, 10, 100, 500, and 1000
-actors. Use enough rounds that the fleet remains active for the complete observation interval. Scheduler saturation
-should increase queue latency and completion time rather than Minecraft MSPT.
+For an initial saturation profile, record an idle baseline and compare equal intervals at 1, 10, 100, 500, 1000, and
+4096 actors. Use enough rounds that the fleet remains active for the complete observation interval. Scheduler
+saturation should increase queue latency and completion time rather than Minecraft MSPT.
 
 ## Dispatch to physical computers
 

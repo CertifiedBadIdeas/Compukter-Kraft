@@ -53,7 +53,7 @@ sealed interface VmActorEvent<out R : Any> {
 
 data class VmActorSchedulerConfig(
     val workerCount: Int = Runtime.getRuntime().availableProcessors().coerceAtLeast(1),
-    val maximumActors: Int = 1_024,
+    val maximumActors: Int = DEFAULT_MAXIMUM_ACTORS,
     val mailboxCapacity: Int = 64,
     val messagesPerTurn: Int = 4,
     val resultCapacityPerWorker: Int = 256,
@@ -68,6 +68,10 @@ data class VmActorSchedulerConfig(
         require(resultCapacityPerWorker > 0) { "result capacity must be positive" }
         require(idlePollMillis > 0) { "idle poll duration must be positive" }
         require(shutdownTimeoutMillis > 0) { "shutdown timeout must be positive" }
+    }
+
+    companion object {
+        const val DEFAULT_MAXIMUM_ACTORS = 4_096
     }
 }
 
