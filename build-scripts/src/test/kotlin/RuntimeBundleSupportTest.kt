@@ -41,12 +41,12 @@ class RuntimeBundleSupportTest {
     lateinit var temporary: Path
 
     @Test
-    fun pinsTheCurrentAbi9RuntimeRelease() {
+    fun pinsTheCurrentAbi10RuntimeRelease() {
         val contract = currentRuntimeBundleContract("0".repeat(40))
 
-        assertEquals("0.9.0", contract.runtimeVersion)
-        assertEquals("v0.9.0", contract.releaseTag)
-        assertEquals(9, contract.ffiAbi)
+        assertEquals("0.10.0", contract.runtimeVersion)
+        assertEquals("v0.10.0", contract.releaseTag)
+        assertEquals(10, contract.ffiAbi)
     }
 
     @Test
@@ -194,12 +194,12 @@ class RuntimeBundleSupportTest {
         val bundles: Path = root.resolve("bundles")
         val staging: Path = root.resolve("staging")
         val contract: RuntimeBundleContract = CONTRACT.copy(vmCommit = COMMIT)
-        val checksums: Path = bundles.resolve("compukter-runtime-0.9.0-checksums.sha256")
+        val checksums: Path = bundles.resolve("compukter-runtime-0.10.0-checksums.sha256")
 
         init {
             Files.createDirectories(bundles)
-            val linux = bundles.resolve("compukter-runtime-0.9.0-linux-x86_64.tar.gz")
-            val windows = bundles.resolve("compukter-runtime-0.9.0-windows-x86_64.zip")
+            val linux = bundles.resolve("compukter-runtime-0.10.0-linux-x86_64.tar.gz")
+            val windows = bundles.resolve("compukter-runtime-0.10.0-windows-x86_64.zip")
             writeTar(linux, entries("x86_64-unknown-linux-gnu", "libcompukter_ffi.so", linuxNative, vmCommit))
             writeZip(
                 windows,
@@ -224,10 +224,10 @@ class RuntimeBundleSupportTest {
             """
             {
               "schema": 1,
-              "runtime_version": "0.9.0",
-              "release_tag": "v0.9.0",
+              "runtime_version": "0.10.0",
+              "release_tag": "v0.10.0",
               "vm_commit": "$vmCommit",
-              "ffi_abi": 9,
+              "ffi_abi": 10,
               "formats": {
                 "artifact": 2,
                 "compilation-request": 1,
@@ -277,8 +277,8 @@ class RuntimeBundleSupportTest {
             val WINDOWS_NATIVE = "windows-native".encodeToByteArray()
             val CONTRACT =
                 RuntimeBundleContract(
-                    runtimeVersion = "0.9.0",
-                    ffiAbi = 9,
+                    runtimeVersion = "0.10.0",
+                    ffiAbi = 10,
                     vmCommit = COMMIT,
                     formats =
                         sortedMapOf(
