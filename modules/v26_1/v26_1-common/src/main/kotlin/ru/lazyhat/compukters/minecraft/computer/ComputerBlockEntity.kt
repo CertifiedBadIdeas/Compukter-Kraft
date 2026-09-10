@@ -88,17 +88,8 @@ open class ComputerBlockEntity internal constructor(
 
     fun computerId() = identity.id()
 
-    fun terminalFullState(): TerminalState? = carrier?.terminalFullState()
-
     fun terminalFullStateAsync(): CompletableFuture<TerminalState?> =
         carrier?.terminalFullStateAsync() ?: CompletableFuture.completedFuture(null)
-
-    fun prepareTerminal(): TerminalState? {
-        if (carrier == null && !filesystemAvailable()) return null
-        val current = carrier ?: createCarrier()?.also { carrier = it } ?: return null
-        if (current.state == neverStarted()) runtimeState = current.turnOn()
-        return current.terminalFullState()
-    }
 
     fun prepareTerminalAsync(): CompletableFuture<TerminalState?> {
         if (carrier == null && !filesystemAvailable()) return CompletableFuture.completedFuture(null)
@@ -107,16 +98,8 @@ open class ComputerBlockEntity internal constructor(
         return current.terminalFullStateAsync()
     }
 
-    fun terminalChangesSince(revision: Long): TerminalUpdate? = carrier?.terminalChangesSince(revision)
-
     fun terminalChangesSinceAsync(revision: Long): CompletableFuture<TerminalUpdate?> =
         carrier?.terminalChangesSinceAsync(revision) ?: CompletableFuture.completedFuture(null)
-
-    fun submitTerminalKey(
-        key: TerminalKey,
-        action: TerminalKeyAction,
-        modifiers: Set<TerminalModifier> = emptySet(),
-    ): Boolean = carrier?.sendTerminalKey(key, action, modifiers) == true
 
     fun submitTerminalKeyAsync(
         key: TerminalKey,
@@ -124,31 +107,17 @@ open class ComputerBlockEntity internal constructor(
         modifiers: Set<TerminalModifier> = emptySet(),
     ): CompletableFuture<Boolean> = carrier?.sendTerminalKeyAsync(key, action, modifiers) ?: CompletableFuture.completedFuture(false)
 
-    fun submitTerminalText(value: String): Boolean = carrier?.sendTerminalText(value) == true
-
     fun submitTerminalTextAsync(value: String): CompletableFuture<Boolean> =
         carrier?.sendTerminalTextAsync(value) ?: CompletableFuture.completedFuture(false)
-
-    fun verifyForDeploy(artifact: ByteArray): ProgramDeploymentCandidate? = carrier?.verifyForDeploy(artifact)
 
     fun verifyForDeployAsync(artifact: ByteArray) =
         carrier?.verifyForDeployAsync(artifact) ?: CompletableFuture.completedFuture<ProgramDeploymentCandidate?>(null)
 
-    fun executableRevision(path: String): VmExecutableRevision? = carrier?.executableRevision(path)
-
     fun executableRevisionAsync(path: String) =
         carrier?.executableRevisionAsync(path) ?: CompletableFuture.completedFuture<VmExecutableRevision?>(null)
 
-    fun fileStat(path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) = carrier?.fileStat(path)
-
     fun fileStatAsync(path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) =
         carrier?.fileStatAsync(path) ?: CompletableFuture.completedFuture<ru.lazyhat.compukters.lang.runtime.fs.VmFileStat?>(null)
-
-    fun fileList(
-        path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
-        startAfter: String?,
-        maximumEntries: Int,
-    ) = carrier?.fileList(path, startAfter, maximumEntries)
 
     fun fileListAsync(
         path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
@@ -156,13 +125,6 @@ open class ComputerBlockEntity internal constructor(
         maximumEntries: Int,
     ) = carrier?.fileListAsync(path, startAfter, maximumEntries)
         ?: CompletableFuture.completedFuture<ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing?>(null)
-
-    fun fileRead(
-        path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
-        offset: Long,
-        maximumBytes: Int,
-        expectedGeneration: Long,
-    ) = carrier?.fileRead(path, offset, maximumBytes, expectedGeneration)
 
     fun fileReadAsync(
         path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
@@ -172,19 +134,11 @@ open class ComputerBlockEntity internal constructor(
     ) = carrier?.fileReadAsync(path, offset, maximumBytes, expectedGeneration)
         ?: CompletableFuture.completedFuture<ru.lazyhat.compukters.lang.runtime.fs.VmFileChunk?>(null)
 
-    fun deploy(
-        path: String,
-        expected: VmExecutableRevision,
-        candidate: ProgramDeploymentCandidate,
-    ): VmExecutableRevision? = carrier?.deploy(path, expected, candidate)
-
     fun deployAsync(
         path: String,
         expected: VmExecutableRevision,
         candidate: ProgramDeploymentCandidate,
     ) = carrier?.deployAsync(path, expected, candidate) ?: CompletableFuture.completedFuture<VmExecutableRevision?>(null)
-
-    fun submitCanonicalLine(line: CharArray): Boolean = carrier?.submitCanonicalLine(line) == true
 
     fun submitCanonicalLineAsync(line: CharArray): CompletableFuture<Boolean> =
         carrier?.submitCanonicalLineAsync(line) ?: CompletableFuture.completedFuture(false)

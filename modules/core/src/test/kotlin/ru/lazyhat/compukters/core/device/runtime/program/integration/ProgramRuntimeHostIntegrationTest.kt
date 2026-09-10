@@ -30,8 +30,6 @@ import ru.lazyhat.compukters.compiler.worker.controller.WorkerPayloadLoader
 import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.compiler.worker.protocol.TrustedBundleIdentity
 import ru.lazyhat.compukters.compiler.worker.protocol.WorkerLimits
-import ru.lazyhat.compukters.core.device.computer.ProgramComputer
-import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.runtime.compiler.CompilerCompletionRouter
 import ru.lazyhat.compukters.core.device.runtime.compiler.ServerComputerCompiler
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeHost
@@ -112,9 +110,7 @@ class ProgramRuntimeHostIntegrationTest {
                             }
                         store.flush(computerId, generation)
                         val computer =
-                            ProgramComputer(
-                                deviceId = 1,
-                                stateSink = { _, _ -> },
+                            ProgramRuntimeHost(
                                 store = store,
                                 computerId = computerId,
                                 romImage = rom,
@@ -122,8 +118,8 @@ class ProgramRuntimeHostIntegrationTest {
                                 compilerRouter = compiler.router,
                             )
                         computer.use {
-                            assertEquals(ProgramComputerState.Running, computer.turnOn())
-                            advanceUntil(computer) { it == ProgramComputerState.WaitingForInput }
+                            assertEquals(ProgramStartResult.Started, computer.startBoot())
+                            advanceUntil(computer) { it == ProgramRuntimeState.WaitingForInput }
                             assertEquals(">\n", terminalText(requireNotNull(computer.terminalFullState())))
 
                             submit(computer, "hello")
@@ -180,8 +176,9 @@ class ProgramRuntimeHostIntegrationTest {
                             val compiledOutput = terminalText(requireNotNull(computer.terminalFullState()))
                             assertTrue(compiledOutput.contains("compiled editor loop"), compiledOutput)
 
-                            assertEquals(ProgramComputerState.Running, computer.reboot())
-                            advanceUntil(computer) { it == ProgramComputerState.WaitingForInput }
+                            computer.shutdown()
+                            assertEquals(ProgramStartResult.Started, computer.startBoot())
+                            advanceUntil(computer) { it == ProgramRuntimeState.WaitingForInput }
                             assertEquals(">\n", terminalText(requireNotNull(computer.terminalFullState())))
 
                             submit(computer, "hello")
@@ -280,28 +277,15 @@ class ProgramRuntimeHostIntegrationTest {
         advanceUntil(host) { it == ProgramRuntimeState.WaitingForInput }
     }
 
-    private fun submit(
-        computer: ProgramComputer,
-        text: String,
-    ) {
-        assertTrue(computer.sendTerminalText(text))
-        advanceUntil(computer) { it == ProgramComputerState.WaitingForInput }
-    }
-
     private fun pressEnter(host: ProgramRuntimeHost) = press(host, TerminalKey.ENTER)
 
-    private fun pressEnter(computer: ProgramComputer) {
-        assertTrue(computer.sendTerminalKey(TerminalKey.ENTER, TerminalKeyAction.PRESS))
-        advanceUntil(computer) { it == ProgramComputerState.WaitingForInput }
-    }
-
     private fun press(
-        computer: ProgramComputer,
+        host: ProgramRuntimeHost,
         key: TerminalKey,
         modifiers: Set<TerminalModifier>,
     ) {
-        assertTrue(computer.sendTerminalKey(key, TerminalKeyAction.PRESS, modifiers))
-        advanceUntil(computer) { it == ProgramComputerState.WaitingForInput }
+        assertTrue(host.sendTerminalKey(key, TerminalKeyAction.PRESS, modifiers))
+        advanceUntil(host) { it == ProgramRuntimeState.WaitingForInput }
     }
 
     private fun press(
@@ -319,24 +303,12 @@ class ProgramRuntimeHostIntegrationTest {
         repeat(MAXIMUM_TICKS) {
             val state = host.serverTick()
             if (predicate(state)) return state
-            check(state == ProgramRuntimeState.Running) { "program terminated before expected state: $state" }
+            check(state == ProgramRuntimeState.Running || state == ProgramRuntimeState.WaitingForCompiler) {
+                "program terminated before expected state: $state"
+            }
+            if (state == ProgramRuntimeState.WaitingForCompiler) Thread.sleep(1)
         }
         error("program did not reach expected state within $MAXIMUM_TICKS ticks; last state was ${host.state}")
-    }
-
-    private fun advanceUntil(
-        computer: ProgramComputer,
-        predicate: (ProgramComputerState) -> Boolean,
-    ): ProgramComputerState {
-        repeat(MAXIMUM_TICKS) {
-            val state = computer.serverTick()
-            if (predicate(state)) return state
-            check(state == ProgramComputerState.Running || state == ProgramComputerState.WaitingForCompiler) {
-                "computer terminated before expected state: $state; terminal=${computer.terminalFullState()?.let(::terminalText)}"
-            }
-            if (state == ProgramComputerState.WaitingForCompiler) Thread.sleep(1)
-        }
-        error("computer did not reach expected state within $MAXIMUM_TICKS ticks; last state was ${computer.state}")
     }
 
     private fun advanceUntilHalted(session: VmSession): VmOutcome.Halted {

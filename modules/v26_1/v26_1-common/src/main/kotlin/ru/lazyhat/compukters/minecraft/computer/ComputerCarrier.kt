@@ -19,7 +19,6 @@
 package ru.lazyhat.compukters.minecraft.computer
 
 import ru.lazyhat.compukters.core.device.computer.ActorProgramComputer
-import ru.lazyhat.compukters.core.device.computer.ProgramComputer
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerFailure
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStateSink
@@ -60,92 +59,48 @@ internal interface ComputerCarrier : AutoCloseable {
 
     fun serverTick(worldTick: Long): ProgramComputerState
 
-    fun terminalFullState(): TerminalState?
+    fun terminalFullStateAsync(): CompletableFuture<TerminalState?>
 
-    fun terminalFullStateAsync(): CompletableFuture<TerminalState?> = CompletableFuture.completedFuture(terminalFullState())
-
-    fun terminalChangesSince(revision: Long): TerminalUpdate?
-
-    fun terminalChangesSinceAsync(revision: Long): CompletableFuture<TerminalUpdate?> =
-        CompletableFuture.completedFuture(terminalChangesSince(revision))
-
-    fun sendTerminalKey(
-        key: TerminalKey,
-        action: TerminalKeyAction,
-        modifiers: Set<TerminalModifier>,
-    ): Boolean
+    fun terminalChangesSinceAsync(revision: Long): CompletableFuture<TerminalUpdate?>
 
     fun sendTerminalKeyAsync(
         key: TerminalKey,
         action: TerminalKeyAction,
         modifiers: Set<TerminalModifier>,
-    ): CompletableFuture<Boolean> = CompletableFuture.completedFuture(sendTerminalKey(key, action, modifiers))
+    ): CompletableFuture<Boolean>
 
-    fun sendTerminalText(value: String): Boolean
-
-    fun sendTerminalTextAsync(value: String): CompletableFuture<Boolean> = CompletableFuture.completedFuture(sendTerminalText(value))
+    fun sendTerminalTextAsync(value: String): CompletableFuture<Boolean>
 
     fun filesystemGeneration(): Long?
 
-    fun fileStat(path: VmVirtualPath): VmFileStat? = null
-
-    fun fileStatAsync(path: VmVirtualPath): CompletableFuture<VmFileStat?> = CompletableFuture.completedFuture(fileStat(path))
-
-    fun fileList(
-        path: VmVirtualPath,
-        startAfter: String?,
-        maximumEntries: Int,
-    ): VmDirectoryListing? = null
+    fun fileStatAsync(path: VmVirtualPath): CompletableFuture<VmFileStat?>
 
     fun fileListAsync(
         path: VmVirtualPath,
         startAfter: String?,
         maximumEntries: Int,
-    ): CompletableFuture<VmDirectoryListing?> = CompletableFuture.completedFuture(fileList(path, startAfter, maximumEntries))
-
-    fun fileRead(
-        path: VmVirtualPath,
-        offset: Long,
-        maximumBytes: Int,
-        expectedGeneration: Long,
-    ): VmFileChunk? = null
+    ): CompletableFuture<VmDirectoryListing?>
 
     fun fileReadAsync(
         path: VmVirtualPath,
         offset: Long,
         maximumBytes: Int,
         expectedGeneration: Long,
-    ): CompletableFuture<VmFileChunk?> = CompletableFuture.completedFuture(fileRead(path, offset, maximumBytes, expectedGeneration))
+    ): CompletableFuture<VmFileChunk?>
 
-    fun verifyForDeploy(artifact: ByteArray): ProgramDeploymentCandidate? = null
+    fun verifyForDeployAsync(artifact: ByteArray): CompletableFuture<ProgramDeploymentCandidate?>
 
-    fun verifyForDeployAsync(artifact: ByteArray): CompletableFuture<ProgramDeploymentCandidate?> =
-        CompletableFuture.completedFuture(verifyForDeploy(artifact))
-
-    fun executableRevision(path: String): VmExecutableRevision? = null
-
-    fun executableRevisionAsync(path: String): CompletableFuture<VmExecutableRevision?> =
-        CompletableFuture.completedFuture(executableRevision(path))
-
-    fun deploy(
-        path: String,
-        expected: VmExecutableRevision,
-        candidate: ProgramDeploymentCandidate,
-    ): VmExecutableRevision? = null
+    fun executableRevisionAsync(path: String): CompletableFuture<VmExecutableRevision?>
 
     fun deployAsync(
         path: String,
         expected: VmExecutableRevision,
         candidate: ProgramDeploymentCandidate,
-    ): CompletableFuture<VmExecutableRevision?> = CompletableFuture.completedFuture(deploy(path, expected, candidate))
+    ): CompletableFuture<VmExecutableRevision?>
 
-    fun submitCanonicalLine(line: CharArray): Boolean = false
+    fun submitCanonicalLineAsync(line: CharArray): CompletableFuture<Boolean>
 
-    fun submitCanonicalLineAsync(line: CharArray): CompletableFuture<Boolean> = CompletableFuture.completedFuture(submitCanonicalLine(line))
-
-    fun submitRedstoneInput(packet: Int): Boolean
-
-    fun submitRedstoneInputAsync(packet: Int): CompletableFuture<Boolean> = CompletableFuture.completedFuture(submitRedstoneInput(packet))
+    fun submitRedstoneInputAsync(packet: Int): CompletableFuture<Boolean>
 
     fun reboot(): ProgramComputerState
 
@@ -179,34 +134,19 @@ internal object RuntimeComputerCarrierFactory : ComputerCarrierFactory {
         initialRedstoneOutput: Int,
     ): ComputerCarrier? {
         val context = requireNotNull(filesystem) { "production computer boot requires a filesystem context" }
-        val actorService = context.actorService
-        if (actorService != null) {
-            val endpoint = VmActorEndpoint(context.computerId, machineEpoch)
-            val lease =
-                actorService.attachBootable(
-                    endpoint,
-                    context.store,
-                    context.romImage(),
-                    compilerRouter = context.compilerRouter,
-                    initialRedstoneOutput = initialRedstoneOutput,
-                ) ?: return null
-            return ActorComputerCarrier(
-                deviceId,
-                stateSink,
-                ActorProgramComputer(actorService, lease, redstoneHostPort),
-            )
-        }
-        return ProgramComputerCarrier(
-            ProgramComputer(
-                deviceId = deviceId,
-                stateSink = stateSink,
-                store = context.store,
-                computerId = context.computerId,
-                romImage = context.romImage(),
+        val endpoint = VmActorEndpoint(context.computerId, machineEpoch)
+        val lease =
+            context.actorService.attachBootable(
+                endpoint,
+                context.store,
+                context.romImage(),
                 compilerRouter = context.compilerRouter,
-                redstoneHostPort = redstoneHostPort,
                 initialRedstoneOutput = initialRedstoneOutput,
-            ),
+            ) ?: return null
+        return ActorComputerCarrier(
+            deviceId,
+            stateSink,
+            ActorProgramComputer(context.actorService, lease, redstoneHostPort),
         )
     }
 }
@@ -233,48 +173,7 @@ private class ActorComputerCarrier(
         return observedState
     }
 
-    override fun terminalFullState(): TerminalState? = null
-
-    override fun terminalChangesSince(revision: Long): TerminalUpdate? = null
-
-    override fun sendTerminalKey(
-        key: TerminalKey,
-        action: TerminalKeyAction,
-        modifiers: Set<TerminalModifier>,
-    ) = false
-
-    override fun sendTerminalText(value: String) = false
-
     override fun filesystemGeneration(): Long? = delegate.fileSystemGeneration
-
-    override fun fileStat(path: VmVirtualPath): VmFileStat? = null
-
-    override fun fileList(
-        path: VmVirtualPath,
-        startAfter: String?,
-        maximumEntries: Int,
-    ): VmDirectoryListing? = null
-
-    override fun fileRead(
-        path: VmVirtualPath,
-        offset: Long,
-        maximumBytes: Int,
-        expectedGeneration: Long,
-    ): VmFileChunk? = null
-
-    override fun verifyForDeploy(artifact: ByteArray): ProgramDeploymentCandidate? = null
-
-    override fun executableRevision(path: String): VmExecutableRevision? = null
-
-    override fun deploy(
-        path: String,
-        expected: VmExecutableRevision,
-        candidate: ProgramDeploymentCandidate,
-    ): VmExecutableRevision? = null
-
-    override fun submitCanonicalLine(line: CharArray) = false
-
-    override fun submitRedstoneInput(packet: Int) = false
 
     override fun terminalFullStateAsync() =
         request(ProgramRuntimeActorCommand::TerminalFullState) {
@@ -477,63 +376,3 @@ private fun ProgramRuntimeActorFailure.toException(): RuntimeException =
             }
         }
     }
-
-private class ProgramComputerCarrier(
-    private val delegate: ProgramComputer,
-) : ComputerCarrier {
-    override val state: ProgramComputerState
-        get() = delegate.state
-
-    override fun turnOn(): ProgramComputerState = delegate.turnOn()
-
-    override fun serverTick(worldTick: Long): ProgramComputerState = delegate.serverTick()
-
-    override fun terminalFullState(): TerminalState? = delegate.terminalFullState()
-
-    override fun terminalChangesSince(revision: Long): TerminalUpdate? = delegate.terminalChangesSince(revision)
-
-    override fun sendTerminalKey(
-        key: TerminalKey,
-        action: TerminalKeyAction,
-        modifiers: Set<TerminalModifier>,
-    ): Boolean = delegate.sendTerminalKey(key, action, modifiers)
-
-    override fun sendTerminalText(value: String): Boolean = delegate.sendTerminalText(value)
-
-    override fun filesystemGeneration(): Long? = delegate.filesystemGeneration()
-
-    override fun fileStat(path: VmVirtualPath): VmFileStat? = delegate.fileStat(path)
-
-    override fun fileList(
-        path: VmVirtualPath,
-        startAfter: String?,
-        maximumEntries: Int,
-    ): VmDirectoryListing? = delegate.fileList(path, startAfter, maximumEntries)
-
-    override fun fileRead(
-        path: VmVirtualPath,
-        offset: Long,
-        maximumBytes: Int,
-        expectedGeneration: Long,
-    ): VmFileChunk? = delegate.fileRead(path, offset, maximumBytes, expectedGeneration)
-
-    override fun verifyForDeploy(artifact: ByteArray): ProgramDeploymentCandidate? = delegate.verifyForDeploy(artifact)
-
-    override fun executableRevision(path: String): VmExecutableRevision? = delegate.executableRevision(path)
-
-    override fun deploy(
-        path: String,
-        expected: VmExecutableRevision,
-        candidate: ProgramDeploymentCandidate,
-    ): VmExecutableRevision? = delegate.deploy(path, expected, candidate)
-
-    override fun submitCanonicalLine(line: CharArray): Boolean = delegate.submitCanonicalLine(line)
-
-    override fun submitRedstoneInput(packet: Int): Boolean = delegate.submitRedstoneInput(packet)
-
-    override fun reboot(): ProgramComputerState = delegate.reboot()
-
-    override fun shutdown() = delegate.shutdown()
-
-    override fun close() = delegate.close()
-}

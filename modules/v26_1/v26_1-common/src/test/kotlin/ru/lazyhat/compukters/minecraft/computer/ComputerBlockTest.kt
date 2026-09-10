@@ -29,11 +29,18 @@ import net.minecraft.world.level.block.entity.BlockEntityType
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStateSink
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStopReason
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandidate
+import ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing
+import ru.lazyhat.compukters.lang.runtime.fs.VmFileChunk
+import ru.lazyhat.compukters.lang.runtime.fs.VmFileStat
+import ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalModifier
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
+import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
+import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -110,21 +117,48 @@ class ComputerBlockTest {
             return state
         }
 
-        override fun terminalFullState(): TerminalState? = null
+        override fun terminalFullStateAsync() = CompletableFuture.completedFuture<TerminalState?>(null)
 
-        override fun terminalChangesSince(revision: Long): TerminalUpdate? = null
+        override fun terminalChangesSinceAsync(revision: Long) = CompletableFuture.completedFuture<TerminalUpdate?>(null)
 
-        override fun sendTerminalKey(
+        override fun sendTerminalKeyAsync(
             key: TerminalKey,
             action: TerminalKeyAction,
             modifiers: Set<TerminalModifier>,
-        ): Boolean = false
+        ) = CompletableFuture.completedFuture(false)
 
-        override fun sendTerminalText(value: String): Boolean = false
+        override fun sendTerminalTextAsync(value: String) = CompletableFuture.completedFuture(false)
 
         override fun filesystemGeneration(): Long? = null
 
-        override fun submitRedstoneInput(packet: Int): Boolean = true
+        override fun submitRedstoneInputAsync(packet: Int) = CompletableFuture.completedFuture(true)
+
+        override fun fileStatAsync(path: VmVirtualPath) = CompletableFuture.completedFuture<VmFileStat?>(null)
+
+        override fun fileListAsync(
+            path: VmVirtualPath,
+            startAfter: String?,
+            maximumEntries: Int,
+        ) = CompletableFuture.completedFuture<VmDirectoryListing?>(null)
+
+        override fun fileReadAsync(
+            path: VmVirtualPath,
+            offset: Long,
+            maximumBytes: Int,
+            expectedGeneration: Long,
+        ) = CompletableFuture.completedFuture<VmFileChunk?>(null)
+
+        override fun verifyForDeployAsync(artifact: ByteArray) = CompletableFuture.completedFuture<ProgramDeploymentCandidate?>(null)
+
+        override fun executableRevisionAsync(path: String) = CompletableFuture.completedFuture<VmExecutableRevision?>(null)
+
+        override fun deployAsync(
+            path: String,
+            expected: VmExecutableRevision,
+            candidate: ProgramDeploymentCandidate,
+        ) = CompletableFuture.completedFuture<VmExecutableRevision?>(null)
+
+        override fun submitCanonicalLineAsync(line: CharArray) = CompletableFuture.completedFuture(false)
 
         override fun reboot(): ProgramComputerState = turnOn()
 

@@ -31,7 +31,7 @@ class ComputerFileSystemContext(
     romImage: ByteArray,
     private val lifecycle: ComputerFileSystemLifecycle,
     internal val compilerRouter: CompilerCompletionRouter? = null,
-    internal val actorService: ProgramRuntimeActorService? = null,
+    internal val actorService: ProgramRuntimeActorService,
 ) {
     private val romImage = romImage.copyOf()
 

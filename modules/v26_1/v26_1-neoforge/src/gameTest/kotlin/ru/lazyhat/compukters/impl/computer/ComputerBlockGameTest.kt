@@ -38,9 +38,11 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent
 import net.neoforged.neoforge.event.level.LevelEvent
 import net.neoforged.neoforge.event.server.ServerStoppingEvent
 import ru.lazyhat.compukters.core.MOD_ID
-import ru.lazyhat.compukters.core.device.computer.ProgramComputer
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStopReason
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeHost
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramTickBudget
 import ru.lazyhat.compukters.ide.client.files.IdeComputerFileAccess
 import ru.lazyhat.compukters.ide.client.files.IdeComputerFileCoordinator
@@ -261,13 +263,13 @@ object ComputerBlockGameTest {
                 session.filesystemGeneration()
             }
         context.store.flush(computerId, generation)
-        ProgramComputer(
-            deviceId = computerId.hashCode(),
-            stateSink = { _, _ -> },
-            store = context.store,
-            computerId = computerId,
-            romImage = rom,
-            tickBudget = ProgramTickBudget(64, 64, 4),
+        TestProgramComputer(
+            ProgramRuntimeHost(
+                store = context.store,
+                computerId = computerId,
+                romImage = rom,
+                tickBudget = ProgramTickBudget(64, 64, 4),
+            ),
         ).use { computer ->
             helper.assertTrue(computer.turnOn() == ProgramComputerState.Running, "process test computer did not boot")
             advanceUntilInput(computer)
@@ -323,7 +325,7 @@ object ComputerBlockGameTest {
         }
     }
 
-    private fun runHello(computer: ProgramComputer) {
+    private fun runHello(computer: TestProgramComputer) {
         check(computer.sendTerminalText("hello"))
         advanceUntilInput(computer)
         check(computer.sendTerminalKey(TerminalKey.ENTER, TerminalKeyAction.PRESS))
@@ -342,8 +344,12 @@ object ComputerBlockGameTest {
             ru.lazyhat.compukters.impl.compiler.NeoForgeCompilerServices
                 .router(helper.level.server)
 
-        ProgramComputer(1, { _, _ -> }, firstContext.store, firstId, rom, compilerRouter = router).use { first ->
-            ProgramComputer(2, { _, _ -> }, secondContext.store, secondId, rom, compilerRouter = router).use { second ->
+        TestProgramComputer(
+            ProgramRuntimeHost(store = firstContext.store, computerId = firstId, romImage = rom, compilerRouter = router),
+        ).use { first ->
+            TestProgramComputer(
+                ProgramRuntimeHost(store = secondContext.store, computerId = secondId, romImage = rom, compilerRouter = router),
+            ).use { second ->
                 helper.assertTrue(first.turnOn() == ProgramComputerState.Running, "first compiler computer did not boot")
                 helper.assertTrue(second.turnOn() == ProgramComputerState.Running, "second compiler computer did not boot")
                 advanceBothUntilInput(first, second)
@@ -378,7 +384,9 @@ object ComputerBlockGameTest {
                 .router(helper.level.server)
 
         val generation =
-            ProgramComputer(1, { _, _ -> }, firstContext.store, firstId, rom, compilerRouter = router).use { computer ->
+            TestProgramComputer(
+                ProgramRuntimeHost(store = firstContext.store, computerId = firstId, romImage = rom, compilerRouter = router),
+            ).use { computer ->
                 helper.assertTrue(computer.turnOn() == ProgramComputerState.Running, "editor computer did not boot")
                 advanceUntilInput(computer)
 
@@ -417,7 +425,9 @@ object ComputerBlockGameTest {
             }
         firstContext.store.flush(firstId, generation)
 
-        ProgramComputer(1, { _, _ -> }, firstContext.store, firstId, rom, compilerRouter = router).use { restored ->
+        TestProgramComputer(
+            ProgramRuntimeHost(store = firstContext.store, computerId = firstId, romImage = rom, compilerRouter = router),
+        ).use { restored ->
             helper.assertTrue(restored.turnOn() == ProgramComputerState.Running, "restored editor computer did not boot")
             advanceUntilInput(restored)
             enterCommand(restored, "stat demo.kt")
@@ -432,7 +442,9 @@ object ComputerBlockGameTest {
             helper.assertTrue(output.contains("persistent editor loop\n"), "restored program did not execute")
         }
 
-        ProgramComputer(2, { _, _ -> }, secondContext.store, secondId, rom, compilerRouter = router).use { isolated ->
+        TestProgramComputer(
+            ProgramRuntimeHost(store = secondContext.store, computerId = secondId, romImage = rom, compilerRouter = router),
+        ).use { isolated ->
             helper.assertTrue(isolated.turnOn() == ProgramComputerState.Running, "isolated editor computer did not boot")
             advanceUntilInput(isolated)
             enterCommand(isolated, "stat demo.kt")
@@ -450,7 +462,7 @@ object ComputerBlockGameTest {
         val rom = processTestRom()
         val context = NeoForgeWorldFileSystemStores.contextSource.create(helper.level, computerId, rom)
         writeFixture(context.store, computerId, "filesystem-write.cpkt", rom)
-        ProgramComputer(31, { _, _ -> }, context.store, computerId, rom).use { computer ->
+        TestProgramComputer(ProgramRuntimeHost(store = context.store, computerId = computerId, romImage = rom)).use { computer ->
             helper.assertTrue(computer.turnOn() == ProgramComputerState.Running, "IDE filesystem computer did not boot")
             advanceUntilInput(computer)
             val profile =
@@ -589,7 +601,7 @@ object ComputerBlockGameTest {
     }
 
     private fun enterCommand(
-        computer: ProgramComputer,
+        computer: TestProgramComputer,
         command: String,
     ) {
         check(computer.sendTerminalText(command))
@@ -597,8 +609,8 @@ object ComputerBlockGameTest {
     }
 
     private fun advanceBothUntilInput(
-        first: ProgramComputer,
-        second: ProgramComputer,
+        first: TestProgramComputer,
+        second: TestProgramComputer,
     ) {
         repeat(30_000) {
             val firstState = first.serverTick()
@@ -617,7 +629,7 @@ object ComputerBlockGameTest {
         error("compiler computers did not return to input")
     }
 
-    private fun advanceUntilInput(computer: ProgramComputer) {
+    private fun advanceUntilInput(computer: TestProgramComputer) {
         repeat(10_000) {
             when (val state = computer.serverTick()) {
                 ProgramComputerState.WaitingForInput -> return
@@ -628,6 +640,91 @@ object ComputerBlockGameTest {
         }
         error("computer did not wait for input")
     }
+
+    /** Direct runtime harness for guest-program checks; production computers always use the actor carrier. */
+    private class TestProgramComputer(
+        private val host: ProgramRuntimeHost,
+    ) : AutoCloseable {
+        val state: ProgramComputerState
+            get() = host.state.toComputerState()
+
+        fun turnOn(): ProgramComputerState {
+            check(host.startBoot() == ProgramStartResult.Started) { "test computer did not boot: ${host.state}" }
+            return state
+        }
+
+        fun serverTick(): ProgramComputerState = host.serverTick().toComputerState()
+
+        fun terminalFullState(): TerminalState? = host.terminalFullState()
+
+        fun sendTerminalText(value: String): Boolean = host.sendTerminalText(value)
+
+        fun sendTerminalKey(
+            key: TerminalKey,
+            action: TerminalKeyAction,
+            modifiers: Set<TerminalModifier> = emptySet(),
+        ): Boolean = host.sendTerminalKey(key, action, modifiers)
+
+        fun filesystemGeneration(): Long? = host.filesystemGeneration()
+
+        fun fileStat(path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) = host.fileStat(path)
+
+        fun fileList(
+            path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
+            startAfter: String?,
+            maximumEntries: Int,
+        ) = host.fileList(path, startAfter, maximumEntries)
+
+        fun fileRead(
+            path: ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath,
+            offset: Long,
+            maximumBytes: Int,
+            expectedGeneration: Long,
+        ) = host.fileRead(path, offset, maximumBytes, expectedGeneration)
+
+        fun reboot(): ProgramComputerState {
+            host.shutdown()
+            return turnOn()
+        }
+
+        override fun close() = host.close()
+    }
+
+    private fun ProgramRuntimeState.toComputerState(): ProgramComputerState =
+        when (this) {
+            ProgramRuntimeState.Idle -> {
+                ProgramComputerState.PoweredOff(ProgramComputerStopReason.NeverStarted)
+            }
+
+            ProgramRuntimeState.Running -> {
+                ProgramComputerState.Running
+            }
+
+            ProgramRuntimeState.WaitingForInput -> {
+                ProgramComputerState.WaitingForInput
+            }
+
+            ProgramRuntimeState.WaitingForCompiler -> {
+                ProgramComputerState.WaitingForCompiler
+            }
+
+            is ProgramRuntimeState.Halted -> {
+                ProgramComputerState.PoweredOff(ProgramComputerStopReason.Halted(value))
+            }
+
+            is ProgramRuntimeState.Failed -> {
+                ProgramComputerState.PoweredOff(
+                    ProgramComputerStopReason.Failure(
+                        ru.lazyhat.compukters.core.device.computer.ProgramComputerFailure
+                            .Runtime(failure),
+                    ),
+                )
+            }
+
+            ProgramRuntimeState.Closed -> {
+                ProgramComputerState.Closed
+            }
+        }
 
     private fun terminalText(state: TerminalState?): String {
         val terminal = requireNotNull(state) { "computer did not expose terminal state" }

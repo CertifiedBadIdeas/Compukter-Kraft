@@ -32,6 +32,7 @@ import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStateSink
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStopReason
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandidate
+import ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath
 import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalCell
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
@@ -41,6 +42,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalPosition
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
+import java.util.concurrent.CompletableFuture
 import java.util.stream.Stream
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -114,14 +116,14 @@ class ComputerBlockEntityTest {
         fixture.entity.serverTick()
         val carrier = fixture.carriers.single()
 
-        val candidate = fixture.entity.verifyForDeploy(byteArrayOf(3, 4))
+        val candidate = fixture.entity.verifyForDeployAsync(byteArrayOf(3, 4)).getNow(null)
         assertEquals(carrier.deploymentCandidate, candidate)
-        assertEquals(VmExecutableRevision.Absent, fixture.entity.executableRevision("/home/demo"))
+        assertEquals(VmExecutableRevision.Absent, fixture.entity.executableRevisionAsync("/home/demo").getNow(null))
         assertEquals(
             VmExecutableRevision.Present(1),
-            fixture.entity.deploy("/home/demo", VmExecutableRevision.Absent, requireNotNull(candidate)),
+            fixture.entity.deployAsync("/home/demo", VmExecutableRevision.Absent, requireNotNull(candidate)).getNow(null),
         )
-        assertTrue(fixture.entity.submitCanonicalLine("/home/demo".toCharArray()))
+        assertTrue(fixture.entity.submitCanonicalLineAsync("/home/demo".toCharArray()).getNow(false))
 
         assertEquals(listOf<Byte>(3, 4), carrier.verifiedArtifact)
         assertEquals(listOf("/home/demo"), carrier.revisionPaths)
@@ -183,7 +185,7 @@ class ComputerBlockEntityTest {
     fun `terminal open boots without advancing an extra tick`() {
         val fixture = fixture()
 
-        assertEquals(terminalState("", 0), fixture.entity.prepareTerminal())
+        assertEquals(terminalState("", 0), fixture.entity.prepareTerminalAsync().getNow(null))
         assertEquals(1, fixture.carriers.single().turnOnCalls)
         assertEquals(0, fixture.carriers.single().serverTickCalls)
         assertTrue(requireNotNull(fixture.entity.terminalMachineId) > 0)
@@ -198,11 +200,11 @@ class ComputerBlockEntityTest {
         carrier.update = TerminalUpdate.Unchanged(1)
         carrier.publishState(ProgramComputerState.WaitingForInput)
 
-        assertEquals(carrier.terminal, fixture.entity.terminalFullState())
-        assertEquals(TerminalUpdate.Unchanged(1), fixture.entity.terminalChangesSince(1))
-        assertTrue(fixture.entity.submitTerminalText("Ada"))
+        assertEquals(carrier.terminal, fixture.entity.terminalFullStateAsync().getNow(null))
+        assertEquals(TerminalUpdate.Unchanged(1), fixture.entity.terminalChangesSinceAsync(1).getNow(null))
+        assertTrue(fixture.entity.submitTerminalTextAsync("Ada").getNow(false))
         assertEquals(listOf("Ada"), carrier.texts)
-        assertEquals(terminalState("prompt", 1), fixture.entity.terminalFullState())
+        assertEquals(terminalState("prompt", 1), fixture.entity.terminalFullStateAsync().getNow(null))
     }
 
     @Test
@@ -216,7 +218,7 @@ class ComputerBlockEntityTest {
         restored.entity.loadForTest(tag)
 
         assertEquals(source.entity.computerId(), restored.entity.computerId())
-        assertNull(restored.entity.terminalFullState())
+        assertNull(restored.entity.terminalFullStateAsync().getNow(null))
         assertEquals(neverStarted(), restored.entity.runtimeState)
         assertTrue(restored.carriers.isEmpty())
         assertEquals(setOf("compukters"), tag.keySet())
@@ -330,52 +332,69 @@ class ComputerBlockEntityTest {
             publishState(ProgramComputerState.PoweredOff(ProgramComputerStopReason.Shutdown))
         }
 
-        override fun terminalFullState(): TerminalState = terminal
+        override fun terminalFullStateAsync(): CompletableFuture<TerminalState?> = CompletableFuture.completedFuture(terminal)
 
-        override fun terminalChangesSince(revision: Long): TerminalUpdate = update
+        override fun terminalChangesSinceAsync(revision: Long): CompletableFuture<TerminalUpdate?> =
+            CompletableFuture.completedFuture(update)
 
-        override fun sendTerminalKey(
+        override fun sendTerminalKeyAsync(
             key: TerminalKey,
             action: TerminalKeyAction,
             modifiers: Set<TerminalModifier>,
-        ): Boolean = true
+        ): CompletableFuture<Boolean> = CompletableFuture.completedFuture(true)
 
-        override fun sendTerminalText(value: String): Boolean {
+        override fun sendTerminalTextAsync(value: String): CompletableFuture<Boolean> {
             texts += value
-            return true
+            return CompletableFuture.completedFuture(true)
         }
 
         override fun filesystemGeneration(): Long? = null
 
-        override fun submitRedstoneInput(packet: Int): Boolean {
+        override fun submitRedstoneInputAsync(packet: Int): CompletableFuture<Boolean> {
             redstoneInputs += packet
-            return true
+            return CompletableFuture.completedFuture(true)
         }
 
-        override fun verifyForDeploy(artifact: ByteArray): ProgramDeploymentCandidate {
+        override fun verifyForDeployAsync(artifact: ByteArray): CompletableFuture<ProgramDeploymentCandidate?> {
             verifiedArtifact = artifact.toList()
-            return deploymentCandidate
+            return CompletableFuture.completedFuture(deploymentCandidate)
         }
 
-        override fun executableRevision(path: String): VmExecutableRevision {
+        override fun executableRevisionAsync(path: String): CompletableFuture<VmExecutableRevision?> {
             revisionPaths += path
-            return VmExecutableRevision.Absent
+            return CompletableFuture.completedFuture(VmExecutableRevision.Absent)
         }
 
-        override fun deploy(
+        override fun deployAsync(
             path: String,
             expected: VmExecutableRevision,
             candidate: ProgramDeploymentCandidate,
-        ): VmExecutableRevision {
+        ): CompletableFuture<VmExecutableRevision?> {
             deploymentPaths += path
             assertEquals(deploymentCandidate, candidate)
-            return VmExecutableRevision.Present(1)
+            return CompletableFuture.completedFuture(VmExecutableRevision.Present(1))
         }
 
-        override fun submitCanonicalLine(line: CharArray): Boolean {
+        override fun submitCanonicalLineAsync(line: CharArray): CompletableFuture<Boolean> {
             canonicalLines += line.concatToString()
-            return true
+            return CompletableFuture.completedFuture(true)
         }
+
+        override fun fileStatAsync(path: VmVirtualPath) =
+            CompletableFuture.completedFuture<ru.lazyhat.compukters.lang.runtime.fs.VmFileStat?>(null)
+
+        override fun fileListAsync(
+            path: VmVirtualPath,
+            startAfter: String?,
+            maximumEntries: Int,
+        ) = CompletableFuture.completedFuture<ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing?>(null)
+
+        override fun fileReadAsync(
+            path: VmVirtualPath,
+            offset: Long,
+            maximumBytes: Int,
+            expectedGeneration: Long,
+        ) = CompletableFuture.completedFuture<ru.lazyhat.compukters.lang.runtime.fs.VmFileChunk?>(null)
 
         override fun close() {
             closeCalls++
