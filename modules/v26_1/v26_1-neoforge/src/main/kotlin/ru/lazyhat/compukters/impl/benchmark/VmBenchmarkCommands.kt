@@ -36,6 +36,7 @@ import java.util.Locale
 
 internal object VmBenchmarkCommands {
     private val fleets = IdentityHashMap<MinecraftServer, HeadlessVmBenchmarkFleet>()
+    private val automaticReports = IdentityHashMap<MinecraftServer, AutomaticReport>()
     private val areaDispatcher = VmBenchmarkAreaDispatcher()
 
     fun register(event: RegisterCommandsEvent) = register(event.dispatcher)
@@ -97,10 +98,19 @@ internal object VmBenchmarkCommands {
     }
 
     fun afterServerTick(event: ServerTickEvent.Post) {
-        fleets[event.server]?.tick(event.server.tickCount.toLong())
+        val fleet = fleets[event.server] ?: return
+        val worldTick = event.server.tickCount.toLong()
+        fleet.tick(worldTick)
+        val report = automaticReports[event.server] ?: return
+        val snapshot = fleet.snapshot(event.server.currentMspt())
+        if (report.schedule.shouldReport(worldTick, snapshot.status)) {
+            report.source.sendSuccess({ Component.literal(snapshot.describe()) }, false)
+            if (snapshot.status.isTerminal()) automaticReports.remove(event.server)
+        }
     }
 
     fun onServerStopping(event: ServerStoppingEvent) {
+        automaticReports.remove(event.server)
         fleets.remove(event.server)?.stop()
     }
 
@@ -117,6 +127,11 @@ internal object VmBenchmarkCommands {
                     count,
                     rounds,
                     source.server.tickCount.toLong(),
+                )
+            automaticReports[source.server] =
+                AutomaticReport(
+                    source,
+                    VmBenchmarkReportSchedule(source.server.tickCount.toLong()),
                 )
             source.sendSuccess(
                 {
@@ -219,4 +234,44 @@ internal object VmBenchmarkCommands {
 
     private const val MAXIMUM_ACTORS = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS
     private const val MAXIMUM_ROUNDS = 1_000_000
+
+    private data class AutomaticReport(
+        val source: CommandSourceStack,
+        val schedule: VmBenchmarkReportSchedule,
+    )
 }
+
+internal class VmBenchmarkReportSchedule(
+    startedTick: Long,
+    private val intervalTicks: Long = REPORT_INTERVAL_TICKS,
+) {
+    private var nextReportTick = startedTick + intervalTicks
+    private var terminalReported = false
+
+    init {
+        require(startedTick >= 0) { "benchmark start tick must not be negative" }
+        require(intervalTicks > 0) { "benchmark report interval must be positive" }
+    }
+
+    fun shouldReport(
+        worldTick: Long,
+        status: HeadlessVmBenchmarkStatus,
+    ): Boolean {
+        require(worldTick >= 0) { "world tick must not be negative" }
+        if (terminalReported) return false
+        if (status.isTerminal()) {
+            terminalReported = true
+            return true
+        }
+        if (worldTick < nextReportTick) return false
+        nextReportTick = worldTick + intervalTicks
+        return true
+    }
+
+    private companion object {
+        const val REPORT_INTERVAL_TICKS = 100L
+    }
+}
+
+private fun HeadlessVmBenchmarkStatus.isTerminal(): Boolean =
+    this == HeadlessVmBenchmarkStatus.COMPLETED || this == HeadlessVmBenchmarkStatus.STOPPED

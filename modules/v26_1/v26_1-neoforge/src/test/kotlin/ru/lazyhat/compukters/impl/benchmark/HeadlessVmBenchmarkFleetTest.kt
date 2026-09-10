@@ -30,6 +30,18 @@ import kotlin.test.assertFailsWith
 
 class HeadlessVmBenchmarkFleetTest {
     @Test
+    fun `automatic reports follow their interval and emit terminal status once`() {
+        val schedule = VmBenchmarkReportSchedule(startedTick = 10, intervalTicks = 100)
+
+        assertEquals(false, schedule.shouldReport(109, HeadlessVmBenchmarkStatus.RUNNING))
+        assertEquals(true, schedule.shouldReport(110, HeadlessVmBenchmarkStatus.RUNNING))
+        assertEquals(false, schedule.shouldReport(209, HeadlessVmBenchmarkStatus.STOPPING))
+        assertEquals(true, schedule.shouldReport(210, HeadlessVmBenchmarkStatus.STOPPING))
+        assertEquals(true, schedule.shouldReport(211, HeadlessVmBenchmarkStatus.STOPPED))
+        assertEquals(false, schedule.shouldReport(310, HeadlessVmBenchmarkStatus.STOPPED))
+    }
+
+    @Test
     fun `fleet admits available actors and records completion without owner thread execution`() {
         val runtime = FakeRuntime(capacity = 2)
         val fleet = HeadlessVmBenchmarkFleet(runtime, byteArrayOf(1), maximumActors = 3)
