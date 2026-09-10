@@ -32,7 +32,7 @@ import java.util.IdentityHashMap
 internal class VmActorServiceRegistry<S : Any>(
     private val checkOwner: (S) -> Unit,
     private val opener: () -> ProgramRuntimeActorService = ::ProgramRuntimeActorService,
-    private val maximumEventsPerTick: Int = 256,
+    private val maximumEventsPerTick: Int = 1_024,
 ) {
     private val servers = IdentityHashMap<S, Entry>()
 
