@@ -25,9 +25,11 @@ VM code lives in `host/compukter-vm`. Documentation is in
   `GRADLE_USER_HOME` in `.gradle-sandbox`, disables the Gradle daemon, and avoids sharing host Gradle lock files.
 - For normal source-built development runs, prefer `./gradlew-sandbox-dev-parallel <tasks>`. It delegates to
   `./gradlew-sandbox-dev --parallel <tasks> -PcompukterVmBuildJobs=$(nproc)`.
-- For long aggregate checks, AI agents should use `./gradlew-sandbox-dev-parallel-summary <tasks>`. It runs the same
-  parallel wrapper, captures the complete combined output under `build/agent-logs/`, prints only the successful build
-  summary, and emits a bounded diagnostic tail on failure without changing the Gradle exit code.
+- For Gradle test, check, and verification tasks, including focused module tests, AI agents should prefer
+  `./gradlew-sandbox-dev-parallel-summary <tasks>`. It runs the same parallel wrapper, captures the complete combined
+  output under `build/agent-logs/`, prints only the successful build summary, and emits a bounded diagnostic tail on
+  failure without changing the Gradle exit code. Use the non-summary parallel wrapper for interactive development runs
+  or when live per-task output is specifically useful.
 - `./gradlew-sandbox-dev-parallel verifyLocalFast` is the default fast feedback entrypoint. It runs build-script and
   policy checks plus a curated JVM test slice; it does not claim complete module coverage.
 - `./gradlew-sandbox-dev-parallel-summary verifyLocalFull` verifies the complete current checkout while keeping its
