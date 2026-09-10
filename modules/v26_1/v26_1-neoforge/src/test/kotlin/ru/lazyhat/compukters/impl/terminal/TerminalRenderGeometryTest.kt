@@ -48,12 +48,13 @@ class TerminalRenderGeometryTest {
         assertEquals(306, small.grid.width)
         assertEquals(247, small.grid.height)
         assertEquals(322, small.panel.width)
-        assertEquals(273, small.panel.height)
-        assertEquals(TerminalRect(159, 43, 481, 316), small.panel)
-        assertEquals(TerminalRect(167, 61, 473, 308), small.grid)
-        assertEquals(TerminalRect(167, 61, 173, 74), small.cell(0, 0))
+        assertEquals(288, small.panel.height)
+        assertEquals(TerminalRect(159, 36, 481, 324), small.panel)
+        assertEquals(TerminalRect(167, 54, 473, 301), small.grid)
+        assertEquals(TerminalRect(167, 303, 473, 316), small.footer)
+        assertEquals(TerminalRect(167, 54, 173, 67), small.cell(0, 0))
         assertEquals(
-            TerminalRect(467, 295, 473, 308),
+            TerminalRect(467, 288, 473, 301),
             small.cell(50, 18),
         )
         assertEquals(small.panel.width, large.panel.width)
@@ -89,10 +90,11 @@ class TerminalRenderGeometryTest {
     fun `small viewport preserves scale and centers the overflowing panel`() {
         val geometry = TerminalRenderGeometry(300, 180, TerminalFontProfile.DEFAULT)
 
-        assertEquals(TerminalRect(-11, -46, 311, 227), geometry.panel)
-        assertEquals(TerminalRect(-3, -28, 303, 219), geometry.grid)
+        assertEquals(TerminalRect(-11, -54, 311, 234), geometry.panel)
+        assertEquals(TerminalRect(-3, -36, 303, 211), geometry.grid)
+        assertEquals(TerminalRect(-3, 213, 303, 226), geometry.footer)
         assertEquals(-3, geometry.titleX)
-        assertEquals(-41, geometry.titleY)
+        assertEquals(-49, geometry.titleY)
     }
 
     @Test
@@ -103,9 +105,9 @@ class TerminalRenderGeometryTest {
         assertEquals(cozette.columns, dina.columns)
         assertEquals(cozette.rows, dina.rows)
         assertEquals(57, cozette.panel.height - dina.panel.height)
-        assertEquals(TerminalRect(159, 72, 481, 288), dina.panel)
-        assertEquals(TerminalRect(297, 74, 373, 88), dina.ideButton)
-        assertEquals(TerminalRect(377, 74, 473, 88), dina.fontButton)
+        assertEquals(TerminalRect(159, 64, 481, 295), dina.panel)
+        assertEquals(TerminalRect(297, 66, 373, 80), dina.ideButton)
+        assertEquals(TerminalRect(377, 66, 473, 80), dina.fontButton)
         assertEquals(4, dina.fontButton.left - dina.ideButton.right)
         assertTrue(dina.ideButton.left >= dina.panel.left)
         assertTrue(dina.ideButton.right <= dina.panel.right)
@@ -115,6 +117,9 @@ class TerminalRenderGeometryTest {
         assertTrue(dina.fontButton.right <= dina.panel.right)
         assertTrue(dina.fontButton.top >= dina.panel.top)
         assertTrue(dina.fontButton.bottom <= dina.grid.top)
+        assertEquals(dina.grid.bottom + TerminalRenderGeometry.FOOTER_GAP, dina.footer.top)
+        assertEquals(TerminalRenderGeometry.FOOTER_HEIGHT, dina.footer.height)
+        assertTrue(dina.footer.bottom <= dina.panel.bottom - TerminalRenderGeometry.PANEL_PADDING)
     }
 
     @Test

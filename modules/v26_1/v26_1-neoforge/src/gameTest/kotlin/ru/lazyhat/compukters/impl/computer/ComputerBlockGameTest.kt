@@ -40,6 +40,7 @@ import net.neoforged.neoforge.event.server.ServerStoppingEvent
 import ru.lazyhat.compukters.core.MOD_ID
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStopReason
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeHost
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
@@ -143,6 +144,7 @@ object ComputerBlockGameTest {
             val entity = helper.getBlockEntity(position, NeoForgeComputerBlockEntity::class.java)
             var persistenceStep: PersistenceStep? = null
             var initialTerminal: CompletableFuture<TerminalState?>? = null
+            var initialResources: CompletableFuture<ProgramResourceSnapshot?>? = null
             helper.assertTrue(
                 entity.type === CompuktersRegistry.COMPUTER_BLOCK_ENTITY.get(),
                 "computer block created the wrong block entity type",
@@ -152,9 +154,12 @@ object ComputerBlockGameTest {
                 .thenWaitUntil {
                     if (entity.runtimeState != neverStarted() && initialTerminal == null) {
                         initialTerminal = entity.terminalFullStateAsync()
+                        initialResources = entity.resourceSnapshotAsync()
                     }
                     helper.assertTrue(initialTerminal?.isDone == true, "computer terminal snapshot is still pending")
                     assertPopulatedTerminal(helper, initialTerminal!!.getNow(null))
+                    helper.assertTrue(initialResources?.isDone == true, "computer resource snapshot is still pending")
+                    assertAvailableResources(helper, initialResources!!.getNow(null))
                 }.thenExecute {
                     helper.setBlock(position, Blocks.AIR)
                     helper.assertTrue(entity.isRemoved, "removing the block did not remove its computer block entity")
@@ -197,6 +202,21 @@ object ComputerBlockGameTest {
         helper.assertTrue(
             populated.cells.any { cell -> cell.codePoint != ' '.code },
             "terminal fixture did not draw any cells",
+        )
+    }
+
+    private fun assertAvailableResources(
+        helper: GameTestHelper,
+        snapshot: ProgramResourceSnapshot?,
+    ) {
+        helper.assertTrue(snapshot is ProgramResourceSnapshot.Available, "running computer did not expose its VM resources")
+        snapshot as ProgramResourceSnapshot.Available
+        helper.assertTrue(snapshot.heapCapacityBytes > 0, "running computer exposed no Guest heap capacity")
+        helper.assertTrue(snapshot.filesystemLogicalCapacityBytes > 0, "running computer exposed no virtual disk capacity")
+        helper.assertTrue(snapshot.heapUsedBytes <= snapshot.heapCapacityBytes, "Guest heap usage exceeded capacity")
+        helper.assertTrue(
+            snapshot.filesystemLogicalBytes <= snapshot.filesystemLogicalCapacityBytes,
+            "virtual disk usage exceeded capacity",
         )
     }
 

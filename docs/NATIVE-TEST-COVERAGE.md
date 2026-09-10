@@ -20,7 +20,7 @@ The layers below answer different questions and must not be counted as substitut
 | Kotlin-to-VM conformance | `./gradlew-sandbox-dev-parallel verifyKotlinVmConformance` | Compiler-produced `.cpkt` artifacts execute with the expected semantics in the pinned Rust VM |
 | JDK FFM integration | `./gradlew-sandbox-dev-parallel :native-runtime:check` | Kotlin wire decoding, JDK 25 descriptors, native loading, typed errors, ownership, and real calls into the built Rust library |
 | Runtime-host integration | `./gradlew-sandbox-dev-parallel :core:programRuntimeIntegrationTest` | The loader-independent host drives boot, processes, terminal input, compiler requests, deployment, and persistent files through FFM |
-| Minecraft integration | `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runGameTestServer` | NeoForge lifecycle, world store ownership, reboot/reload, compiler routing, IDE file access, tombstones, and redstone behavior use the production runtime path |
+| Minecraft integration | `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runGameTestServer` | NeoForge lifecycle, world store ownership, reboot/reload, compiler routing, IDE file access, resource snapshots, tombstones, and redstone behavior use the production runtime path |
 
 `verifyLocalFull` composes these layers, but its success is one aggregate result rather than additional independent
 coverage.
@@ -63,8 +63,9 @@ verifier, allocator, or failure-path coverage.
 
 The two `ProgramRuntimeHostIntegrationTest` scenarios cover ROM boot, foreground child execution, reboot, terminal
 editing, compiler requests, verified installation, Unicode input, and filesystem persistence through the real FFM
-library. The NeoForge GameTests add production registration and ticking, removal/close, two-computer compilation,
-persistent programming and world restart, tombstone recovery, IDE filesystem import, and world-facing redstone.
+library. The NeoForge GameTests add production registration and ticking, removal/close, observed resource snapshots,
+two-computer compilation, persistent programming and world restart, tombstone recovery, IDE filesystem import, and
+world-facing redstone.
 These are vertical ownership checks, not replacements for the direct Rust tests of the same components.
 
 ## Inventory notes

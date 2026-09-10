@@ -136,9 +136,12 @@ The Minecraft carrier owns exactly one actor endpoint and submits at most one ad
 `system/programs/shell.kt`. A foreground child suspends its parent until it exits or fails. There is one active
 foreground lane today, while the runtime contract leaves room for later parallel execution. Reboot replaces the
 complete machine stack and clears the terminal. Minecraft sends full state to a new viewer and ordered deltas
-thereafter. Terminal viewers submit bounded asynchronous key, text, state, and resync operations, which merge in
-server-arrival order without client-side echo or a terminal input lease. Replies are published only after returning to
-the server thread and only while the viewer still refers to the same machine epoch.
+thereafter. Terminal viewers submit bounded asynchronous key, text, state, resync, and resource-snapshot operations,
+which merge in server-arrival order without client-side echo or a terminal input lease. A valid standalone-terminal
+viewer samples resources immediately and then every ten server ticks through the same single-poll admission. Its
+viewer-local window retains one prior sample to derive semantic consumed/granted Guest-unit usage; it is discarded on
+close, invalidation, machine replacement, or server stop. Replies are published only after returning to the server
+thread and only while the viewer still refers to the same machine epoch.
 
 The raw terminal is a synchronous Rust device: cell writes, positional writes, rectangular fills, colors, cursor
 changes, and input polling never cross into Minecraft. The authoritative fixed 51x19 cell grid and its replication
@@ -156,9 +159,12 @@ before every original blocking request resumes. VM halt, fault, shutdown, reboot
 zero output.
 
 The client renders the fixed 51x19 grid in a centered compact panel while the world remains visible through a
-translucent dim layer. Users can select the packaged Cozette 6x13, Dina 6x10, or ProggyTiny 6x10 terminal font without
-changing terminal coordinates or creating a second grid. The terminal screen can suspend its observation and open the
-IDE, whose target terminal view consumes the same replicated terminal state.
+translucent dim layer. A separate footer presents rolling `CPU` utilization, current Guest heap and virtual-disk
+usage, and concise lifecycle activity. Here `CPU` is the virtual computer's consumed/granted semantic Guest-unit
+budget, not physical host timing. Users can select the packaged Cozette 6x13, Dina 6x10, or ProggyTiny 6x10 terminal
+font without changing terminal coordinates or creating a second grid.
+The terminal screen can suspend its observation and open the IDE, whose target terminal view consumes the same
+replicated terminal state but does not yet display these standalone-terminal gauges.
 
 The Rust VM owns verification, the Tier 0 interpreter, managed memory and collection, quotas, traps and faults,
 capability suspension, and host-neutral sessions. Future JIT or AOT tiers must remain behind the same verified artifact

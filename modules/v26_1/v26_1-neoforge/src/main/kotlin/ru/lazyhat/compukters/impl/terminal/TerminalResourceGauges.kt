@@ -91,12 +91,41 @@ internal class TerminalResourceReplica(
     }
 }
 
+internal object TerminalResourceText {
+    fun format(gauges: TerminalResourceGauges): String =
+        "CPU ${budget(gauges)} | RAM ${percentage(gauges.heapBasisPoints)} | " +
+            "DISK ${percentage(gauges.diskBasisPoints)} | ${activity(gauges.activity)}"
+
+    private fun budget(gauges: TerminalResourceGauges): String =
+        if (gauges.countersSaturated) "SAT" else percentage(gauges.vmBudgetBasisPoints)
+
+    private fun percentage(basisPoints: Int?): String =
+        basisPoints?.let { "${(it + BASIS_POINT_ROUNDING) / BASIS_POINTS_PER_PERCENT}%" } ?: "--"
+
+    private fun activity(activity: TerminalResourceActivity): String =
+        when (activity) {
+            TerminalResourceActivity.ACTIVE -> "ACTIVE"
+            TerminalResourceActivity.COLLECTING -> "COLLECT"
+            TerminalResourceActivity.WAITING_INPUT -> "WAIT IN"
+            TerminalResourceActivity.WAITING_COMPILER -> "WAIT COMP"
+            TerminalResourceActivity.HALTED -> "HALTED"
+            TerminalResourceActivity.FAILED -> "FAILED"
+            TerminalResourceActivity.UNAVAILABLE -> "OFF"
+        }
+
+    private const val BASIS_POINTS_PER_PERCENT = 100
+    private const val BASIS_POINT_ROUNDING = BASIS_POINTS_PER_PERCENT / 2
+}
+
 internal class TerminalResourceGaugeWindow {
     private var previous: ProgramResourceSnapshot.Available? = null
 
     fun accept(snapshot: ProgramResourceSnapshot?): TerminalResourceGauges =
         when (snapshot) {
-            is ProgramResourceSnapshot.Available -> acceptAvailable(snapshot)
+            is ProgramResourceSnapshot.Available -> {
+                acceptAvailable(snapshot)
+            }
+
             is ProgramResourceSnapshot.Unavailable -> {
                 previous = null
                 TerminalResourceGauges.unavailable(snapshot.state.activity())
@@ -180,9 +209,7 @@ private fun ProgramRuntimeState.activity(): TerminalResourceActivity =
         ProgramRuntimeState.WaitingForCompiler -> TerminalResourceActivity.WAITING_COMPILER
         is ProgramRuntimeState.Halted -> TerminalResourceActivity.HALTED
         is ProgramRuntimeState.Failed -> TerminalResourceActivity.FAILED
-        ProgramRuntimeState.Idle,
-        ProgramRuntimeState.Closed,
-        -> TerminalResourceActivity.UNAVAILABLE
+        ProgramRuntimeState.Idle, ProgramRuntimeState.Closed -> TerminalResourceActivity.UNAVAILABLE
     }
 
 private fun addExactOrNull(

@@ -222,6 +222,18 @@ internal class TerminalScreen(
                 geometry.gridGeometry,
                 System.nanoTime() / 1_000_000L,
             )
+            val resourceText =
+                Component
+                    .literal(TerminalResourceText.format(resourceGauges))
+                    .withStyle { style -> style.withFont(fontProfile.fontDescription) }
+            graphics.text(
+                font,
+                resourceText,
+                geometry.footer.left,
+                geometry.footer.top + fontProfile.glyphDrawOffsetY,
+                RESOURCE_COLOR,
+                false,
+            )
             super.extractRenderState(
                 graphics,
                 viewport.toVirtualX(mouseX.toDouble()).toInt(),
@@ -271,6 +283,7 @@ internal class TerminalScreen(
         val PANEL_COLOR = 0xFF101418.toInt()
         val PANEL_BORDER_COLOR = 0xFF27323A.toInt()
         val TITLE_COLOR = 0xFFF2F4F8.toInt()
+        val RESOURCE_COLOR = 0xFFA9BAC7.toInt()
         val GRID_COLOR = TerminalRenderGeometry.paletteColor(0)
         val UNSUPPORTED_MESSAGE = Component.literal("Compukters UI requires at least 640x360 pixels")
     }

@@ -18,6 +18,7 @@
 
 package ru.lazyhat.compukters.impl.terminal
 
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramFailure
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramTickBudget
@@ -28,6 +29,29 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TerminalResourceGaugeWindowTest {
+    @Test
+    fun `footer text is compact explicit and bounded to the terminal grid`() {
+        assertEquals(
+            "CPU 63% | RAM 40% | DISK 75% | COLLECT",
+            TerminalResourceText.format(
+                TerminalResourceGauges(6_250, 40, 100, 3, 4, TerminalResourceActivity.COLLECTING, false),
+            ),
+        )
+        assertEquals(
+            "CPU SAT | RAM -- | DISK -- | WAIT COMP",
+            TerminalResourceText.format(
+                TerminalResourceGauges(null, 0, 0, 0, 0, TerminalResourceActivity.WAITING_COMPILER, true),
+            ),
+        )
+        TerminalResourceActivity.entries.forEach { activity ->
+            val text =
+                TerminalResourceText.format(
+                    TerminalResourceGauges(10_000, 1, 1, 1, 1, activity, false),
+                )
+            assertTrue(text.length <= TerminalRenderGeometry.COLUMNS, text)
+        }
+    }
+
     @Test
     fun `poll schedule admits one immediate sample and one per interval`() {
         val schedule = TerminalResourcePollSchedule(intervalTicks = 10)
@@ -87,18 +111,17 @@ class TerminalResourceGaugeWindowTest {
             TerminalResourceActivity.HALTED,
             window.accept(snapshot(state = ProgramRuntimeState.Halted(null), granted = 500)).activity,
         )
-        assertEquals(
-            TerminalResourceActivity.FAILED,
+        val failed =
             window.accept(
                 snapshot(
                     state =
                         ProgramRuntimeState.Failed(
-                            ru.lazyhat.compukters.core.device.runtime.program.ProgramFailure.Bridge("failed"),
+                            ProgramFailure.Bridge("failed"),
                         ),
                     granted = 600,
                 ),
-            ).activity,
-        )
+            )
+        assertEquals(TerminalResourceActivity.FAILED, failed.activity)
     }
 
     @Test

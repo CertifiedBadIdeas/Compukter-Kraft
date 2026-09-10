@@ -89,7 +89,7 @@ class TerminalRenderGeometry(
     val gridWidth: Int = columns * fontProfile.cellWidth
     val gridHeight: Int = rows * fontProfile.cellHeight
     val panelWidth: Int = gridWidth + PANEL_PADDING * 2
-    val panelHeight: Int = TITLE_HEIGHT + gridHeight + PANEL_PADDING
+    val panelHeight: Int = TITLE_HEIGHT + gridHeight + FOOTER_GAP + FOOTER_HEIGHT + PANEL_PADDING
     val panel: TerminalRect =
         TerminalRect(
             (viewportWidth - panelWidth) / 2,
@@ -102,7 +102,14 @@ class TerminalRenderGeometry(
             panel.left + PANEL_PADDING,
             panel.top + TITLE_HEIGHT,
             panel.right - PANEL_PADDING,
-            panel.bottom - PANEL_PADDING,
+            panel.top + TITLE_HEIGHT + gridHeight,
+        )
+    val footer: TerminalRect =
+        TerminalRect(
+            grid.left,
+            grid.bottom + FOOTER_GAP,
+            grid.right,
+            grid.bottom + FOOTER_GAP + FOOTER_HEIGHT,
         )
     val gridGeometry = TerminalGridGeometry(grid.left, grid.top, fontProfile)
     val originX: Int = grid.left
@@ -140,6 +147,8 @@ class TerminalRenderGeometry(
         const val PANEL_PADDING = 8
         const val TITLE_HEIGHT = 18
         const val TITLE_TOP = 5
+        const val FOOTER_GAP = 2
+        const val FOOTER_HEIGHT = 13
         private const val FONT_BUTTON_WIDTH = 96
         private const val FONT_BUTTON_HEIGHT = 14
         private const val IDE_BUTTON_WIDTH = 76
