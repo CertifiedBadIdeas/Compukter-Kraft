@@ -88,7 +88,7 @@ class ComputerBlockTest {
             TEST_TYPE,
             BlockPos.ZERO,
             Blocks.FURNACE.defaultBlockState(),
-            ComputerCarrierFactory { _, _, stateSink, _, _, _ ->
+            ComputerCarrierFactory { _, _, stateSink, _, _, _, _ ->
                 carrier.attach(stateSink)
             },
         )

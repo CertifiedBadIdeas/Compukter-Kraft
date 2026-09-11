@@ -42,6 +42,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequest
 import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
 import ru.lazyhat.compukters.lang.runtime.vm.VmResourceSnapshot
 import ru.lazyhat.compukters.lang.runtime.vm.VmStartException
+import ru.lazyhat.compukters.lang.runtime.vm.VmValue
 import ru.lazyhat.compukters.lang.runtime.vm.VmVerificationException
 
 class ProgramRuntimeHost internal constructor(
@@ -50,6 +51,7 @@ class ProgramRuntimeHost internal constructor(
     private val computerId: ComputerId = ComputerId.fromLongs(0, 1),
     private val compilerRouter: CompilerCompletionRouter? = null,
     private val redstoneHostPort: RedstoneHostPort = UNAVAILABLE_REDSTONE_PORT,
+    private val soundHostPort: SoundHostPort = UNAVAILABLE_SOUND_PORT,
     initialRedstoneOutput: Int = 0,
 ) : AutoCloseable {
     constructor(tickBudget: ProgramTickBudget = ProgramTickBudget()) : this(NativeProgramVmSessionFactory(), tickBudget)
@@ -61,6 +63,7 @@ class ProgramRuntimeHost internal constructor(
         tickBudget: ProgramTickBudget = ProgramTickBudget(),
         compilerRouter: CompilerCompletionRouter? = null,
         redstoneHostPort: RedstoneHostPort = UNAVAILABLE_REDSTONE_PORT,
+        soundHostPort: SoundHostPort = UNAVAILABLE_SOUND_PORT,
         initialRedstoneOutput: Int = 0,
     ) : this(
         NativeProgramVmSessionFactory(ProgramFileSystemLaunchContext(store, computerId, romImage)),
@@ -68,6 +71,7 @@ class ProgramRuntimeHost internal constructor(
         computerId,
         compilerRouter,
         redstoneHostPort,
+        soundHostPort,
         initialRedstoneOutput,
     )
 
@@ -76,6 +80,7 @@ class ProgramRuntimeHost internal constructor(
     private var activeVmEpoch = 0L
     private var pendingCompilation: ComputerCompilationAddress? = null
     private var pendingRedstoneCommit: PendingRedstoneCommit? = null
+    private var pendingSoundCommit: PendingSoundCommit? = null
     internal var lastClosedFileSystemGeneration: Long? = null
         private set
     private var confirmedRedstoneOutput = RedstoneWire.requireOutputRegister(initialRedstoneOutput)
@@ -127,7 +132,7 @@ class ProgramRuntimeHost internal constructor(
             applyCompilationCompletion(activeSession)
             return state
         }
-        if (pendingRedstoneCommit != null) return state
+        if (pendingRedstoneCommit != null || pendingSoundCommit != null) return state
         advanceForTick(activeSession)
         if (session !== activeSession) return state
         try {
@@ -212,6 +217,10 @@ class ProgramRuntimeHost internal constructor(
                     remainingHostRequests -= outcome.requests.size
                     if (outcome.requests.all(::isRedstoneOutputRequest)) {
                         commitRedstoneBatch(activeSession, outcome.requests)
+                        return
+                    }
+                    if (outcome.requests.all(::isSoundRequest)) {
+                        commitSoundBatch(activeSession, outcome.requests)
                         return
                     }
                     for (request in outcome.requests) {
@@ -409,6 +418,15 @@ class ProgramRuntimeHost internal constructor(
         return true
     }
 
+    fun completeSound(result: SoundCommitResult): Boolean {
+        if (result == SoundCommitResult.Deferred) return false
+        val pending = pendingSoundCommit ?: return false
+        if (session !== pending.session) return false
+        pendingSoundCommit = null
+        completeSoundBatch(pending, result)
+        return true
+    }
+
     fun shutdown() {
         if (state == ProgramRuntimeState.Closed) return
         releaseSession()
@@ -477,6 +495,62 @@ class ProgramRuntimeHost internal constructor(
         }
     }
 
+    private fun commitSoundBatch(
+        activeSession: ProgramVmSession,
+        requests: List<VmHostRequest>,
+    ) {
+        val sounds =
+            try {
+                requests.map(::decodeSoundRequest)
+            } catch (error: IllegalArgumentException) {
+                finish(ProgramRuntimeState.Failed(ProgramFailure.Bridge(error.message ?: "invalid sound request batch")))
+                return
+            }
+        val pending = PendingSoundCommit(activeSession, requests)
+        when (val result = soundHostPort.emit(sounds)) {
+            is SoundCommitResult.Completed,
+            is SoundCommitResult.Failed,
+            -> completeSoundBatch(pending, result)
+
+            SoundCommitResult.Deferred -> pendingSoundCommit = pending
+        }
+    }
+
+    private fun completeSoundBatch(
+        pending: PendingSoundCommit,
+        result: SoundCommitResult,
+    ) {
+        when (result) {
+            is SoundCommitResult.Completed -> {
+                if (result.admissions.size != pending.requests.size) {
+                    finish(ProgramRuntimeState.Failed(ProgramFailure.Bridge("sound completion size mismatch")))
+                    return
+                }
+                pending.requests.zip(result.admissions).forEach { (request, admitted) ->
+                    if (!resume(request, HostResponse.BoolSuccess(admitted))) return
+                }
+            }
+
+            is SoundCommitResult.Failed -> {
+                pending.requests.forEach { request ->
+                    if (!resume(request, HostResponse.Failure(result.kind, result.code))) return
+                }
+            }
+
+            SoundCommitResult.Deferred -> {
+                error("deferred sound completion was rejected")
+            }
+        }
+    }
+
+    private fun decodeSoundRequest(request: VmHostRequest): SoundRequest {
+        require(isSoundRequest(request)) { "unexpected capability in sound request batch" }
+        require(request.arguments.size == 2) { "sound beep requires exactly two arguments" }
+        val note = requireNotNull((request.arguments[0] as? VmValue.I32)?.value) { "sound note must be I32" }
+        val volume = requireNotNull((request.arguments[1] as? VmValue.I32)?.value) { "sound volume must be I32" }
+        return SoundRequest(note, volume)
+    }
+
     private fun <T> terminalQuery(query: ProgramVmSession.() -> T): T? {
         val activeSession = session ?: return null
         return try {
@@ -537,6 +611,7 @@ class ProgramRuntimeHost internal constructor(
         pendingCompilation?.let { compilerRouter?.cancel(it) }
         pendingCompilation = null
         pendingRedstoneCommit = null
+        pendingSoundCommit = null
         activeVmEpoch = 0
         try {
             try {
@@ -553,16 +628,26 @@ class ProgramRuntimeHost internal constructor(
 
     private companion object {
         val REDSTONE_CAPABILITY = CapabilityIdentity("compukter", "redstone", 1, 0)
+        val SOUND_CAPABILITY = CapabilityIdentity("compukter", "sound", 1, 0)
         val UNAVAILABLE_REDSTONE_PORT =
             RedstoneHostPort { RedstoneCommitResult.Failed(HostFailureKind.UNAVAILABLE, 0) }
+        val UNAVAILABLE_SOUND_PORT =
+            SoundHostPort { SoundCommitResult.Failed(HostFailureKind.UNAVAILABLE, 0) }
 
         fun isRedstoneOutputRequest(request: VmHostRequest): Boolean =
             request.capability == REDSTONE_CAPABILITY && request.operation in 6..7
+
+        fun isSoundRequest(request: VmHostRequest): Boolean = request.capability == SOUND_CAPABILITY && request.operation == 0
     }
 
     private data class PendingRedstoneCommit(
         val session: ProgramVmSession,
         val packed: Int,
+        val requests: List<VmHostRequest>,
+    )
+
+    private data class PendingSoundCommit(
+        val session: ProgramVmSession,
         val requests: List<VmHostRequest>,
     )
 }

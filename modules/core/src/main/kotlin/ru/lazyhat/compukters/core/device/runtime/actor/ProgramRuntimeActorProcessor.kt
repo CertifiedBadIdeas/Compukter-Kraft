@@ -37,10 +37,12 @@ import java.util.concurrent.CompletableFuture
 internal class ProgramRuntimeActorProcessor(
     private val host: ProgramRuntimeHost,
     private val redstonePort: ActorRedstoneHostPort? = null,
+    private val soundPort: ActorSoundHostPort? = null,
 ) : VmActorProcessor<ProgramRuntimeActorCommand, ProgramRuntimeActorReply> {
     private val deploymentCandidates = mutableMapOf<ProgramDeploymentToken, ProgramDeploymentCandidate>()
     private var nextDeploymentToken = 0L
     private var pendingRedstoneRequest: ProgramRuntimeRequestId? = null
+    private var pendingSoundRequest: ProgramRuntimeRequestId? = null
     val closed = CompletableFuture<Long?>()
     private var lastFileSystemGeneration: Long? = null
 
@@ -81,6 +83,7 @@ internal class ProgramRuntimeActorProcessor(
             is ProgramRuntimeActorCommand.Start -> {
                 captureGeneration()
                 pendingRedstoneRequest = null
+                pendingSoundRequest = null
                 discardAllCandidates()
                 ProgramRuntimeActorValue.Start(host.start(command.artifactBytes()))
             }
@@ -88,19 +91,29 @@ internal class ProgramRuntimeActorProcessor(
             is ProgramRuntimeActorCommand.StartBoot -> {
                 captureGeneration()
                 pendingRedstoneRequest = null
+                pendingSoundRequest = null
                 discardAllCandidates()
                 ProgramRuntimeActorValue.Start(host.startBoot())
             }
 
             is ProgramRuntimeActorCommand.Advance -> {
                 host.serverTick()
-                redstonePort
-                    ?.takeRequestedOutput()
-                    ?.let { packed ->
-                        pendingRedstoneRequest = command.requestId
-                        ProgramRuntimeActorValue.RedstoneOutputRequested(packed)
-                    }
-                    ?: ProgramRuntimeActorValue.None
+                val redstone =
+                    redstonePort
+                        ?.takeRequestedOutput()
+                        ?.let { packed ->
+                            pendingRedstoneRequest = command.requestId
+                            ProgramRuntimeActorValue.RedstoneOutputRequested(packed)
+                        }
+                val sound =
+                    soundPort
+                        ?.takeRequestedSounds()
+                        ?.let { requests ->
+                            pendingSoundRequest = command.requestId
+                            ProgramRuntimeActorValue.SoundRequested(requests)
+                        }
+                check(redstone == null || sound == null) { "one actor advance cannot defer two world request batches" }
+                redstone ?: sound ?: ProgramRuntimeActorValue.None
             }
 
             is ProgramRuntimeActorCommand.TerminalFullState -> {
@@ -174,9 +187,18 @@ internal class ProgramRuntimeActorProcessor(
                 ProgramRuntimeActorValue.Accepted(accepted)
             }
 
+            is ProgramRuntimeActorCommand.CompleteSound -> {
+                val accepted =
+                    pendingSoundRequest == command.soundRequestId &&
+                        host.completeSound(command.result)
+                if (accepted) pendingSoundRequest = null
+                ProgramRuntimeActorValue.Accepted(accepted)
+            }
+
             is ProgramRuntimeActorCommand.Shutdown -> {
                 captureGeneration()
                 pendingRedstoneRequest = null
+                pendingSoundRequest = null
                 discardAllCandidates()
                 host.shutdown()
                 ProgramRuntimeActorValue.None
@@ -185,6 +207,7 @@ internal class ProgramRuntimeActorProcessor(
             is ProgramRuntimeActorCommand.Reboot -> {
                 captureGeneration()
                 pendingRedstoneRequest = null
+                pendingSoundRequest = null
                 discardAllCandidates()
                 host.shutdown()
                 ProgramRuntimeActorValue.Start(host.startBoot())

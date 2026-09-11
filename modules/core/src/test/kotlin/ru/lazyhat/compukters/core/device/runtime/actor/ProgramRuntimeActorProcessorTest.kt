@@ -27,6 +27,9 @@ import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramVmSession
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramVmSessionFactory
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
+import ru.lazyhat.compukters.core.device.runtime.program.SoundCommitResult
+import ru.lazyhat.compukters.core.device.runtime.program.SoundHostPort
+import ru.lazyhat.compukters.core.device.runtime.program.SoundRequest
 import ru.lazyhat.compukters.lang.runtime.capability.HostResponse
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryEntry
@@ -181,6 +184,58 @@ class ProgramRuntimeActorProcessorTest {
     }
 
     @Test
+    fun `async carrier emits sound only on its owner thread and returns admission`() {
+        val owner = Thread.currentThread()
+        val session = RecordingSession()
+        val port = ActorSoundHostPort()
+        val host =
+            ProgramRuntimeHost(
+                object : ProgramVmSessionFactory {
+                    override fun open(artifact: ByteArray): ProgramVmSession = session
+
+                    override fun boot(): ProgramVmSession = session
+                },
+                soundHostPort = port,
+            )
+        val endpoint = VmActorEndpoint(ComputerId.fromLongs(9, 10), 1)
+        ProgramRuntimeActorService(schedulerConfig()).use { service ->
+            var emissions = 0
+            val lease = requireNotNull(service.attach(endpoint, host, soundPort = port))
+            val carrier =
+                ActorProgramComputer(
+                    service,
+                    lease,
+                    { RedstoneCommitResult.Committed },
+                    SoundHostPort { requests ->
+                        assertEquals(owner, Thread.currentThread())
+                        assertEquals(listOf(SoundRequest(12, 75)), requests)
+                        emissions++
+                        SoundCommitResult.Completed(listOf(true))
+                    },
+                )
+            carrier.turnOn()
+            awaitQueuedResult(service)
+            service.pump(1)
+            session.nextOutcome =
+                VmOutcome.HostRequestBatch(
+                    listOf(VmHostRequest(1, SOUND, 0, listOf(VmValue.I32(12), VmValue.I32(75)))),
+                )
+
+            carrier.serverTick(1)
+            awaitQueuedResult(service)
+            service.pump(1)
+            assertEquals(1, emissions)
+            assertEquals(1, service.runtimeMetrics().deferredWorldRequests)
+            awaitQueuedResult(service)
+            service.pump(1)
+
+            assertEquals(listOf<HostResponse>(HostResponse.BoolSuccess(true)), session.responses)
+            assertEquals(0, service.runtimeMetrics().deferredWorldRequests)
+            carrier.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
     fun `prepared deployments keep independent tokens until discarded`() {
         val session = RecordingSession()
         val host = ProgramRuntimeHost(ProgramVmSessionFactory { session })
@@ -270,6 +325,37 @@ class ProgramRuntimeActorProcessorTest {
             )
             assertTrue(assertIs<ProgramRuntimeActorValue.Accepted>(scheduler.awaitReplies(1).single().value).accepted)
             assertTrue(session.calls.any { it.startsWith("resume:") })
+        }
+    }
+
+    @Test
+    fun `sound crosses the actor boundary and resumes with the server admission`() {
+        val session = RecordingSession()
+        session.nextOutcome =
+            VmOutcome.HostRequestBatch(
+                listOf(VmHostRequest(1, SOUND, 0, listOf(VmValue.I32(12), VmValue.I32(75)))),
+            )
+        val port = ActorSoundHostPort()
+        val host = ProgramRuntimeHost(ProgramVmSessionFactory { session }, soundHostPort = port)
+        ProgramRuntimeActorProcessor(host, soundPort = port).use { processor ->
+            processor.process(ProgramRuntimeActorCommand.Start(request(1), byteArrayOf(1)))
+
+            val emitted =
+                assertIs<ProgramRuntimeActorValue.SoundRequested>(
+                    processor.process(ProgramRuntimeActorCommand.Advance(request(2), 100)).value,
+                )
+            assertEquals(listOf(SoundRequest(12, 75)), emitted.requests)
+
+            val completed =
+                processor.process(
+                    ProgramRuntimeActorCommand.CompleteSound(
+                        request(3),
+                        request(2),
+                        SoundCommitResult.Completed(listOf(true)),
+                    ),
+                )
+            assertTrue(assertIs<ProgramRuntimeActorValue.Accepted>(completed.value).accepted)
+            assertEquals(listOf<HostResponse>(HostResponse.BoolSuccess(true)), session.responses)
         }
     }
 
@@ -403,6 +489,7 @@ class ProgramRuntimeActorProcessorTest {
 
     private class RecordingSession : ProgramVmSession {
         val calls = mutableListOf<String>()
+        val responses = mutableListOf<HostResponse>()
         var candidate = RecordingCandidate(calls)
         val terminal =
             TerminalState(
@@ -432,7 +519,7 @@ class ProgramRuntimeActorProcessorTest {
         override fun resume(
             identity: VmHostRequestIdentity,
             response: HostResponse,
-        ) = record("resume") { }
+        ) = record("resume") { responses += response }
 
         override fun completeCompilationArtifact(
             token: Long,
@@ -543,6 +630,7 @@ class ProgramRuntimeActorProcessorTest {
     }
 
     private companion object {
+        val SOUND = CapabilityIdentity("compukter", "sound", 1, 0)
         val REDSTONE = CapabilityIdentity("compukter", "redstone", 1, 0)
         const val TIMEOUT_SECONDS = 5L
     }

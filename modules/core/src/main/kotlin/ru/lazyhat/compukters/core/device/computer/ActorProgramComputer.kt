@@ -30,6 +30,8 @@ import ru.lazyhat.compukters.core.device.runtime.program.ProgramFailure
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneHostPort
+import ru.lazyhat.compukters.core.device.runtime.program.SoundCommitResult
+import ru.lazyhat.compukters.core.device.runtime.program.SoundHostPort
 import ru.lazyhat.compukters.lang.runtime.vm.HostFailureKind
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
@@ -42,6 +44,7 @@ class ActorProgramComputer(
     private val service: ProgramRuntimeActorService,
     private val lease: ProgramRuntimeActorLease,
     private val redstone: RedstoneHostPort,
+    private val sound: SoundHostPort = SoundHostPort { SoundCommitResult.Failed(HostFailureKind.UNAVAILABLE, 0) },
     private val stateSink: (ProgramRuntimeState) -> Unit = {},
 ) {
     private val owner = Thread.currentThread()
@@ -49,6 +52,7 @@ class ActorProgramComputer(
     private var advance: CompletableFuture<ProgramRuntimeActorReply>? = null
     private var acknowledgement: CompletableFuture<ProgramRuntimeActorReply>? = null
     private var pendingOutput: PendingOutput? = null
+    private var pendingSound: PendingSound? = null
     private var closeResult: CompletableFuture<Long?>? = null
     private var bootRequest: CompletableFuture<ProgramRuntimeActorReply>? = null
     private var lastAdvanceTick = -1L
@@ -102,8 +106,8 @@ class ActorProgramComputer(
         checkOwner()
         require(worldTick >= 0)
         if (closeResult != null) return
-        if (pendingOutput != null) {
-            acknowledgeOutput()
+        if (pendingOutput != null || pendingSound != null) {
+            acknowledgeWorldRequest()
             return
         }
         if (advance != null || worldTick <= lastAdvanceTick ||
@@ -122,18 +126,39 @@ class ActorProgramComputer(
                 failUnlessBusy(failure)
                 return@whenComplete
             }
-            val output = reply.value as? ProgramRuntimeActorValue.RedstoneOutputRequested ?: return@whenComplete
-            val result =
-                try {
-                    redstone.commitOutput(output.packed).also {
-                        check(it != RedstoneCommitResult.Deferred) { "server redstone port must complete the world mutation" }
-                    }
-                } catch (_: Exception) {
-                    RedstoneCommitResult.Failed(HostFailureKind.INPUT_OUTPUT, 0)
+            when (val request = reply.value) {
+                is ProgramRuntimeActorValue.RedstoneOutputRequested -> {
+                    val result =
+                        try {
+                            redstone.commitOutput(request.packed).also {
+                                check(it != RedstoneCommitResult.Deferred) { "server redstone port must complete the world mutation" }
+                            }
+                        } catch (_: Exception) {
+                            RedstoneCommitResult.Failed(HostFailureKind.INPUT_OUTPUT, 0)
+                        }
+                    if (currentLifecycle != lifecycle || closeResult != null) return@whenComplete
+                    pendingOutput = PendingOutput(reply.requestId, request.packed, result)
+                    acknowledgeWorldRequest()
                 }
-            if (currentLifecycle != lifecycle || closeResult != null) return@whenComplete
-            pendingOutput = PendingOutput(reply.requestId, output.packed, result)
-            acknowledgeOutput()
+
+                is ProgramRuntimeActorValue.SoundRequested -> {
+                    val result =
+                        try {
+                            sound.emit(request.requests).also {
+                                check(it != SoundCommitResult.Deferred) { "server sound port must complete the world mutation" }
+                            }
+                        } catch (_: Exception) {
+                            SoundCommitResult.Failed(HostFailureKind.INPUT_OUTPUT, 0)
+                        }
+                    if (currentLifecycle != lifecycle || closeResult != null) return@whenComplete
+                    pendingSound = PendingSound(reply.requestId, result)
+                    acknowledgeWorldRequest()
+                }
+
+                else -> {
+                    Unit
+                }
+            }
         }
     }
 
@@ -143,30 +168,48 @@ class ActorProgramComputer(
         closeResult?.let { return it.copy() }
         lifecycle++
         pendingOutput = null
+        pendingSound = null
         val result = lease.closeAsync()
         closeResult = result
         publish(ProgramRuntimeState.Closed)
         return result.copy()
     }
 
-    private fun acknowledgeOutput() {
+    private fun acknowledgeWorldRequest() {
         if (acknowledgement != null) return
-        val output = pendingOutput ?: return
+        val output = pendingOutput
+        val sound = pendingSound
+        check(output == null || sound == null) { "computer cannot own two pending world requests" }
         val future =
-            send {
-                ProgramRuntimeActorCommand.CompleteRedstoneOutput(it, output.requestId, output.packed, output.result)
+            when {
+                output != null -> {
+                    send {
+                        ProgramRuntimeActorCommand.CompleteRedstoneOutput(it, output.requestId, output.packed, output.result)
+                    }
+                }
+
+                sound != null -> {
+                    send {
+                        ProgramRuntimeActorCommand.CompleteSound(it, sound.requestId, sound.result)
+                    }
+                }
+
+                else -> {
+                    return
+                }
             }
         acknowledgement = future
         future.whenComplete { reply, failure ->
             if (acknowledgement === future) acknowledgement = null
-            if (pendingOutput !== output || closeResult != null) return@whenComplete
+            if (pendingOutput !== output || pendingSound !== sound || closeResult != null) return@whenComplete
             if (failure != null) {
                 // Retain the exact completion when the mailbox is full. Do not repeat the world mutation.
                 failUnlessBusy(failure)
             } else {
                 pendingOutput = null
+                pendingSound = null
                 if ((reply.value as? ProgramRuntimeActorValue.Accepted)?.accepted != true) {
-                    publish(ProgramRuntimeState.Failed(ProgramFailure.Bridge("redstone completion was rejected")))
+                    publish(ProgramRuntimeState.Failed(ProgramFailure.Bridge("world request completion was rejected")))
                 }
             }
         }
@@ -183,6 +226,7 @@ class ActorProgramComputer(
         advance = null
         acknowledgement = null
         pendingOutput = null
+        pendingSound = null
         return observe(submitted, lifecycle)
     }
 
@@ -223,5 +267,10 @@ class ActorProgramComputer(
         val requestId: ProgramRuntimeRequestId,
         val packed: Int,
         val result: RedstoneCommitResult,
+    )
+
+    private data class PendingSound(
+        val requestId: ProgramRuntimeRequestId,
+        val result: SoundCommitResult,
     )
 }

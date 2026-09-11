@@ -22,6 +22,8 @@ import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramStartResult
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
+import ru.lazyhat.compukters.core.device.runtime.program.SoundCommitResult
+import ru.lazyhat.compukters.core.device.runtime.program.SoundRequest
 import ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing
 import ru.lazyhat.compukters.lang.runtime.fs.VmFileChunk
 import ru.lazyhat.compukters.lang.runtime.fs.VmFileStat
@@ -195,6 +197,16 @@ sealed interface ProgramRuntimeActorCommand {
         }
     }
 
+    data class CompleteSound(
+        override val requestId: ProgramRuntimeRequestId,
+        val soundRequestId: ProgramRuntimeRequestId,
+        val result: SoundCommitResult,
+    ) : ProgramRuntimeActorCommand {
+        init {
+            require(result != SoundCommitResult.Deferred) { "sound completion cannot be deferred" }
+        }
+    }
+
     data class Shutdown(
         override val requestId: ProgramRuntimeRequestId,
     ) : ProgramRuntimeActorCommand
@@ -267,6 +279,12 @@ sealed interface ProgramRuntimeActorValue {
     data class RedstoneOutputRequested(
         val packed: Int,
     ) : ProgramRuntimeActorValue
+
+    class SoundRequested(
+        requests: List<SoundRequest>,
+    ) : ProgramRuntimeActorValue {
+        val requests: List<SoundRequest> = requests.toList()
+    }
 
     data class Rejected(
         val failure: ProgramRuntimeActorFailure,

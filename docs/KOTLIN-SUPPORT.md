@@ -431,6 +431,7 @@ and the mandatory built-ins module; there is no ambient Kotlin/JVM classpath.
 | `compukter:compiler` | Guest compilation operations |
 | `compukter:process` | Child process execution and explicit exit |
 | `compukter:redstone` | Side-oriented redstone reads, waits, and weak/direct output writes |
+| `compukter:sound` | Bounded one-shot computer beeps with admission feedback |
 
 Ordinary functions in these modules are compiled ahead of Guest projects into
 relocatable platform fragments. Only declarations explicitly marked as native
@@ -468,6 +469,20 @@ cannot become one merely by copying its package, name, and signature.
   these packages have no Guest implementation. Tracking: not scheduled
 
 ## Compukters Guest APIs
+
+- [x] **One-shot sound** — `Sound.beep(note)` and
+  `Sound.beep(note, volume)` emit the vanilla note-block pling from the
+  computer and return whether the server admitted it. Notes are bounded to
+  `0..24`, with `12` as neutral pitch; volume is bounded to `1..100` and
+  defaults to `100`. A computer may emit once every four ticks, the server
+  admits at most 64 computer sounds per tick, and rejected sounds are not
+  queued. The VM validates the scalar request, while the actor carrier performs
+  the Minecraft call on the server thread before resuming the Guest Boolean.
+  Evidence:
+  [`MinimalScriptLoweringTest`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/compiler-k2/src/test/kotlin/ru/lazyhat/compukters/compiler/worker/k2/MinimalScriptLoweringTest.kt),
+  test `sound beep lowers deterministically to a blocking Boolean capability operation`,
+  [`computer.rs`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/host/compukter-vm/src/computer.rs), sound request tests, and
+  [`ComputerSoundGameTest`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/v26_1/v26_1-neoforge/src/gameTest/kotlin/ru/lazyhat/compukters/impl/computer/ComputerSoundGameTest.kt).
 
 - [x] **Redstone GPIO** — `Redstone.<side>` exposes immediate `get()`,
   edge-triggered `await()`, exact `await(level)`, threshold

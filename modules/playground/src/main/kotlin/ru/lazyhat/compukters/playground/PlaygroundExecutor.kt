@@ -136,6 +136,10 @@ class NativePlaygroundExecutor(
                                 HostResponse.UnitSuccess -> {
                                     return PlaygroundExecution.PlatformFailure("terminal input returned no line")
                                 }
+
+                                is HostResponse.BoolSuccess -> {
+                                    return PlaygroundExecution.PlatformFailure("terminal input returned a Boolean")
+                                }
                             }
                         }
 
@@ -207,6 +211,7 @@ class NativePlaygroundExecutor(
         return when (val response = terminal.invoke(compatibilityRequest(WRITE_OPERATION, appended))) {
             HostResponse.UnitSuccess -> null
             is HostResponse.Failure -> PlaygroundExecution.HostFailure(response.kind, response.code)
+            is HostResponse.BoolSuccess -> PlaygroundExecution.PlatformFailure("terminal output returned a Boolean")
             is HostResponse.StringSuccess -> PlaygroundExecution.PlatformFailure("terminal output returned an input line")
         }
     }

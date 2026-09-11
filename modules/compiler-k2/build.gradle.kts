@@ -286,6 +286,7 @@ val whenConformanceArtifact = layout.buildDirectory.file("generated/conformance/
 val argvConformanceArtifact = layout.buildDirectory.file("generated/conformance/argv.cpkt")
 val platformScalarConformanceArtifact = layout.buildDirectory.file("generated/conformance/platform-scalar.cpkt")
 val redstoneConformanceArtifact = layout.buildDirectory.file("generated/conformance/redstone.cpkt")
+val soundConformanceArtifact = layout.buildDirectory.file("generated/conformance/sound.cpkt")
 val intLoopsConformanceArtifact = layout.buildDirectory.file("generated/conformance/kotlin-int-loops.cpkt")
 val intArrayConformanceArtifact = layout.buildDirectory.file("generated/conformance/kotlin-int-array.cpkt")
 val bootArtifact = layout.buildDirectory.file("generated/system/boot.cpkt")
@@ -402,6 +403,22 @@ val generateRedstoneConformanceArtifact = tasks.register<Test>("generateRedstone
     doFirst {
         systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
         systemProperty("compukter.vm.redstoneArtifact", redstoneConformanceArtifact.get().asFile.absolutePath)
+    }
+}
+
+val generateSoundConformanceArtifact = tasks.register<Test>("generateSoundConformanceArtifact") {
+    description = "Compiles the deterministic sound program for GameTest conformance."
+    group = "verification"
+    dependsOn(tasks.jar)
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("*sound beep lowers deterministically to a blocking Boolean capability operation*")
+    inputs.file(workerJar)
+    outputs.file(soundConformanceArtifact)
+    doFirst {
+        systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
+        systemProperty("compukter.vm.soundArtifact", soundConformanceArtifact.get().asFile.absolutePath)
     }
 }
 

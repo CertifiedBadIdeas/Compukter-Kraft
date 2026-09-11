@@ -117,8 +117,9 @@ counters and gauges for the current server service rather than an equal-CPU or d
 
 `ActorProgramComputer` is the asynchronous carrier implementation for that migration. Its server-side state is an
 observation from actor replies, and terminal, filesystem, deployment, and input requests return futures. It keeps at
-most one advance in flight, suppresses obsolete lifecycle replies, and performs redstone world commits on its owning
-server thread. A full actor mailbox retains the redstone acknowledgement for retry without repeating the mutation.
+most one advance in flight, suppresses obsolete lifecycle replies, and performs redstone and sound world actions on
+its owning server thread. A full actor mailbox retains the world-action acknowledgement for retry without repeating
+the mutation.
 Its close future reports the final filesystem generation after accepted work drains and native resources close; this
 barrier does not depend on server result pumping and may complete on a worker thread.
 
@@ -159,6 +160,12 @@ changed-mask-plus-levels packet; output requests are reduced in publication orde
 loader-independent host port at most once per computer per tick. A successful physical commit is confirmed to Rust
 before every original blocking request resumes. VM halt, fault, shutdown, reboot, and replacement never synthesize a
 zero output.
+
+One-shot sound requests cross the same actor boundary as immutable `(note, volume)` batches. Minecraft emits the
+vanilla note-block pling in the block sound category, using equal-temperament pitch around neutral note 12, before the
+VM task receives its Boolean admission result. Each loaded computer has a four-tick cooldown, and one server-wide
+counter admits at most 64 computer sounds per tick. Rejected sounds return `false` immediately and are never queued;
+unloaded block entities retain no sound state or background work.
 
 The client renders the fixed 51x19 grid in a centered compact panel while the world remains visible through a
 translucent dim layer. A separate footer presents rolling `CPU` utilization, current Guest heap and virtual-disk
@@ -259,7 +266,7 @@ their existing resource counters once, and wakes them with an ordinary Text even
 `/rom/vmbench` workload to at most 1000 loaded physical computers in a bounded area. The harness owns no persistent
 computer identity, never loads chunks, and does not provide a guest-visible fleet protocol.
 
-Terminal, standard output and error, redstone, process, filesystem, and compiler declarations live in the
+Terminal, standard output and error, redstone, sound, process, filesystem, and compiler declarations live in the
 `guest-platform` bundle as separately identifiable modules. Compilation and IDE analysis resolve the same module graph
 and consume the same Kotlin API surface. General stream handles, pipes, process redirection, and third-party addon
 bundles remain later layers.

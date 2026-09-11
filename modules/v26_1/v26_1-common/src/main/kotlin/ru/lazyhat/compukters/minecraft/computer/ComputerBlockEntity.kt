@@ -21,6 +21,8 @@ package ru.lazyhat.compukters.minecraft.computer
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.server.level.ServerLevel
+import net.minecraft.sounds.SoundEvents
+import net.minecraft.sounds.SoundSource
 import net.minecraft.world.level.block.entity.BlockEntity
 import net.minecraft.world.level.block.entity.BlockEntityType
 import net.minecraft.world.level.block.state.BlockState
@@ -32,6 +34,9 @@ import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandid
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneHostPort
+import ru.lazyhat.compukters.core.device.runtime.program.SoundCommitResult
+import ru.lazyhat.compukters.core.device.runtime.program.SoundHostPort
+import ru.lazyhat.compukters.core.device.runtime.program.SoundRequest
 import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
@@ -40,6 +45,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import java.util.concurrent.CompletableFuture
+import kotlin.math.pow
 
 open class ComputerBlockEntity internal constructor(
     type: BlockEntityType<*>,
@@ -80,7 +86,9 @@ open class ComputerBlockEntity internal constructor(
     private var sampledRedstoneInputs = IntArray(RedstoneWire.SIDE_COUNT)
     private var dirtyRedstoneInputs = RedstoneWire.ALL_SIDES_MASK
     private var carrierRetryTicks = 0
+    private val soundCooldown = SoundCooldown(SOUND_COOLDOWN_TICKS)
     private val redstoneHostPort = RedstoneHostPort(::commitRedstoneOutput)
+    private val soundHostPort = SoundHostPort(::emitSounds)
 
     var terminalMachineId: Long? = null
         private set
@@ -247,6 +255,7 @@ open class ComputerBlockEntity internal constructor(
                 stateSink = { _, state -> runtimeState = state },
                 filesystem = filesystem,
                 redstoneHostPort = redstoneHostPort,
+                soundHostPort = soundHostPort,
                 initialRedstoneOutput = committedRedstoneOutput,
             )
         if (created == null) return null
@@ -293,6 +302,30 @@ open class ComputerBlockEntity internal constructor(
         return RedstoneCommitResult.Committed
     }
 
+    private fun emitSounds(requests: List<SoundRequest>): SoundCommitResult {
+        val serverLevel = requireNotNull(level as? ServerLevel) { "sound emission requires a server level" }
+        check(serverLevel.server.isSameThread) { "sound emission must run on the server thread" }
+        val tick = serverLevel.server.tickCount.toLong()
+        val admissions =
+            requests.map { request ->
+                if (!soundCooldown.isReady(tick) || !ComputerSoundBudget.tryAcquire(serverLevel, tick)) {
+                    false
+                } else {
+                    serverLevel.playSound(
+                        null,
+                        blockPos,
+                        SoundEvents.NOTE_BLOCK_PLING.value(),
+                        SoundSource.BLOCKS,
+                        request.volume / 100.0f,
+                        2.0.pow((request.note - 12) / 12.0).toFloat(),
+                    )
+                    soundCooldown.markEmitted(tick)
+                    true
+                }
+            }
+        return SoundCommitResult.Completed(admissions)
+    }
+
     private fun closeCarrier() {
         val current = carrier
         carrier = null
@@ -326,6 +359,7 @@ open class ComputerBlockEntity internal constructor(
         const val ROOT_KEY = "compukters"
         const val REDSTONE_OUTPUT_KEY = "redstoneOutput"
         const val CARRIER_RETRY_INTERVAL_TICKS = 20
+        const val SOUND_COOLDOWN_TICKS = 4
 
         fun neverStarted(): ProgramComputerState = ProgramComputerState.PoweredOff(ProgramComputerStopReason.NeverStarted)
     }

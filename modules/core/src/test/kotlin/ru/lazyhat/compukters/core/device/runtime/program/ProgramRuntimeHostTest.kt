@@ -161,6 +161,56 @@ class ProgramRuntimeHostTest {
     }
 
     @Test
+    fun `deferred sound batch suspends advancement and resumes each task with its admission`() {
+        val requests = listOf(sound(1, 12, 100, 2), sound(2, 24, 50, 3))
+        val session = ScriptedSession(outcomes = listOf(VmOutcome.HostRequestBatch(requests), VmOutcome.Halted(null)))
+        var emitted: List<SoundRequest>? = null
+        val host =
+            ProgramRuntimeHost(
+                sessionFactory = ProgramVmSessionFactory { session },
+                soundHostPort =
+                    SoundHostPort { sounds ->
+                        emitted = sounds
+                        SoundCommitResult.Deferred
+                    },
+            )
+        host.start(byteArrayOf(1))
+
+        assertEquals(ProgramRuntimeState.Running, host.serverTick())
+        assertEquals(listOf(SoundRequest(12, 100), SoundRequest(24, 50)), emitted)
+        assertEquals(emptyList(), session.responses)
+        assertEquals(ProgramRuntimeState.Running, host.serverTick())
+        assertEquals(1, session.advances.size)
+
+        assertTrue(host.completeSound(SoundCommitResult.Completed(listOf(true, false))))
+        assertEquals(
+            listOf(
+                response(2, 1, HostResponse.BoolSuccess(true)),
+                response(3, 2, HostResponse.BoolSuccess(false)),
+            ),
+            session.responses,
+        )
+        assertEquals(ProgramRuntimeState.Halted(null), host.serverTick())
+    }
+
+    @Test
+    fun `sound completion rejects a mismatched admission count without resuming the VM`() {
+        val session = ScriptedSession(outcomes = listOf(VmOutcome.HostRequestBatch(listOf(sound(1, 12, 100)))))
+        val host =
+            ProgramRuntimeHost(
+                sessionFactory = ProgramVmSessionFactory { session },
+                soundHostPort = SoundHostPort { SoundCommitResult.Deferred },
+            )
+        host.start(byteArrayOf(1))
+        host.serverTick()
+
+        assertTrue(host.completeSound(SoundCommitResult.Completed(emptyList())))
+        assertEquals(ProgramRuntimeState.Failed(ProgramFailure.Bridge("sound completion size mismatch")), host.state)
+        assertEquals(emptyList(), session.responses)
+        assertEquals(1, session.closeCalls)
+    }
+
+    @Test
     fun `redstone batch commits once confirms before every success and stops this tick`() {
         val events = mutableListOf<String>()
         val requests =
@@ -1084,6 +1134,7 @@ class ProgramRuntimeHostTest {
 
     private companion object {
         val REDSTONE = CapabilityIdentity("compukter", "redstone", 1, 0)
+        val SOUND = CapabilityIdentity("compukter", "sound", 1, 0)
 
         fun redstoneSide(
             id: Long,
@@ -1095,6 +1146,13 @@ class ProgramRuntimeHostTest {
             id: Long,
             packed: Int,
         ): VmHostRequest = VmHostRequest(id, REDSTONE, 7, listOf(VmValue.I32(packed)))
+
+        fun sound(
+            id: Long,
+            note: Int,
+            volume: Int,
+            taskId: Int = 1,
+        ): VmHostRequest = VmHostRequest(id, SOUND, 0, listOf(VmValue.I32(note), VmValue.I32(volume)), taskId)
 
         fun fakeDeploymentCandidate(): ProgramDeploymentCandidate =
             object : ProgramDeploymentCandidate {

@@ -77,9 +77,8 @@ class MinimalScriptLoweringTest {
                 import compukter.sound.Sound
 
                 fun main() {
-                    if (Sound.beep(12)) {
-                        Sound.beep(24, 50)
-                    }
+                    println(Sound.beep(12))
+                    println(Sound.beep(24, 50))
                 }
                 """.trimIndent()
             val first = adapter.compile(request(source))
@@ -90,6 +89,9 @@ class MinimalScriptLoweringTest {
             assertContentEquals(artifact, assertNotNull(second.artifact).toByteArray())
             assertTrue(first.diagnostics.none { it.severity.name == "ERROR" }, first.diagnostics.toString())
             assertEquals(1, opcodes.count { it == 0xe9 }, "the shared beep implementation must block on its VM task: $opcodes")
+            System.getProperty("compukter.vm.soundArtifact")?.let { output ->
+                Path.of(output).also { it.parent.createDirectories() }.writeBytes(artifact)
+            }
         }
 
     @Test

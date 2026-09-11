@@ -124,6 +124,10 @@ object ComputerBlockGameTest {
             ComputerRedstoneGameTest(testData),
         )
         event.registerTest(
+            Identifier.fromNamespaceAndPath(MOD_ID, "computer_sound"),
+            ComputerSoundGameTest(testData),
+        )
+        event.registerTest(
             Identifier.fromNamespaceAndPath(MOD_ID, "vm_actor_service"),
             VmActorServiceGameTest(testData),
         )

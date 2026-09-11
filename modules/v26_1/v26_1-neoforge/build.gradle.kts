@@ -36,6 +36,7 @@ plugins {
 
 val gameTest by sourceSets.creating
 val redstoneConformanceArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/redstone.cpkt")
+val soundConformanceArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/sound.cpkt")
 
 kotlin.target.compilations.named(gameTest.name) {
     associateWith(kotlin.target.compilations.getByName("main"))
@@ -43,7 +44,11 @@ kotlin.target.compilations.named(gameTest.name) {
 
 tasks.named<ProcessResources>(gameTest.processResourcesTaskName) {
     dependsOn(":compiler-k2:generateRedstoneConformanceArtifact")
+    dependsOn(":compiler-k2:generateSoundConformanceArtifact")
     from(redstoneConformanceArtifact) {
+        into("fixtures")
+    }
+    from(soundConformanceArtifact) {
         into("fixtures")
     }
     from(rootProject.layout.projectDirectory.file("host/compukter-vm/tests/fixtures/filesystem-write.cpkt")) {

@@ -33,6 +33,7 @@ import ru.lazyhat.compukters.core.device.runtime.program.ProgramDeploymentCandid
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneHostPort
+import ru.lazyhat.compukters.core.device.runtime.program.SoundHostPort
 import ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing
 import ru.lazyhat.compukters.lang.runtime.fs.VmFileChunk
 import ru.lazyhat.compukters.lang.runtime.fs.VmFileStat
@@ -123,6 +124,7 @@ internal fun interface ComputerCarrierFactory {
         stateSink: ProgramComputerStateSink,
         filesystem: ComputerFileSystemContext?,
         redstoneHostPort: RedstoneHostPort,
+        soundHostPort: SoundHostPort,
         initialRedstoneOutput: Int,
     ): ComputerCarrier?
 }
@@ -134,6 +136,7 @@ internal object RuntimeComputerCarrierFactory : ComputerCarrierFactory {
         stateSink: ProgramComputerStateSink,
         filesystem: ComputerFileSystemContext?,
         redstoneHostPort: RedstoneHostPort,
+        soundHostPort: SoundHostPort,
         initialRedstoneOutput: Int,
     ): ComputerCarrier? {
         val context = requireNotNull(filesystem) { "production computer boot requires a filesystem context" }
@@ -149,7 +152,7 @@ internal object RuntimeComputerCarrierFactory : ComputerCarrierFactory {
         return ActorComputerCarrier(
             deviceId,
             stateSink,
-            ActorProgramComputer(context.actorService, lease, redstoneHostPort),
+            ActorProgramComputer(context.actorService, lease, redstoneHostPort, soundHostPort),
         )
     }
 }

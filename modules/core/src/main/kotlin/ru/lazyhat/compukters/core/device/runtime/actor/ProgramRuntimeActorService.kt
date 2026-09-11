@@ -23,6 +23,9 @@ import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeHost
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramTickBudget
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneCommitResult
 import ru.lazyhat.compukters.core.device.runtime.program.RedstoneHostPort
+import ru.lazyhat.compukters.core.device.runtime.program.SoundCommitResult
+import ru.lazyhat.compukters.core.device.runtime.program.SoundHostPort
+import ru.lazyhat.compukters.core.device.runtime.program.SoundRequest
 import ru.lazyhat.compukters.lang.runtime.fs.WorldFileSystemStore
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -70,6 +73,7 @@ class ProgramRuntimeActorService(
         initialRedstoneOutput: Int = 0,
     ): ProgramRuntimeActorLease? {
         val port = ActorRedstoneHostPort()
+        val soundPort = ActorSoundHostPort()
         val host =
             ProgramRuntimeHost(
                 store = store,
@@ -78,17 +82,19 @@ class ProgramRuntimeActorService(
                 tickBudget = tickBudget,
                 compilerRouter = compilerRouter,
                 redstoneHostPort = port,
+                soundHostPort = soundPort,
                 initialRedstoneOutput = initialRedstoneOutput,
             )
-        return attach(endpoint, host, port)
+        return attach(endpoint, host, port, soundPort)
     }
 
     internal fun attach(
         endpoint: VmActorEndpoint,
         host: ProgramRuntimeHost,
         port: ActorRedstoneHostPort? = null,
+        soundPort: ActorSoundHostPort? = null,
     ): ProgramRuntimeActorLease? {
-        val processor = ProgramRuntimeActorProcessor(host, port)
+        val processor = ProgramRuntimeActorProcessor(host, port, soundPort)
         if (!scheduler.register(endpoint, processor)) return null
         return ProgramRuntimeActorLease(endpoint, processor.closed) { scheduler.unregister(endpoint) }
     }
@@ -102,7 +108,12 @@ class ProgramRuntimeActorService(
         require(preparedCommand.requestId == requestId) { "runtime command factory returned a mismatched request id" }
         val address = RequestAddress(endpoint, requestId)
         val future = CompletableFuture<ProgramRuntimeActorReply>()
-        val pendingRequest = PendingRequest(future, preparedCommand is ProgramRuntimeActorCommand.CompleteRedstoneOutput)
+        val pendingRequest =
+            PendingRequest(
+                future,
+                preparedCommand is ProgramRuntimeActorCommand.CompleteRedstoneOutput ||
+                    preparedCommand is ProgramRuntimeActorCommand.CompleteSound,
+            )
         check(pending.putIfAbsent(address, pendingRequest) == null) { "runtime request id collision" }
         val submission = scheduler.submit(endpoint, preparedCommand)
         if (submission != VmActorSubmission.ACCEPTED) {
@@ -129,7 +140,13 @@ class ProgramRuntimeActorService(
                     val reply = event.value
                     val request = pending.remove(RequestAddress(event.endpoint, reply.requestId)) ?: return@forEach
                     if (request.completesWorldRequest) deferredWorldRequests.remove(event.endpoint)
-                    if (reply.value is ProgramRuntimeActorValue.RedstoneOutputRequested && deferredWorldRequests.add(event.endpoint)) {
+                    if (
+                        (
+                            reply.value is ProgramRuntimeActorValue.RedstoneOutputRequested ||
+                                reply.value is ProgramRuntimeActorValue.SoundRequested
+                        ) &&
+                        deferredWorldRequests.add(event.endpoint)
+                    ) {
                         totalDeferredWorldRequests.incrementAndGet()
                     }
                     request.future.complete(reply)
@@ -190,7 +207,8 @@ class ProgramRuntimeActorService(
                 this is ProgramRuntimeActorCommand.SendTerminalText ||
                 this is ProgramRuntimeActorCommand.SubmitCanonicalLine ||
                 this is ProgramRuntimeActorCommand.SubmitRedstoneInput ||
-                this is ProgramRuntimeActorCommand.CompleteRedstoneOutput
+                this is ProgramRuntimeActorCommand.CompleteRedstoneOutput ||
+                this is ProgramRuntimeActorCommand.CompleteSound
     }
 }
 
@@ -215,4 +233,16 @@ internal class ActorRedstoneHostPort : RedstoneHostPort {
     }
 
     fun takeRequestedOutput(): Int? = requestedOutput.also { requestedOutput = null }
+}
+
+internal class ActorSoundHostPort : SoundHostPort {
+    private var requestedSounds: List<SoundRequest>? = null
+
+    override fun emit(requests: List<SoundRequest>): SoundCommitResult {
+        check(requestedSounds == null) { "sound actor already owns a deferred request batch" }
+        requestedSounds = requests.toList()
+        return SoundCommitResult.Deferred
+    }
+
+    fun takeRequestedSounds(): List<SoundRequest>? = requestedSounds.also { requestedSounds = null }
 }
