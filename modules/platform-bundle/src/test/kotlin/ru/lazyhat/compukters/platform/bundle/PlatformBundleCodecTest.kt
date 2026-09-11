@@ -50,6 +50,54 @@ class PlatformBundleCodecTest {
     }
 
     @Test
+    fun `int default arguments round trip signed boundaries and affect module identity`() {
+        val base = terminal()
+        val defaults =
+            listOf(
+                PlatformDefaultArgument.IntValue(Int.MIN_VALUE),
+                PlatformDefaultArgument.IntValue(100),
+                PlatformDefaultArgument.IntValue(Int.MAX_VALUE),
+            )
+        val declaration = base.declarations.first().copy(defaultArguments = defaults)
+        val changed = base.copy(declarations = listOf(declaration) + base.declarations.drop(1))
+        val bundle = PlatformBundleCodec.assemble("2.4", PlatformBundleCodec.SUPPORTED_PLATFORM_ABI, builtins(), listOf(ranges(), changed))
+        val decoded = PlatformBundleCodec.decode(PlatformBundleCodec.encode(bundle))
+
+        assertEquals(
+            defaults,
+            decoded.modules
+                .single { it.id == changed.id }
+                .declarations
+                .single { it.symbol == declaration.symbol }
+                .defaultArguments,
+        )
+        assertNotEquals(PlatformBundleCodec.moduleContentHash(base), PlatformBundleCodec.moduleContentHash(changed))
+    }
+
+    @Test
+    fun `decoder rejects unknown and truncated int default arguments`() {
+        val base = terminal()
+        val declaration =
+            base.declarations.first().copy(
+                defaultArguments = listOf(PlatformDefaultArgument.IntValue(0x12345678)),
+            )
+        val changed = base.copy(declarations = listOf(declaration) + base.declarations.drop(1))
+        val bundle = PlatformBundleCodec.assemble("2.4", PlatformBundleCodec.SUPPORTED_PLATFORM_ABI, builtins(), listOf(ranges(), changed))
+        val encoded = PlatformBundleCodec.encode(bundle)
+        val encodedDefault = byteArrayOf(2, 0x78, 0x56, 0x34, 0x12)
+        val defaultOffset = encoded.indexOfSequence(encodedDefault)
+        assertTrue(defaultOffset >= 0, "encoded Int default not found")
+
+        val unknownTag = encoded.copyOf().also { it[defaultOffset] = 99 }
+        val unknownFailure = assertFailsWith<IllegalArgumentException> { PlatformBundleCodec.decode(unknownTag) }
+        assertTrue(unknownFailure.message.orEmpty().contains("invalid platform default argument tag"))
+
+        val truncated = encoded.copyOf(defaultOffset + encodedDefault.size - 1)
+        val truncatedFailure = assertFailsWith<IllegalArgumentException> { PlatformBundleCodec.decode(truncated) }
+        assertTrue(truncatedFailure.message.orEmpty().contains("truncated platform bundle"))
+    }
+
+    @Test
     fun `completion declarations round trip canonically and affect module identity`() {
         val base = terminal()
         val println =
@@ -395,3 +443,8 @@ class PlatformBundleCodecTest {
         val RANGES = PlatformModuleId("stdlib", "ranges")
     }
 }
+
+private fun ByteArray.indexOfSequence(sequence: ByteArray): Int =
+    indices.firstOrNull { start ->
+        start <= size - sequence.size && sequence.indices.all { offset -> this[start + offset] == sequence[offset] }
+    } ?: -1

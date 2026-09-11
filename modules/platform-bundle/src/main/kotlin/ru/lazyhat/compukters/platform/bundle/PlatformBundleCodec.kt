@@ -31,7 +31,7 @@ import java.security.MessageDigest
 object PlatformBundleCodec {
     const val SUPPORTED_PLATFORM_ABI = 1
 
-    private const val FORMAT_VERSION = 4
+    private const val FORMAT_VERSION = 5
     private const val MAX_BUNDLE_BYTES = 128 * 1024 * 1024
     private const val MAX_BINARY_BYTES = 64 * 1024 * 1024
     private const val MAX_TEXT_BYTES = 1024 * 1024
@@ -197,6 +197,8 @@ object PlatformBundleCodec {
                 }
                 declaration.defaultArguments.filterNotNull().forEach { argument ->
                     when (argument) {
+                        is PlatformDefaultArgument.IntValue -> {}
+
                         is PlatformDefaultArgument.EnumEntry -> {
                             strictUtf8(argument.symbol, "platform enum default argument")
                         }
@@ -361,6 +363,11 @@ object PlatformBundleCodec {
                             output.write(1)
                             string(argument.symbol)
                         }
+
+                        is PlatformDefaultArgument.IntValue -> {
+                            output.write(2)
+                            i32(argument.value)
+                        }
                     }
                 }
             }
@@ -506,6 +513,7 @@ object PlatformBundleCodec {
                                 when (val tag = u8()) {
                                     0 -> null
                                     1 -> PlatformDefaultArgument.EnumEntry(string("platform enum default argument"))
+                                    2 -> PlatformDefaultArgument.IntValue(i32())
                                     else -> throw IllegalArgumentException("invalid platform default argument tag: $tag")
                                 }
                             },

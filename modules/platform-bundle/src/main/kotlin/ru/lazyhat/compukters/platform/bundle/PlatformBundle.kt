@@ -62,6 +62,10 @@ data class PlatformDeclaration(
 )
 
 sealed interface PlatformDefaultArgument {
+    data class IntValue(
+        val value: Int,
+    ) : PlatformDefaultArgument
+
     data class EnumEntry(
         val symbol: String,
     ) : PlatformDefaultArgument

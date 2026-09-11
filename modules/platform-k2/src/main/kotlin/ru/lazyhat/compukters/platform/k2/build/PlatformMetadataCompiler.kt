@@ -508,12 +508,17 @@ class PlatformMetadataCompiler {
             function.valueParameters.map { parameter ->
                 parameter.defaultValue?.let { expression ->
                     val reference = expression.text
-                    require(reference.matches(QUALIFIED_IDENTIFIER)) {
-                        "platform default argument must be a qualified enum entry: $reference"
+                    val intValue = parseDefaultIntLiteral(reference)
+                    if (intValue != null) {
+                        PlatformDefaultArgument.IntValue(intValue)
+                    } else {
+                        require(reference.matches(QUALIFIED_IDENTIFIER)) {
+                            "platform default argument must be a qualified enum entry or Int literal: $reference"
+                        }
+                        PlatformDefaultArgument.EnumEntry(
+                            if (reference.startsWith("$packageName.")) reference else "$packageName.$reference",
+                        )
                     }
-                    PlatformDefaultArgument.EnumEntry(
-                        if (reference.startsWith("$packageName.")) reference else "$packageName.$reference",
-                    )
                 }
             }
         if (values.none { it != null }) return emptyList()
@@ -631,7 +636,7 @@ class PlatformMetadataCompiler {
 }
 
 object PlatformMetadataCodec {
-    private const val FORMAT = 3
+    private const val FORMAT = 4
     private val MAGIC = byteArrayOf('C'.code.toByte(), 'P'.code.toByte(), 'M'.code.toByte(), 'D'.code.toByte())
 
     fun encode(metadata: DecodedPlatformMetadata): ImmutableBytes {
@@ -660,6 +665,11 @@ object PlatformMetadataCodec {
                                 is PlatformDefaultArgument.EnumEntry -> {
                                     sink.writeByte(1)
                                     sink.string(argument.symbol)
+                                }
+
+                                is PlatformDefaultArgument.IntValue -> {
+                                    sink.writeByte(2)
+                                    sink.writeInt(argument.value)
                                 }
                             }
                         }
@@ -699,6 +709,7 @@ object PlatformMetadataCodec {
                                 when (val tag = source.readUnsignedByte()) {
                                     0 -> null
                                     1 -> PlatformDefaultArgument.EnumEntry(source.string())
+                                    2 -> PlatformDefaultArgument.IntValue(source.readInt())
                                     else -> throw IllegalArgumentException("invalid platform default argument tag: $tag")
                                 }
                             },
@@ -772,6 +783,25 @@ private fun DataInputStream.bytes(label: String): ByteArray {
 }
 
 private fun String.canonicalType(): String = replace(Regex("\\s+"), "")
+
+private fun parseDefaultIntLiteral(source: String): Int? {
+    if (!source.matches(INT_LITERAL)) return null
+    val compact = source.replace("_", "")
+    val negative = compact.startsWith('-')
+    val unsigned = compact.removePrefix("-").removePrefix("+")
+    val (digits, radix) =
+        when {
+            unsigned.startsWith("0x", ignoreCase = true) -> unsigned.drop(2) to 16
+            unsigned.startsWith("0b", ignoreCase = true) -> unsigned.drop(2) to 2
+            else -> unsigned to 10
+        }
+    if (digits.isEmpty()) return null
+    val magnitude = digits.toLongOrNull(radix) ?: return null
+    val value = if (negative) -magnitude else magnitude
+    return value.takeIf { it in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong() }?.toInt()
+}
+
+private val INT_LITERAL = Regex("[+-]?(?:[0-9](?:_?[0-9])*|0[xX][0-9a-fA-F](?:_?[0-9a-fA-F])*|0[bB][01](?:_?[01])*)")
 
 private fun KtDeclaration.declarationStartOffset(): Int =
     modifierList?.textRange?.startOffset

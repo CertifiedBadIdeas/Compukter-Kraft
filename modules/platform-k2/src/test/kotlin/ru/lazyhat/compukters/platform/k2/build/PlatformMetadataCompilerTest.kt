@@ -22,6 +22,8 @@ import org.jetbrains.kotlin.fir.resolve.providers.symbolProvider
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import ru.lazyhat.compukters.platform.bundle.PlatformCompletionKind
+import ru.lazyhat.compukters.platform.bundle.PlatformDeclaration
+import ru.lazyhat.compukters.platform.bundle.PlatformDefaultArgument
 import ru.lazyhat.compukters.platform.bundle.PlatformModule
 import ru.lazyhat.compukters.platform.bundle.PlatformModuleId
 import ru.lazyhat.compukters.platform.bundle.PlatformScalarConstant
@@ -139,6 +141,35 @@ class PlatformMetadataCompilerTest {
         assertFailsWith<IllegalArgumentException> {
             PlatformMetadataCodec.validateAgainstSources(mismatched, listOf(source("api.kt", "package sample\nexternal fun ping(): Int")))
         }
+    }
+
+    @Test
+    fun `metadata decoder rejects unknown and truncated int defaults`() {
+        val declaration =
+            PlatformDeclaration(
+                symbol = "sample.configure",
+                signature = "fun(Int):Int",
+                module = module,
+                sourcePath = "api.kt",
+                startUtf16 = 0,
+                endUtf16 = 1,
+                trustedExternal = false,
+                defaultArguments = listOf(PlatformDefaultArgument.IntValue(0x12345678)),
+            )
+        val encoded =
+            PlatformMetadataCodec
+                .encode(DecodedPlatformMetadata(module, listOf(declaration), listOf(declaration.symbol)))
+                .toByteArray()
+        val encodedDefault = byteArrayOf(2, 0x12, 0x34, 0x56, 0x78)
+        val defaultOffset = encoded.indexOfSequence(encodedDefault)
+        assertTrue(defaultOffset >= 0, "encoded Int default not found")
+
+        val unknownTag = ImmutableBytes.of(encoded.copyOf().also { it[defaultOffset] = 99 })
+        val unknownFailure = assertFailsWith<IllegalArgumentException> { PlatformMetadataCodec.decode(unknownTag) }
+        assertTrue(unknownFailure.message.orEmpty().contains("invalid platform default argument tag"))
+
+        val truncated = ImmutableBytes.of(encoded.copyOf(defaultOffset + encodedDefault.size - 1))
+        assertFailsWith<java.io.EOFException> { PlatformMetadataCodec.decode(truncated) }
     }
 
     @Test
@@ -287,3 +318,8 @@ class PlatformMetadataCompilerTest {
         content: String,
     ): PlatformSource = PlatformSource(path, ImmutableBytes.of(content.encodeToByteArray()))
 }
+
+private fun ByteArray.indexOfSequence(sequence: ByteArray): Int =
+    indices.firstOrNull { start ->
+        start <= size - sequence.size && sequence.indices.all { offset -> this[start + offset] == sequence[offset] }
+    } ?: -1

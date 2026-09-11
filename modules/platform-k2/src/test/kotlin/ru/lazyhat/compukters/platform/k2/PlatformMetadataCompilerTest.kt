@@ -21,10 +21,12 @@ package ru.lazyhat.compukters.platform.k2
 import ru.lazyhat.compukters.platform.bundle.PlatformDefaultArgument
 import ru.lazyhat.compukters.platform.bundle.PlatformModuleId
 import ru.lazyhat.compukters.platform.bundle.PlatformSource
+import ru.lazyhat.compukters.platform.k2.build.PlatformMetadataCodec
 import ru.lazyhat.compukters.platform.k2.build.PlatformMetadataCompiler
 import ru.lazyhat.compukters.worker.value.ImmutableBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -59,6 +61,70 @@ class PlatformMetadataCompilerTest {
             listOf(null, null, PlatformDefaultArgument.EnumEntry("sample.Api.Power.WEAK")),
             set.defaultArguments,
         )
+    }
+
+    @Test
+    fun `int defaults retain decimal hexadecimal and signed values`() {
+        val metadata =
+            PlatformMetadataCompiler().compile(
+                PlatformModuleId("sample", "defaults"),
+                listOf(
+                    PlatformSource(
+                        "Defaults.kt",
+                        ImmutableBytes.of(
+                            """
+                            package sample
+
+                            object Api {
+                                fun configure(decimal: Int = 100, hexadecimal: Int = 0x18, minimum: Int = -2147483648) = decimal
+                            }
+                            """.trimIndent().encodeToByteArray(),
+                        ),
+                    ),
+                ),
+            )
+
+        val configure = metadata.declarations.single { it.symbol == "sample.Api.configure" }
+        val defaults =
+            listOf(
+                PlatformDefaultArgument.IntValue(100),
+                PlatformDefaultArgument.IntValue(24),
+                PlatformDefaultArgument.IntValue(Int.MIN_VALUE),
+            )
+        assertEquals(defaults, configure.defaultArguments)
+        assertEquals(
+            defaults,
+            PlatformMetadataCodec
+                .decode(metadata.metadata)
+                .declarations
+                .single { it.symbol == "sample.Api.configure" }
+                .defaultArguments,
+        )
+    }
+
+    @Test
+    fun `unsupported platform default expressions remain rejected`() {
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                PlatformMetadataCompiler().compile(
+                    PlatformModuleId("sample", "defaults"),
+                    listOf(
+                        PlatformSource(
+                            "Defaults.kt",
+                            ImmutableBytes.of(
+                                """
+                                package sample
+
+                                fun configuredDefault(): Int = 100
+                                fun configure(value: Int = configuredDefault()) = value
+                                """.trimIndent().encodeToByteArray(),
+                            ),
+                        ),
+                    ),
+                )
+            }
+
+        assertTrue(failure.message.orEmpty().contains("qualified enum entry or Int literal"))
     }
 
     @Test
