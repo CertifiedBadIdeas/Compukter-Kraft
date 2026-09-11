@@ -20,6 +20,7 @@ package ru.lazyhat.compukters.impl.benchmark
 
 import com.mojang.serialization.MapCodec
 import net.minecraft.core.BlockPos
+import net.minecraft.core.Direction
 import net.minecraft.core.Holder
 import net.minecraft.gametest.framework.GameTestHelper
 import net.minecraft.gametest.framework.GameTestInstance
@@ -110,6 +111,32 @@ internal class VmBenchmarkGameTest(
                     }
                 if (!completed) terminals = null
                 helper.assertTrue(completed, "physical computers did not complete the area benchmark")
+            }.thenExecute {
+                terminals = null
+                val position = helper.absolutePos(firstPosition)
+                server.commands.performPrefixedCommand(
+                    server.createCommandSourceStack(),
+                    "compukters vmbench area ${position.x} ${position.y} ${position.z} " +
+                        "${position.x} ${position.y} ${position.z} redstone 2",
+                )
+            }.thenWaitUntil {
+                val signal = helper.level.getSignal(helper.absolutePos(firstPosition), Direction.DOWN)
+                helper.assertTrue(signal == 15, "physical redstone benchmark did not commit its high pulse: signal=$signal")
+            }.thenWaitUntil {
+                val signal = helper.level.getSignal(helper.absolutePos(firstPosition), Direction.DOWN)
+                val pending = terminals ?: listOf(first.terminalFullStateAsync()).also { terminals = it }
+                helper.assertTrue(pending.all { it.isDone }, "physical redstone benchmark terminal snapshot is still pending")
+                val output = terminalText(pending.single().getNow(null))
+                val completed =
+                    signal == 0 &&
+                        first.runtimeState == ProgramComputerState.WaitingForInput &&
+                        output.contains("vmbench redstone: acknowledged transitions=4")
+                if (!completed) terminals = null
+                helper.assertTrue(
+                    completed,
+                    "physical redstone benchmark did not clear its output and return to the shell: " +
+                        "signal=$signal state=${first.runtimeState}",
+                )
             }.thenSucceed()
     }
 

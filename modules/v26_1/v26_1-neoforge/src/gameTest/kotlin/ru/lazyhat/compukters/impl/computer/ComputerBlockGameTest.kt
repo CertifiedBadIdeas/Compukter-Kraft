@@ -316,7 +316,7 @@ object ComputerBlockGameTest {
             advanceUntilInput(computer)
             helper.assertTrue(
                 terminalText(computer.terminalFullState()).endsWith(
-                    "> vmbench cpu 0\nusage: vmbench cpu <rounds 1..1000000>\n>\n",
+                    "> vmbench cpu 0\nusage: vmbench <cpu|redstone> <rounds 1..1000000>\n>\n",
                 ),
                 "vmbench did not reject an invalid round count",
             )
@@ -325,7 +325,7 @@ object ComputerBlockGameTest {
             advanceUntilInput(computer)
             helper.assertTrue(
                 terminalText(computer.terminalFullState()).endsWith(
-                    "> vmbench memory 2\nusage: vmbench cpu <rounds 1..1000000>\n>\n",
+                    "> vmbench memory 2\nusage: vmbench <cpu|redstone> <rounds 1..1000000>\n>\n",
                 ),
                 "vmbench did not reject an invalid workload mode",
             )

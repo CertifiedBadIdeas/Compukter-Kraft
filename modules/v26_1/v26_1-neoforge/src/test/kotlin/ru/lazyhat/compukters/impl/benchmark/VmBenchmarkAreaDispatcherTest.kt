@@ -77,4 +77,31 @@ class VmBenchmarkAreaDispatcherTest {
         }
         assertEquals(0, accesses)
     }
+
+    @Test
+    fun `redstone workload dispatches ordinary redstone benchmark command`() {
+        val submitted = mutableListOf<String>()
+        val access =
+            object : VmBenchmarkAreaAccess {
+                override fun isLoaded(position: BlockPos) = true
+
+                override fun computer(position: BlockPos) =
+                    VmBenchmarkAreaComputer { command ->
+                        submitted += command
+                        CompletableFuture.completedFuture(true)
+                    }
+            }
+
+        val dispatch =
+            VmBenchmarkAreaDispatcher().dispatch(
+                access,
+                BlockPos.ZERO,
+                BlockPos.ZERO,
+                3,
+                VmBenchmarkAreaWorkload.REDSTONE,
+            )
+
+        assertEquals(listOf("/rom/vmbench redstone 3"), submitted)
+        assertEquals(VmBenchmarkAreaResult(1, 0, 0), dispatch.completion.getNow(null))
+    }
 }

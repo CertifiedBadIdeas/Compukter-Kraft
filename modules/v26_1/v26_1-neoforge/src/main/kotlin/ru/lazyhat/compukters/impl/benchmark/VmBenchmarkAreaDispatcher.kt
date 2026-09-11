@@ -37,6 +37,7 @@ internal class VmBenchmarkAreaDispatcher(
         first: BlockPos,
         second: BlockPos,
         rounds: Int,
+        workload: VmBenchmarkAreaWorkload = VmBenchmarkAreaWorkload.CPU,
     ): VmBenchmarkAreaDispatch {
         require(rounds in 1..MAXIMUM_ROUNDS) { "benchmark rounds must be in 1..$MAXIMUM_ROUNDS" }
         val minimum = BlockPos(minOf(first.x, second.x), minOf(first.y, second.y), minOf(first.z, second.z))
@@ -62,7 +63,7 @@ internal class VmBenchmarkAreaDispatcher(
                         limited++
                         continue
                     }
-                    deliveries += computer.submit("/rom/vmbench cpu $rounds").exceptionally { false }
+                    deliveries += computer.submit(workload.command(rounds)).exceptionally { false }
                 }
             }
         }
@@ -93,6 +94,16 @@ internal class VmBenchmarkAreaDispatcher(
         const val MAXIMUM_COMPUTERS = 1_000
         const val MAXIMUM_ROUNDS = 1_000_000
     }
+}
+
+internal enum class VmBenchmarkAreaWorkload(
+    private val argument: String,
+) {
+    CPU("cpu"),
+    REDSTONE("redstone"),
+    ;
+
+    fun command(rounds: Int): String = "/rom/vmbench $argument $rounds"
 }
 
 internal interface VmBenchmarkAreaAccess {

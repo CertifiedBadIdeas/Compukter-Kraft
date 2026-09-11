@@ -107,8 +107,27 @@ internal object VmBenchmarkCommands {
                                                                 BlockPosArgument.getLoadedBlockPos(context, "from"),
                                                                 BlockPosArgument.getLoadedBlockPos(context, "to"),
                                                                 IntegerArgumentType.getInteger(context, "rounds"),
+                                                                VmBenchmarkAreaWorkload.CPU,
                                                             )
                                                         },
+                                                ).then(
+                                                    Commands
+                                                        .literal("redstone")
+                                                        .then(
+                                                            Commands
+                                                                .argument(
+                                                                    "rounds",
+                                                                    IntegerArgumentType.integer(1, MAXIMUM_ROUNDS),
+                                                                ).executes { context ->
+                                                                    area(
+                                                                        context.source,
+                                                                        BlockPosArgument.getLoadedBlockPos(context, "from"),
+                                                                        BlockPosArgument.getLoadedBlockPos(context, "to"),
+                                                                        IntegerArgumentType.getInteger(context, "rounds"),
+                                                                        VmBenchmarkAreaWorkload.REDSTONE,
+                                                                    )
+                                                                },
+                                                        ),
                                                 ),
                                         ),
                                 ),
@@ -197,13 +216,16 @@ internal object VmBenchmarkCommands {
         first: net.minecraft.core.BlockPos,
         second: net.minecraft.core.BlockPos,
         rounds: Int,
+        workload: VmBenchmarkAreaWorkload,
     ): Int =
         runCatching {
-            val dispatch = areaDispatcher.dispatch(MinecraftVmBenchmarkAreaAccess(source.level), first, second, rounds)
+            val dispatch =
+                areaDispatcher.dispatch(MinecraftVmBenchmarkAreaAccess(source.level), first, second, rounds, workload)
             source.sendSuccess(
                 {
                     Component.literal(
-                        "VM benchmark area scanned ${dispatch.scannedPositions} positions, found " +
+                        "VM benchmark area workload=${workload.name.lowercase(Locale.ROOT)} scanned " +
+                            "${dispatch.scannedPositions} positions, found " +
                             "${dispatch.discoveredComputers} computers, scheduled ${dispatch.scheduledComputers}, " +
                             "skipped ${dispatch.unloadedPositions} unloaded positions and limited ${dispatch.limitedComputers}",
                     )
