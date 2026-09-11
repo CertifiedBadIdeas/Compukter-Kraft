@@ -41,6 +41,9 @@ class ProgramRuntimeActorService(
     private val deferredWorldRequests = ConcurrentHashMap.newKeySet<VmActorEndpoint>()
     private val nextRequestId = AtomicLong()
     private val totalDeferredWorldRequests = AtomicLong()
+    private val hostContinuationSamples = AtomicLong()
+    private val totalHostContinuationDelayTicks = AtomicLong()
+    private val maximumHostContinuationDelayTicks = AtomicLong()
     private val rejectedInputRequests = AtomicLong()
     private val lastPumpEvents = AtomicInteger()
     private val lastPumpNanos = AtomicLong()
@@ -170,12 +173,22 @@ class ProgramRuntimeActorService(
 
     fun metrics(): VmActorSchedulerMetrics = scheduler.metrics()
 
+    internal fun recordHostContinuationDelay(delayTicks: Long) {
+        require(delayTicks >= 0) { "host continuation delay must not be negative" }
+        hostContinuationSamples.incrementAndGet()
+        totalHostContinuationDelayTicks.addAndGet(delayTicks)
+        maximumHostContinuationDelayTicks.accumulateAndGet(delayTicks, ::maxOf)
+    }
+
     fun runtimeMetrics(): ProgramRuntimeActorMetrics =
         ProgramRuntimeActorMetrics(
             scheduler = scheduler.metrics(),
             pendingRequests = pending.size,
             deferredWorldRequests = deferredWorldRequests.size,
             totalDeferredWorldRequests = totalDeferredWorldRequests.get(),
+            hostContinuationSamples = hostContinuationSamples.get(),
+            totalHostContinuationDelayTicks = totalHostContinuationDelayTicks.get(),
+            maximumHostContinuationDelayTicks = maximumHostContinuationDelayTicks.get(),
             rejectedInputRequests = rejectedInputRequests.get(),
             lastPumpEvents = lastPumpEvents.get(),
             lastPumpNanos = lastPumpNanos.get(),

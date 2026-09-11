@@ -100,6 +100,7 @@ internal object NeoForgeVmActorServices {
         val scheduler = metrics.scheduler
         val processed = scheduler.processedMessages.coerceAtLeast(1)
         val drained = scheduler.drainedEvents.coerceAtLeast(1)
+        val continuationSamples = metrics.hostContinuationSamples.coerceAtLeast(1)
         LOGGER.debug {
             "VM actors: registered=${scheduler.registeredActors}/${scheduler.maximumActors}, " +
                 "runnable=${scheduler.scheduledActors}, " +
@@ -112,6 +113,9 @@ internal object NeoForgeVmActorServices {
                 "resultMaxUs=${scheduler.maximumResultLatencyNanos / 1_000}, " +
                 "drainedLast=${metrics.lastPumpEvents}, pumpLastUs=${metrics.lastPumpNanos / 1_000}, " +
                 "worldDeferred=${metrics.deferredWorldRequests}, worldTotal=${metrics.totalDeferredWorldRequests}, " +
+                "hostToAdvance=n=${metrics.hostContinuationSamples}/" +
+                "avg=${metrics.totalHostContinuationDelayTicks / continuationSamples}/" +
+                "max=${metrics.maximumHostContinuationDelayTicks} ticks, " +
                 "inputRejected=${metrics.rejectedInputRequests}, mailboxRejected=${scheduler.mailboxFullRejections}"
         }
     }

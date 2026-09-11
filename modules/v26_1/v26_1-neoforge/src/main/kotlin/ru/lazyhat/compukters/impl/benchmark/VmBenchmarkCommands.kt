@@ -347,6 +347,10 @@ internal object VmBenchmarkCommands {
         val resultNanos =
             (metrics.scheduler.totalResultLatencyNanos - baseline.scheduler.totalResultLatencyNanos).coerceAtLeast(0)
         val worldRequests = (metrics.totalDeferredWorldRequests - baseline.totalDeferredWorldRequests).coerceAtLeast(0)
+        val continuationSamples =
+            (metrics.hostContinuationSamples - baseline.hostContinuationSamples).coerceAtLeast(0)
+        val continuationTicks =
+            (metrics.totalHostContinuationDelayTicks - baseline.totalHostContinuationDelayTicks).coerceAtLeast(0)
         val pulseProgress =
             if (expectedWorldRequests == 0L) {
                 ""
@@ -360,6 +364,8 @@ internal object VmBenchmarkCommands {
             "actors=${metrics.scheduler.registeredActors}/${metrics.scheduler.maximumActors} registered/capacity, " +
             "rounds=$rounds, ticks=$elapsedTicks, MSPT=${"%.3f".format(Locale.ROOT, server.currentMspt())}, " +
             "world=$worldRequests, worldDeferred=${metrics.deferredWorldRequests}$pulseProgress, " +
+            "hostToAdvance=n=$continuationSamples/" +
+            "avg=${continuationTicks / continuationSamples.coerceAtLeast(1)} ticks, " +
             "mailbox=${metrics.scheduler.queuedMessages}, results=${metrics.scheduler.queuedResults}, " +
             "workers=${metrics.scheduler.busyWorkers}, queueAvgUs=${queueNanos / processed / 1_000}, " +
             "resultAvgUs=${resultNanos / drained / 1_000}, drainedLast=${metrics.lastPumpEvents}, " +

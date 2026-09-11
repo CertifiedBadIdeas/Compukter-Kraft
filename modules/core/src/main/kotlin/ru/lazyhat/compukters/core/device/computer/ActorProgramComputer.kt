@@ -56,6 +56,8 @@ class ActorProgramComputer(
     private var closeResult: CompletableFuture<Long?>? = null
     private var bootRequest: CompletableFuture<ProgramRuntimeActorReply>? = null
     private var lastAdvanceTick = -1L
+    private var lastObservedServerTick = -1L
+    private var hostCompletionTick: Long? = null
 
     var state: ProgramRuntimeState = ProgramRuntimeState.Idle
         private set
@@ -105,6 +107,7 @@ class ActorProgramComputer(
     fun serverTick(worldTick: Long) {
         checkOwner()
         require(worldTick >= 0)
+        lastObservedServerTick = maxOf(lastObservedServerTick, worldTick)
         if (closeResult != null) return
         if (pendingOutput != null || pendingSound != null) {
             acknowledgeWorldRequest()
@@ -119,6 +122,12 @@ class ActorProgramComputer(
         val currentLifecycle = lifecycle
         val future = send { ProgramRuntimeActorCommand.Advance(it, worldTick) }
         advance = future
+        if (!future.isCompletedExceptionally) {
+            hostCompletionTick?.let { completedAt ->
+                service.recordHostContinuationDelay((worldTick - completedAt).coerceAtLeast(0))
+                hostCompletionTick = null
+            }
+        }
         future.whenComplete { reply, failure ->
             if (advance === future) advance = null
             if (currentLifecycle != lifecycle || closeResult != null) return@whenComplete
@@ -138,6 +147,7 @@ class ActorProgramComputer(
                         }
                     if (currentLifecycle != lifecycle || closeResult != null) return@whenComplete
                     pendingOutput = PendingOutput(reply.requestId, request.packed, result)
+                    hostCompletionTick = lastObservedServerTick
                     acknowledgeWorldRequest()
                 }
 
@@ -152,6 +162,7 @@ class ActorProgramComputer(
                         }
                     if (currentLifecycle != lifecycle || closeResult != null) return@whenComplete
                     pendingSound = PendingSound(reply.requestId, result)
+                    hostCompletionTick = lastObservedServerTick
                     acknowledgeWorldRequest()
                 }
 
@@ -169,6 +180,7 @@ class ActorProgramComputer(
         lifecycle++
         pendingOutput = null
         pendingSound = null
+        hostCompletionTick = null
         val result = lease.closeAsync()
         closeResult = result
         publish(ProgramRuntimeState.Closed)
@@ -227,6 +239,7 @@ class ActorProgramComputer(
         acknowledgement = null
         pendingOutput = null
         pendingSound = null
+        hostCompletionTick = null
         return observe(submitted, lifecycle)
     }
 

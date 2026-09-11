@@ -227,10 +227,18 @@ class ProgramRuntimeActorProcessorTest {
             assertEquals(1, emissions)
             assertEquals(1, service.runtimeMetrics().deferredWorldRequests)
             awaitQueuedResult(service)
+            carrier.serverTick(2)
             service.pump(1)
 
             assertEquals(listOf<HostResponse>(HostResponse.BoolSuccess(true)), session.responses)
             assertEquals(0, service.runtimeMetrics().deferredWorldRequests)
+            carrier.serverTick(3)
+            awaitQueuedResult(service)
+            service.pump(1)
+            val metrics = service.runtimeMetrics()
+            assertEquals(1, metrics.hostContinuationSamples)
+            assertEquals(2, metrics.totalHostContinuationDelayTicks)
+            assertEquals(2, metrics.maximumHostContinuationDelayTicks)
             carrier.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
         }
     }
