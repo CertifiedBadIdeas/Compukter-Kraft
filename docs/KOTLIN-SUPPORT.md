@@ -635,7 +635,8 @@ cannot become one merely by copying its package, name, and signature.
   [`CompletionQueryTest`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/query/CompletionQueryTest.kt),
   tests `qualified completion uses inferred receiver members and applicable extensions`,
   `completion preserves overloads and orders them deterministically`, and
-  `completion gives standard library overloads distinct argument labels`,
+  `completion gives standard library overloads distinct argument labels`, and
+  `completion tolerates synthetic function interfaces from platform libraries`,
   plus
   [`CompletionIntegrationTest`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/integration/CompletionIntegrationTest.kt),
   test `forked worker returns semantic completion`.

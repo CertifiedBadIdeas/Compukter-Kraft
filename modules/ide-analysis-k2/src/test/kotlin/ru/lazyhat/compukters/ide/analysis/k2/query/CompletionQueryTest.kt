@@ -23,6 +23,7 @@ import ru.lazyhat.compukters.ide.analysis.AnalysisQuery
 import ru.lazyhat.compukters.ide.analysis.AnalysisResult
 import ru.lazyhat.compukters.ide.analysis.CompletionKind
 import ru.lazyhat.compukters.ide.analysis.CompletionTrigger
+import ru.lazyhat.compukters.ide.analysis.DeclarationOrigin
 import ru.lazyhat.compukters.ide.editor.EditorDocument
 import ru.lazyhat.compukters.ide.editor.EditorEditResult
 import ru.lazyhat.compukters.ide.editor.EditorRange
@@ -327,6 +328,21 @@ class CompletionQueryTest {
             val items = fixture.complete("main.kt", powerSource.indexOf("Redstone.Power.") + "Redstone.Power.".length).items
 
             assertTrue(items.map { it.insertText }.containsAll(setOf("WEAK", "DIRECT")), items.toString())
+        }
+    }
+
+    @Test
+    fun `completion tolerates synthetic function interfaces from platform libraries`() {
+        val source = "fun main() { Fun }"
+        K2QueryFixture.sourceWithGuestApi(false, "main.kt" to source).use { fixture ->
+            val result = fixture.complete("main.kt", source.indexOf("Fun") + "Fun".length)
+            val function = result.items.single { it.insertText == "Function0" }
+
+            assertEquals(CompletionKind.Interface, function.kind)
+            assertEquals(
+                "kotlin:builtins",
+                assertIs<DeclarationOrigin.Platform>(function.origin).identity.name,
+            )
         }
     }
 

@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaDeclarationSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaFunctionSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KaSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolOrigin
 import org.jetbrains.kotlin.analysis.api.symbols.findClass
 import org.jetbrains.kotlin.analysis.api.symbols.symbol
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
@@ -51,7 +52,12 @@ internal object DeclarationOriginMapper {
         snapshot: AdmittedK2Snapshot,
     ): MappedDeclaration? {
         val navigableSymbol = (symbol as? KaConstructorSymbol)?.containingClassId?.let(::findClass) ?: symbol
-        val declaration = navigableSymbol.psi as? KtNamedDeclaration
+        val declaration =
+            if (navigableSymbol.origin == KaSymbolOrigin.SOURCE) {
+                navigableSymbol.psi as? KtNamedDeclaration
+            } else {
+                null
+            }
         val name = declaration?.nameIdentifier
         val path =
             snapshot.files.entries
