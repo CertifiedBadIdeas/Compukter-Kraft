@@ -357,6 +357,7 @@ internal object VmBenchmarkCommands {
         return "Physical VM area benchmark: $status; workload=$workload, " +
             "delivery=$acceptedComputers accepted/$pendingComputers pending/$rejectedComputers rejected, " +
             "computers=$activeComputers active/$completedComputers completed/$unavailableComputers unavailable, " +
+            "actors=${metrics.scheduler.registeredActors}/${metrics.scheduler.maximumActors} registered/capacity, " +
             "rounds=$rounds, ticks=$elapsedTicks, MSPT=${"%.3f".format(Locale.ROOT, server.currentMspt())}, " +
             "world=$worldRequests, worldDeferred=${metrics.deferredWorldRequests}$pulseProgress, " +
             "mailbox=${metrics.scheduler.queuedMessages}, results=${metrics.scheduler.queuedResults}, " +

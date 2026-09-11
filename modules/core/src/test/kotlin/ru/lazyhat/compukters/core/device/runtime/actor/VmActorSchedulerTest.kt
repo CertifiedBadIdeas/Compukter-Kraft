@@ -311,6 +311,7 @@ class VmActorSchedulerTest {
             }
 
             val metrics = scheduler.metrics()
+            assertEquals(1_000, metrics.maximumActors)
             assertEquals(1_000, metrics.registeredActors)
             assertEquals(0, metrics.scheduledActors)
             assertEquals(0, metrics.queuedMessages)

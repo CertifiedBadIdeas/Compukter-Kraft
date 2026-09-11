@@ -173,6 +173,7 @@ class VmActorScheduler<C : Any, R : Any>(
 
     fun metrics(): VmActorSchedulerMetrics =
         VmActorSchedulerMetrics(
+            maximumActors = config.maximumActors,
             registeredActors = registeredActors.get(),
             scheduledActors = scheduledActors.get(),
             queuedMessages = queuedMessages.get(),

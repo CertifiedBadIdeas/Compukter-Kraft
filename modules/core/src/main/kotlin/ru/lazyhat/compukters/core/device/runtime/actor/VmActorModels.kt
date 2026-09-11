@@ -84,6 +84,7 @@ data class VmActorSchedulerConfig(
 }
 
 data class VmActorSchedulerMetrics(
+    val maximumActors: Int,
     val registeredActors: Int,
     val scheduledActors: Int,
     val queuedMessages: Int,

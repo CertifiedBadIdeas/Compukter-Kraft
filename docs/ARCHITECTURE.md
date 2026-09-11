@@ -110,10 +110,10 @@ Increasing queue limits trades bounded memory for burst tolerance; increasing me
 latency for locality.
 
 Scheduler snapshots read atomic counters and bounded lane sizes without scanning registered actors. Every five seconds
-the debug log reports registered and runnable actors, mailbox and result depths, worker occupancy, average/maximum
-command-queue latency, average/maximum execution time, completed-result latency, the last server pump size and duration,
-deferred world requests, and rejected input/mailbox submissions. These are lifetime counters and gauges for the current
-server service rather than an equal-CPU or delivery-latency contract.
+the debug log reports registered actors together with configured capacity, runnable actors, mailbox and result depths,
+worker occupancy, average/maximum command-queue latency, average/maximum execution time, completed-result latency, the
+last server pump size and duration, deferred world requests, and rejected input/mailbox submissions. These are lifetime
+counters and gauges for the current server service rather than an equal-CPU or delivery-latency contract.
 
 `ActorProgramComputer` is the asynchronous carrier implementation for that migration. Its server-side state is an
 observation from actor replies, and terminal, filesystem, deployment, and input requests return futures. It keeps at
@@ -190,10 +190,12 @@ that point. Store shutdown starts every outstanding drain before waiting for the
 does not wait for VM completion; the server-stopping hook alone permits a bounded ten-second wait. A failed close
 barrier keeps the store unavailable rather than closing storage underneath a possibly live native machine.
 Native flush, tombstone, recovery, and store close run on one lazy persistence executor per world, outside the
-registry monitor and outside both the server tick and VM actor workers. Admission reserves at most 1024 computer
-identities per world, including pending removal/recovery; each identity owns at most one queued or running token.
+registry monitor and outside both the server tick and VM actor workers. Each world captures the configured VM actor
+capacity when its store opens and admits at most that many computer identities, including pending removal/recovery;
+each identity owns at most one queued or running token.
 Repeated saves coalesce to the latest requested generation. The identity remains unavailable until final persistence
-completes, so a quickly reloaded block retries attachment on later ticks instead of opening a second machine.
+completes, so a quickly reloaded block retries attachment instead of opening a second machine. Failed background
+carrier admission is retried once every 20 block-entity ticks; explicit terminal access may retry immediately.
 Persistence failures are logged once, fail outstanding lifecycle futures, and prevent unsafe reattachment or store
 close. Initial store opening happens during server startup rather than an ordinary computer tick. Calls sharing a
 native world-store handle are serialized by a fair lock across VM actors and persistence work, while ordinary VM

@@ -101,7 +101,8 @@ internal object NeoForgeVmActorServices {
         val processed = scheduler.processedMessages.coerceAtLeast(1)
         val drained = scheduler.drainedEvents.coerceAtLeast(1)
         LOGGER.debug {
-            "VM actors: registered=${scheduler.registeredActors}, runnable=${scheduler.scheduledActors}, " +
+            "VM actors: registered=${scheduler.registeredActors}/${scheduler.maximumActors}, " +
+                "runnable=${scheduler.scheduledActors}, " +
                 "mailbox=${scheduler.queuedMessages}, results=${scheduler.queuedResults}, workers=${scheduler.busyWorkers}, " +
                 "queueAvgUs=${scheduler.totalQueueLatencyNanos / processed / 1_000}, " +
                 "queueMaxUs=${scheduler.maximumQueueLatencyNanos / 1_000}, " +

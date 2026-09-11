@@ -116,17 +116,18 @@ positions. At most 4096 computers receive a command, matching the default actor-
 loads chunks: unloaded positions are counted and skipped. It first reports the scan and scheduled fan-out, then reports
 how many computers accepted or rejected the asynchronous canonical command. While the run is active, it reports
 progress every five seconds and emits one final `COMPLETED` report. `/compukters vmbench status` shows the latest
-physical-area run instead of the headless
-fleet when `area` was the latest benchmark command. A second `area` command is rejected until the retained run reaches
-`COMPLETED`, so an accidental repeat cannot replace its status. Boot the fleet and let every shell reach its prompt
+physical-area run instead of the headless fleet when `area` was the latest benchmark command. A second `area` command
+is rejected until the retained run reaches `COMPLETED`, so an accidental repeat cannot replace its status. Boot the
+fleet and let every shell reach its prompt
 before dispatching if you want all computers to accept it.
 
 The physical report separates command delivery from execution: `pending`, `accepted`, and `rejected` describe delivery;
 `active`, `completed`, and `unavailable` describe accepted computers using their already-published runtime state. This
-status scan does not poll terminals, load chunks, or submit actor requests. Redstone runs also show `world`, the
-world-request delta since dispatch, and `pulseProgress`, that delta divided by the expected two acknowledged transitions
-per accepted computer and round. Treat the percentage as an aggregate throughput aid: unrelated world requests on the
-same actor service can contribute to the delta, while the computer-state counts determine completion.
+status scan does not poll terminals, load chunks, or submit actor requests. `actors=registered/capacity` exposes the
+server's effective VM admission bound. Redstone runs also show `world`, the world-request delta since dispatch, and
+`pulseProgress`, that delta divided by the expected two acknowledged transitions per accepted computer and round. Treat
+the percentage as an aggregate throughput aid: unrelated world requests on the same actor service can contribute to
+the delta, while the computer-state counts determine completion.
 
 ## Profile scaling in a world
 

@@ -20,6 +20,7 @@ package ru.lazyhat.compukters.impl.benchmark
 
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorMetrics
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEndpoint
+import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerMetrics
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramFailure
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
@@ -240,6 +241,7 @@ class HeadlessVmBenchmarkFleetTest {
             ProgramRuntimeActorMetrics(
                 scheduler =
                     VmActorSchedulerMetrics(
+                        maximumActors = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS,
                         registeredActors = registered,
                         scheduledActors = 0,
                         queuedMessages = 0,
