@@ -122,6 +122,21 @@ internal class VmBenchmarkGameTest(
             }.thenWaitUntil {
                 val signal = helper.level.getSignal(helper.absolutePos(firstPosition), Direction.DOWN)
                 helper.assertTrue(signal == 15, "physical redstone benchmark did not commit its high pulse: signal=$signal")
+                val snapshot = requireNotNull(VmBenchmarkCommands.areaSnapshot(server))
+                helper.assertTrue(
+                    snapshot.status == VmBenchmarkAreaStatus.RUNNING && snapshot.activeComputers == 1,
+                    "physical area benchmark did not expose its active computer: $snapshot",
+                )
+                val position = helper.absolutePos(firstPosition)
+                server.commands.performPrefixedCommand(
+                    server.createCommandSourceStack(),
+                    "compukters vmbench area ${position.x} ${position.y} ${position.z} " +
+                        "${position.x} ${position.y} ${position.z} redstone 1",
+                )
+                helper.assertTrue(
+                    VmBenchmarkCommands.areaSnapshot(server)?.rounds == 2,
+                    "physical area benchmark replaced its active run",
+                )
             }.thenWaitUntil {
                 val signal = helper.level.getSignal(helper.absolutePos(firstPosition), Direction.DOWN)
                 val pending = terminals ?: listOf(first.terminalFullStateAsync()).also { terminals = it }
@@ -136,6 +151,11 @@ internal class VmBenchmarkGameTest(
                     completed,
                     "physical redstone benchmark did not clear its output and return to the shell: " +
                         "signal=$signal state=${first.runtimeState}",
+                )
+                val snapshot = requireNotNull(VmBenchmarkCommands.areaSnapshot(server))
+                helper.assertTrue(
+                    snapshot.status == VmBenchmarkAreaStatus.COMPLETED && snapshot.completedComputers == 1,
+                    "physical area benchmark did not expose completion: $snapshot",
                 )
             }.thenSucceed()
     }

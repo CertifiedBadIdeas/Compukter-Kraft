@@ -114,8 +114,18 @@ The original form submits `/rom/vmbench cpu <rounds>` and remains compatible. Th
 region and starts 600 acknowledged pulses on each accepted computer. The region may contain at most 32,768 block
 positions and at most 1000 computers receive a command. The dispatcher never loads chunks: unloaded positions are
 counted and skipped. It first reports the scan and scheduled fan-out, then reports how many computers accepted or
-rejected the asynchronous canonical command. This is a delivery report, not a completion report. Boot the fleet and
-let every shell reach its prompt before dispatching if you want all computers to accept it.
+rejected the asynchronous canonical command. While the run is active, it reports progress every five seconds and emits
+one final `COMPLETED` report. `/compukters vmbench status` shows the latest physical-area run instead of the headless
+fleet when `area` was the latest benchmark command. A second `area` command is rejected until the retained run reaches
+`COMPLETED`, so an accidental repeat cannot replace its status. Boot the fleet and let every shell reach its prompt
+before dispatching if you want all computers to accept it.
+
+The physical report separates command delivery from execution: `pending`, `accepted`, and `rejected` describe delivery;
+`active`, `completed`, and `unavailable` describe accepted computers using their already-published runtime state. This
+status scan does not poll terminals, load chunks, or submit actor requests. Redstone runs also show `world`, the
+world-request delta since dispatch, and `pulseProgress`, that delta divided by the expected two acknowledged transitions
+per accepted computer and round. Treat the percentage as an aggregate throughput aid: unrelated world requests on the
+same actor service can contribute to the delta, while the computer-state counts determine completion.
 
 ## Profile scaling in a world
 
@@ -145,10 +155,11 @@ that is part of the experiment. Keep all benchmark chunks loaded without relying
 2. Record an idle `/debug` profile and the nearest `VM actors` debug-log record. The actor service logs one record every
    five seconds.
 3. Dispatch the redstone workload to 1 computer, then repeat on otherwise identical 10, 100, 500, and 1000-computer
-   layouts. Start with 600 rounds for roughly a one-minute unsaturated run at 20 TPS; use the same rounds and observation
-   interval at every size.
-4. For each size, preserve the area delivery report, an equal-duration `/debug` profile, the first and last `VM actors`
-   records, and the wall-clock time until `worldTotal` reaches the expected delta and `worldDeferred` returns to zero.
+   layouts. Choose enough rounds to cover the intended observation interval; the measured 1000-computer development
+   layout took about two minutes at 600 rounds, so 300 rounds is a practical one-minute starting point on that host.
+   Use the same rounds and observation interval at every size.
+4. For each size, preserve the automatic area reports, an equal-duration `/debug` profile, the first and last `VM actors`
+   records, and the wall-clock time until the area status reaches `COMPLETED` and `worldDeferred` returns to zero.
 5. Spot-check that terminals end with the expected `acknowledged transitions=<rounds * 2>` line and zero top output
    before the next run.
 

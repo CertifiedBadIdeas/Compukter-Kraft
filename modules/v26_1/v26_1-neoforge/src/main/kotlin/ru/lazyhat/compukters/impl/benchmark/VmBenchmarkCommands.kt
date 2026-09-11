@@ -28,6 +28,7 @@ import net.minecraft.server.MinecraftServer
 import net.neoforged.neoforge.event.RegisterCommandsEvent
 import net.neoforged.neoforge.event.server.ServerStoppingEvent
 import net.neoforged.neoforge.event.tick.ServerTickEvent
+import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorMetrics
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
 import ru.lazyhat.compukters.impl.computer.NeoForgeVmActorServices
 import ru.lazyhat.compukters.minecraft.computer.HeadlessVmBenchmarkArtifact
@@ -37,6 +38,8 @@ import java.util.Locale
 internal object VmBenchmarkCommands {
     private val fleets = IdentityHashMap<MinecraftServer, HeadlessVmBenchmarkFleet>()
     private val automaticReports = IdentityHashMap<MinecraftServer, AutomaticReport>()
+    private val areaRuns = IdentityHashMap<MinecraftServer, ObservedAreaRun>()
+    private val latestRuns = IdentityHashMap<MinecraftServer, LatestRun>()
     private val areaDispatcher = VmBenchmarkAreaDispatcher()
 
     fun register(event: RegisterCommandsEvent) = register(event.dispatcher)
@@ -137,19 +140,33 @@ internal object VmBenchmarkCommands {
     }
 
     fun afterServerTick(event: ServerTickEvent.Post) {
-        val fleet = fleets[event.server] ?: return
         val worldTick = event.server.tickCount.toLong()
-        fleet.tick(worldTick)
-        val report = automaticReports[event.server] ?: return
-        val snapshot = fleet.snapshot(event.server.currentMspt())
-        if (report.schedule.shouldReport(worldTick, snapshot.status, snapshot.phase)) {
-            report.source.sendSuccess({ Component.literal(snapshot.describe()) }, false)
-            if (snapshot.status.isTerminal()) automaticReports.remove(event.server)
+        fleets[event.server]?.let { fleet ->
+            fleet.tick(worldTick)
+            automaticReports[event.server]?.let { report ->
+                val snapshot = fleet.snapshot(event.server.currentMspt())
+                if (report.schedule.shouldReport(worldTick, snapshot.status, snapshot.phase)) {
+                    report.source.sendSuccess({ Component.literal(snapshot.describe()) }, false)
+                    if (snapshot.status.isTerminal()) automaticReports.remove(event.server)
+                }
+            }
+        }
+        areaRuns[event.server]?.let { observation ->
+            if (observation.shouldReport(worldTick)) {
+                val snapshot = observation.run.snapshot(worldTick)
+                observation.source.sendSuccess(
+                    { Component.literal(snapshot.describeArea(event.server, observation.baseline)) },
+                    false,
+                )
+                observation.reported(worldTick, snapshot.status)
+            }
         }
     }
 
     fun onServerStopping(event: ServerStoppingEvent) {
         automaticReports.remove(event.server)
+        areaRuns.remove(event.server)
+        latestRuns.remove(event.server)
         fleets.remove(event.server)?.stop()
     }
 
@@ -173,6 +190,7 @@ internal object VmBenchmarkCommands {
                     source,
                     VmBenchmarkReportSchedule(worldTick, initialPhase = mode.initialPhase()),
                 )
+            latestRuns[source.server] = LatestRun.HEADLESS
             source.sendSuccess(
                 {
                     Component.literal(
@@ -190,6 +208,12 @@ internal object VmBenchmarkCommands {
         }
 
     private fun status(source: CommandSourceStack): Int {
+        if (latestRuns[source.server] == LatestRun.AREA) {
+            val observation = areaRuns[source.server] ?: return idleStatus(source)
+            val snapshot = observation.run.snapshot(source.server.tickCount.toLong())
+            source.sendSuccess({ Component.literal(snapshot.describeArea(source.server, observation.baseline)) }, false)
+            return snapshot.activeComputers
+        }
         val snapshot =
             fleets[source.server]?.snapshot(source.server.currentMspt())
                 ?: HeadlessVmBenchmarkSnapshot.idle(
@@ -219,8 +243,22 @@ internal object VmBenchmarkCommands {
         workload: VmBenchmarkAreaWorkload,
     ): Int =
         runCatching {
+            val worldTick = source.server.tickCount.toLong()
+            val previous = areaRuns[source.server]
+            check(previous == null || previous.run.snapshot(worldTick).status == VmBenchmarkAreaStatus.COMPLETED) {
+                "a physical VM area benchmark is already active"
+            }
+            val baseline = NeoForgeVmActorServices.service(source.server).runtimeMetrics()
             val dispatch =
                 areaDispatcher.dispatch(MinecraftVmBenchmarkAreaAccess(source.level), first, second, rounds, workload)
+            areaRuns[source.server] =
+                ObservedAreaRun(
+                    run = VmBenchmarkAreaRun(dispatch, workload, rounds, worldTick),
+                    baseline = baseline,
+                    source = source,
+                    nextReportTick = worldTick + REPORT_INTERVAL_TICKS,
+                )
+            latestRuns[source.server] = LatestRun.AREA
             source.sendSuccess(
                 {
                     Component.literal(
@@ -259,6 +297,9 @@ internal object VmBenchmarkCommands {
 
     private fun MinecraftServer.currentMspt(): Double = averageTickTimeNanos / 1_000_000.0
 
+    internal fun areaSnapshot(server: MinecraftServer): VmBenchmarkAreaSnapshot? =
+        areaRuns[server]?.run?.snapshot(server.tickCount.toLong())
+
     private fun HeadlessVmBenchmarkSnapshot.describe(): String {
         val processed = (metrics.scheduler.processedMessages - baseline.scheduler.processedMessages).coerceAtLeast(1)
         val drained = (metrics.scheduler.drainedEvents - baseline.scheduler.drainedEvents).coerceAtLeast(1)
@@ -294,13 +335,69 @@ internal object VmBenchmarkCommands {
         "samples=$availableSamples available/$unavailableSamples unavailable, " +
             "heap=$heapUsedBytes/$heapCapacityBytes bytes, executionResident=$executionResidentBytes bytes"
 
+    private fun VmBenchmarkAreaSnapshot.describeArea(
+        server: MinecraftServer,
+        baseline: ProgramRuntimeActorMetrics,
+    ): String {
+        val metrics = NeoForgeVmActorServices.metrics(server) ?: baseline
+        val processed = (metrics.scheduler.processedMessages - baseline.scheduler.processedMessages).coerceAtLeast(1)
+        val drained = (metrics.scheduler.drainedEvents - baseline.scheduler.drainedEvents).coerceAtLeast(1)
+        val queueNanos =
+            (metrics.scheduler.totalQueueLatencyNanos - baseline.scheduler.totalQueueLatencyNanos).coerceAtLeast(0)
+        val resultNanos =
+            (metrics.scheduler.totalResultLatencyNanos - baseline.scheduler.totalResultLatencyNanos).coerceAtLeast(0)
+        val worldRequests = (metrics.totalDeferredWorldRequests - baseline.totalDeferredWorldRequests).coerceAtLeast(0)
+        val pulseProgress =
+            if (expectedWorldRequests == 0L) {
+                ""
+            } else {
+                val percent = (worldRequests.toDouble() * 100.0 / expectedWorldRequests).coerceAtMost(100.0)
+                ", pulseProgress=${"%.1f".format(Locale.ROOT, percent)}%"
+            }
+        return "Physical VM area benchmark: $status; workload=$workload, " +
+            "delivery=$acceptedComputers accepted/$pendingComputers pending/$rejectedComputers rejected, " +
+            "computers=$activeComputers active/$completedComputers completed/$unavailableComputers unavailable, " +
+            "rounds=$rounds, ticks=$elapsedTicks, MSPT=${"%.3f".format(Locale.ROOT, server.currentMspt())}, " +
+            "world=$worldRequests, worldDeferred=${metrics.deferredWorldRequests}$pulseProgress, " +
+            "mailbox=${metrics.scheduler.queuedMessages}, results=${metrics.scheduler.queuedResults}, " +
+            "workers=${metrics.scheduler.busyWorkers}, queueAvgUs=${queueNanos / processed / 1_000}, " +
+            "resultAvgUs=${resultNanos / drained / 1_000}, drainedLast=${metrics.lastPumpEvents}, " +
+            "pumpLastUs=${metrics.lastPumpNanos / 1_000}, " +
+            "inputRejected=${metrics.rejectedInputRequests - baseline.rejectedInputRequests}, " +
+            "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}"
+    }
+
     private const val MAXIMUM_ACTORS = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS
     private const val MAXIMUM_ROUNDS = 1_000_000
+    private const val REPORT_INTERVAL_TICKS = 100L
 
     private data class AutomaticReport(
         val source: CommandSourceStack,
         val schedule: VmBenchmarkReportSchedule,
     )
+
+    private data class ObservedAreaRun(
+        val run: VmBenchmarkAreaRun,
+        val baseline: ProgramRuntimeActorMetrics,
+        val source: CommandSourceStack,
+        var nextReportTick: Long,
+        var terminalReported: Boolean = false,
+    ) {
+        fun shouldReport(worldTick: Long): Boolean = !terminalReported && worldTick >= nextReportTick
+
+        fun reported(
+            worldTick: Long,
+            status: VmBenchmarkAreaStatus,
+        ) {
+            nextReportTick = worldTick + REPORT_INTERVAL_TICKS
+            terminalReported = status == VmBenchmarkAreaStatus.COMPLETED
+        }
+    }
+
+    private enum class LatestRun {
+        HEADLESS,
+        AREA,
+    }
 }
 
 internal class VmBenchmarkReportSchedule(

@@ -20,6 +20,7 @@ package ru.lazyhat.compukters.impl.benchmark
 
 import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
+import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.minecraft.computer.ComputerBlockEntity
 import java.util.concurrent.CompletableFuture
 
@@ -48,7 +49,7 @@ internal class VmBenchmarkAreaDispatcher(
         var unloaded = 0
         var computers = 0
         var limited = 0
-        val deliveries = mutableListOf<CompletableFuture<Boolean>>()
+        val deliveries = mutableListOf<VmBenchmarkAreaDelivery>()
         for (y in minimum.y..maximum.y) {
             for (z in minimum.z..maximum.z) {
                 for (x in minimum.x..maximum.x) {
@@ -63,16 +64,16 @@ internal class VmBenchmarkAreaDispatcher(
                         limited++
                         continue
                     }
-                    deliveries += computer.submit(workload.command(rounds)).exceptionally { false }
+                    deliveries += VmBenchmarkAreaDelivery(computer, computer.submit(workload.command(rounds)).exceptionally { false })
                 }
             }
         }
         val completion =
-            CompletableFuture.allOf(*deliveries.toTypedArray()).thenApply {
-                val accepted = deliveries.count { it.getNow(false) }
+            CompletableFuture.allOf(*deliveries.map(VmBenchmarkAreaDelivery::accepted).toTypedArray()).thenApply {
+                val accepted = deliveries.count { it.accepted.getNow(false) }
                 VmBenchmarkAreaResult(accepted, deliveries.size - accepted, limited)
             }
-        return VmBenchmarkAreaDispatch(positions.toInt(), unloaded, computers, deliveries.size, limited, completion)
+        return VmBenchmarkAreaDispatch(positions.toInt(), unloaded, computers, deliveries.size, limited, completion, deliveries)
     }
 
     private fun volume(
@@ -98,9 +99,10 @@ internal class VmBenchmarkAreaDispatcher(
 
 internal enum class VmBenchmarkAreaWorkload(
     private val argument: String,
+    val worldRequestsPerRound: Int,
 ) {
-    CPU("cpu"),
-    REDSTONE("redstone"),
+    CPU("cpu", 0),
+    REDSTONE("redstone", 2),
     ;
 
     fun command(rounds: Int): String = "/rom/vmbench $argument $rounds"
@@ -114,6 +116,14 @@ internal interface VmBenchmarkAreaAccess {
 
 internal fun interface VmBenchmarkAreaComputer {
     fun submit(command: String): CompletableFuture<Boolean>
+
+    fun benchmarkState(): VmBenchmarkAreaComputerState = VmBenchmarkAreaComputerState.ACTIVE
+}
+
+internal enum class VmBenchmarkAreaComputerState {
+    ACTIVE,
+    WAITING_FOR_INPUT,
+    UNAVAILABLE,
 }
 
 internal class MinecraftVmBenchmarkAreaAccess(
@@ -123,17 +133,36 @@ internal class MinecraftVmBenchmarkAreaAccess(
 
     override fun computer(position: BlockPos): VmBenchmarkAreaComputer? {
         val entity = level.getBlockEntity(position) as? ComputerBlockEntity ?: return null
-        return VmBenchmarkAreaComputer { command ->
-            entity.prepareTerminalAsync().thenCompose { terminal ->
-                if (terminal == null) {
-                    CompletableFuture.completedFuture(false)
-                } else {
-                    entity.submitCanonicalLineAsync(command.toCharArray())
+        return object : VmBenchmarkAreaComputer {
+            override fun submit(command: String): CompletableFuture<Boolean> =
+                entity.prepareTerminalAsync().thenCompose { terminal ->
+                    if (terminal == null) {
+                        CompletableFuture.completedFuture(false)
+                    } else {
+                        entity.submitCanonicalLineAsync(command.toCharArray())
+                    }
                 }
-            }
+
+            override fun benchmarkState(): VmBenchmarkAreaComputerState =
+                when (entity.runtimeState) {
+                    ProgramComputerState.WaitingForInput -> VmBenchmarkAreaComputerState.WAITING_FOR_INPUT
+
+                    ProgramComputerState.Running,
+                    ProgramComputerState.WaitingForCompiler,
+                    -> VmBenchmarkAreaComputerState.ACTIVE
+
+                    is ProgramComputerState.PoweredOff,
+                    ProgramComputerState.Closed,
+                    -> VmBenchmarkAreaComputerState.UNAVAILABLE
+                }
         }
     }
 }
+
+internal data class VmBenchmarkAreaDelivery(
+    val computer: VmBenchmarkAreaComputer,
+    val accepted: CompletableFuture<Boolean>,
+)
 
 internal data class VmBenchmarkAreaDispatch(
     val scannedPositions: Int,
@@ -142,6 +171,7 @@ internal data class VmBenchmarkAreaDispatch(
     val scheduledComputers: Int,
     val limitedComputers: Int,
     val completion: CompletableFuture<VmBenchmarkAreaResult>,
+    val deliveries: List<VmBenchmarkAreaDelivery>,
 )
 
 internal data class VmBenchmarkAreaResult(
