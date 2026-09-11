@@ -21,6 +21,7 @@ package ru.lazyhat.compukters.impl.benchmark
 import net.minecraft.core.BlockPos
 import net.minecraft.server.level.ServerLevel
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
+import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
 import ru.lazyhat.compukters.minecraft.computer.ComputerBlockEntity
 import java.util.concurrent.CompletableFuture
 
@@ -92,7 +93,7 @@ internal class VmBenchmarkAreaDispatcher(
 
     private companion object {
         const val MAXIMUM_POSITIONS = 32_768
-        const val MAXIMUM_COMPUTERS = 1_000
+        const val MAXIMUM_COMPUTERS = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS
         const val MAXIMUM_ROUNDS = 1_000_000
     }
 }

@@ -19,12 +19,36 @@
 package ru.lazyhat.compukters.impl.benchmark
 
 import net.minecraft.core.BlockPos
+import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class VmBenchmarkAreaDispatcherTest {
+    @Test
+    fun `default fanout admits the complete actor capacity`() {
+        val capacity = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS
+        val access =
+            object : VmBenchmarkAreaAccess {
+                override fun isLoaded(position: BlockPos) = true
+
+                override fun computer(position: BlockPos) = VmBenchmarkAreaComputer { CompletableFuture.completedFuture(true) }
+            }
+
+        val dispatch =
+            VmBenchmarkAreaDispatcher().dispatch(
+                access,
+                BlockPos.ZERO,
+                BlockPos(capacity, 0, 0),
+                1,
+            )
+
+        assertEquals(capacity + 1, dispatch.discoveredComputers)
+        assertEquals(capacity, dispatch.scheduledComputers)
+        assertEquals(1, dispatch.limitedComputers)
+    }
+
     @Test
     fun `dispatch skips unloaded positions and bounds computer fanout`() {
         val submitted = mutableListOf<String>()
