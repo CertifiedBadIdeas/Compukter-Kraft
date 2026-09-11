@@ -9,8 +9,8 @@ description: Load real Compukter VMs in Minecraft and profile their server-tick 
 `vmbench` is an ordinary Guest Kotlin executable in `/rom`. It uses the same compiler output, verifier, process stack,
 interpreter, quotas, and Minecraft computer lifecycle as player programs; it has no privileged benchmark runtime path.
 
-The first workload isolates integer and branch execution. It does not measure terminal, filesystem, compiler,
-redstone, network, or managed-allocation throughput.
+The CPU workload isolates integer and branch execution. The redstone workload exercises acknowledged server-thread
+world commits. Neither workload measures terminal, filesystem, compiler, network, or managed-allocation throughput.
 
 Compukters also provides operator-only fleet commands. The headless mode isolates the native VM and actor scheduler;
 the area mode drives ordinary placed computers and therefore includes block-entity, chunk, filesystem, and Minecraft
@@ -22,6 +22,7 @@ At a computer shell, run:
 
 ```text
 vmbench cpu <rounds>
+vmbench redstone <rounds>
 ```
 
 `rounds` must be an ASCII decimal value from `1` through `1000000`. Each round performs 1,024 iterations of a fixed
@@ -39,6 +40,24 @@ vmbench cpu: checksum=-365826314
 
 The program prints once before and once after the hot loop. It makes no terminal or host-capability calls while the
 workload is running, so a long run will leave the displayed start line unchanged.
+
+`redstone` first normalizes the computer's local **top** weak output to zero. Every round then produces one `15 -> 0`
+pulse. Each of those two transitions uses the ordinary Guest redstone API and suspends until the physical output is
+committed on the Minecraft server thread and acknowledged back to the VM. Sequential suspension prevents the high and
+low transitions from being combined into one commit. For example:
+
+```text
+vmbench redstone 2
+```
+
+finishes with a zero top output and:
+
+```text
+vmbench redstone: acknowledged transitions=4
+```
+
+The completion line is printed only after the final clear is acknowledged. Shutdown, reboot, and block removal retain
+their normal production behavior and do not add benchmark-specific cleanup.
 
 ## Profile the actor scheduler
 
@@ -87,13 +106,16 @@ After placing and booting computers, send the ordinary shell command to every lo
 
 ```text
 /compukters vmbench area <from> <to> <rounds 1..1000000>
+/compukters vmbench area <from> <to> redstone <rounds 1..1000000>
 ```
 
-For example, `compukters vmbench area 0 64 0 9 73 9 1000000` scans a 10x10x10 region. The region may contain at most
-32,768 block positions and at most 1000 computers receive a command. The dispatcher never loads chunks: unloaded
-positions are counted and skipped. It first reports the scan and scheduled fan-out, then reports how many computers
-accepted or rejected the asynchronous canonical command. Boot the fleet and let every shell reach its prompt before
-dispatching if you want all computers to accept it.
+The original form submits `/rom/vmbench cpu <rounds>` and remains compatible. The explicit `redstone` form submits
+`/rom/vmbench redstone <rounds>`. For example, `compukters vmbench area 0 64 0 9 73 9 redstone 600` scans a 10x10x10
+region and starts 600 acknowledged pulses on each accepted computer. The region may contain at most 32,768 block
+positions and at most 1000 computers receive a command. The dispatcher never loads chunks: unloaded positions are
+counted and skipped. It first reports the scan and scheduled fan-out, then reports how many computers accepted or
+rejected the asynchronous canonical command. This is a delivery report, not a completion report. Boot the fleet and
+let every shell reach its prompt before dispatching if you want all computers to accept it.
 
 ## Profile scaling in a world
 
@@ -112,6 +134,31 @@ Keep the Minecraft, NeoForge, Compukters, Java, and hardware versions unchanged 
 Minecraft writes `/debug` profiling results beneath the current game or server directory. Compare equal-duration runs;
 the benchmark intentionally defines deterministic VM work, not a universal wall-clock threshold. Faster hosts may
 complete more aggregate work before their tick time degrades.
+
+## Profile world-request capacity
+
+Use a disposable layout and keep the block above every computer empty. The benchmark intentionally sends weak power
+through the top face; attached redstone components add their own neighbor-update cost and should only be present when
+that is part of the experiment. Keep all benchmark chunks loaded without relying on the dispatcher to load them.
+
+1. Boot the complete physical fleet and wait until every computer shows its shell prompt.
+2. Record an idle `/debug` profile and the nearest `VM actors` debug-log record. The actor service logs one record every
+   five seconds.
+3. Dispatch the redstone workload to 1 computer, then repeat on otherwise identical 10, 100, 500, and 1000-computer
+   layouts. Start with 600 rounds for roughly a one-minute unsaturated run at 20 TPS; use the same rounds and observation
+   interval at every size.
+4. For each size, preserve the area delivery report, an equal-duration `/debug` profile, the first and last `VM actors`
+   records, and the wall-clock time until `worldTotal` reaches the expected delta and `worldDeferred` returns to zero.
+5. Spot-check that terminals end with the expected `acknowledged transitions=<rounds * 2>` line and zero top output
+   before the next run.
+
+Compare MSPT/TPS together with deltas, not absolute lifetime counters. `worldDeferred` is the current number of actors
+waiting on a world acknowledgement, while the `worldTotal` delta counts world requests surfaced during the interval.
+Also record `results`, `queueAvgUs`/`queueMaxUs`, `resultAvgUs`/`resultMaxUs`, `drainedLast`, `pumpLastUs`,
+`inputRejected`, and `mailboxRejected`. A healthy saturation curve increases queue and completion latency under the
+fixed server-thread bound; it must not turn one tick into unbounded world work. A `worldTotal` delta of twice the round
+count per accepted computer, followed by `worldDeferred=0`, is the expected complete-run shape when every top output
+starts at zero. A computer whose top output was nonzero contributes one additional normalization request.
 
 ## Stop a long run
 

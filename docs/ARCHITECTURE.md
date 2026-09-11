@@ -244,13 +244,16 @@ in-computer loop is `edit demo.kt` -> `kotlinc demo.kt` -> `demo`; source and ar
 isolated by `ComputerId`.
 
 `/rom/vmbench cpu <rounds>` runs the documented deterministic, allocation-free integer/branch workload through the
-ordinary foreground process and VM quota path. It exists to measure aggregate in-world runtime cost and does not own a
-timing capability, privileged execution budget, or benchmark-only host path. See the
+ordinary foreground process and VM quota path. `/rom/vmbench redstone <rounds>` normalizes the local top output to zero
+and then emits one acknowledged weak-power `15 -> 0` pulse per round; every transition suspends through the ordinary
+Guest redstone API until its physical server-thread commit is confirmed. These workloads exist to measure aggregate
+in-world runtime cost and do not own a timing capability, privileged execution budget, or benchmark-only host path.
+See the
 [in-world VM benchmark guide](https://certifiedbadideas.github.io/Compukters/VM-BENCHMARK/) for the controlled scaling procedure.
 An operator-only harness can run up to 4096 internal headless artifacts through the same verified session and actor
 scheduler, including a phased capacity run that settles actors at terminal input, observes 100 idle ticks, samples
-their existing resource counters once, and wakes them with an ordinary Text event. It can also dispatch the ordinary
-`/rom/vmbench` command to at most 1000 loaded physical computers in a bounded area. The harness owns no persistent
+their existing resource counters once, and wakes them with an ordinary Text event. It can also dispatch either ordinary
+`/rom/vmbench` workload to at most 1000 loaded physical computers in a bounded area. The harness owns no persistent
 computer identity, never loads chunks, and does not provide a guest-visible fleet protocol.
 
 Terminal, standard output and error, redstone, process, filesystem, and compiler declarations live in the
