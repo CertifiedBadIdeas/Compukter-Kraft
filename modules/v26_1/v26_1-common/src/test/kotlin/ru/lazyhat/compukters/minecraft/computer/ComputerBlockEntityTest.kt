@@ -159,7 +159,7 @@ class ComputerBlockEntityTest {
     }
 
     @Test
-    fun `server tick retries a carrier rejected by scheduler capacity`() {
+    fun `server tick retries a carrier rejected by capacity after a bounded delay`() {
         var attempts = 0
         lateinit var accepted: FakeCarrier
         val entity =
@@ -177,11 +177,35 @@ class ComputerBlockEntityTest {
         entity.serverTick()
         assertNull(entity.terminalMachineId)
         assertEquals(neverStarted(), entity.runtimeState)
+        repeat(19) { entity.serverTick() }
+        assertEquals(1, attempts)
 
         entity.serverTick()
         assertTrue(requireNotNull(entity.terminalMachineId) > 0)
+        assertEquals(2, attempts)
         assertEquals(1, accepted.turnOnCalls)
         assertEquals(1, accepted.serverTickCalls)
+    }
+
+    @Test
+    fun `terminal open retries carrier admission immediately`() {
+        var attempts = 0
+        val entity =
+            TestComputerBlockEntity(
+                ComputerCarrierFactory { deviceId, _, stateSink, _, redstoneHostPort, initialRedstoneOutput ->
+                    attempts++
+                    if (attempts == 1) {
+                        null
+                    } else {
+                        FakeCarrier(deviceId, stateSink, redstoneHostPort, initialRedstoneOutput)
+                    }
+                },
+            )
+
+        entity.serverTick()
+
+        assertEquals(terminalState("", 0), entity.prepareTerminalAsync().getNow(null))
+        assertEquals(2, attempts)
     }
 
     @Test

@@ -46,15 +46,11 @@ internal class WorldFileSystemStoreRegistry<S : Any>(
     private val tombstoner: (S, ComputerId) -> Unit,
     private val recoverer: (S, ComputerId) -> Unit,
     private val closer: (S) -> Unit,
-    private val maximumComputers: Int = 1024,
+    private val maximumComputers: () -> Int = { 1024 },
     private val executorFactory: (Int) -> java.util.concurrent.ExecutorService = ::persistenceExecutor,
     private val reportFailure: (Throwable) -> Unit = {},
 ) {
     private val entries = mutableMapOf<Path, Entry<S>>()
-
-    init {
-        require(maximumComputers > 0)
-    }
 
     @Synchronized
     fun store(worldRoot: Path): S = entry(worldRoot).store
@@ -66,7 +62,7 @@ internal class WorldFileSystemStoreRegistry<S : Any>(
     ): Boolean {
         val current = entries[canonicalWorldRoot(worldRoot)] ?: return true
         checkAvailable(current)
-        return computerId !in current.computers && current.computers.size < maximumComputers
+        return computerId !in current.computers && current.computers.size < current.maximumComputers
     }
 
     fun lifecycle(worldRoot: Path): ComputerFileSystemLifecycle {
@@ -152,7 +148,7 @@ internal class WorldFileSystemStoreRegistry<S : Any>(
         current: Entry<S>,
         id: ComputerId,
     ): Computer {
-        check(current.computers.size < maximumComputers) { "filesystem computer capacity is exhausted" }
+        check(current.computers.size < current.maximumComputers) { "filesystem computer capacity is exhausted" }
         return Computer(id).also { current.computers[id] = it }
     }
 
@@ -356,9 +352,11 @@ internal class WorldFileSystemStoreRegistry<S : Any>(
         val key = canonicalWorldRoot(worldRoot)
         return entries
             .getOrPut(key) {
+                val capacity = maximumComputers()
+                require(capacity > 0) { "filesystem computer capacity must be positive" }
                 val storageRoot = key.resolve(STORAGE_DIRECTORY)
                 Files.createDirectories(storageRoot)
-                Entry(key, opener(storageRoot.toRealPath()), executorFactory(maximumComputers))
+                Entry(key, opener(storageRoot.toRealPath()), executorFactory(capacity), capacity)
             }.also(::checkAvailable)
     }
 
@@ -373,6 +371,7 @@ internal class WorldFileSystemStoreRegistry<S : Any>(
         val key: Path,
         val store: S,
         val executor: java.util.concurrent.ExecutorService,
+        val maximumComputers: Int,
     ) {
         val computers = mutableMapOf<ComputerId, Computer>()
         var stopping: CompletableFuture<Void>? = null
@@ -435,6 +434,7 @@ object NeoForgeWorldFileSystemStores {
             tombstoner = WorldFileSystemStore::tombstone,
             recoverer = WorldFileSystemStore::recover,
             closer = WorldFileSystemStore::close,
+            maximumComputers = ru.lazyhat.compukters.impl.config.CompuktersServerConfig::maximumActors,
             reportFailure = {
                 ru.lazyhat.compukters.core.LOGGER
                     .error(it) { "Computer filesystem persistence failed" }

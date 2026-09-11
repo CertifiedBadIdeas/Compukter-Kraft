@@ -53,10 +53,12 @@ object CompuktersServerConfig {
 
     val SPEC: ModConfigSpec = builder.build()
 
+    fun maximumActors(): Int = maximumActors.get()
+
     fun schedulerConfig(): VmActorSchedulerConfig =
         VmActorSchedulerConfig(
             workerCount = workerCount.get(),
-            maximumActors = maximumActors.get(),
+            maximumActors = maximumActors(),
             mailboxCapacity = mailboxCapacity.get(),
             messagesPerTurn = messagesPerTurn.get(),
             resultCapacityPerWorker = resultCapacityPerWorker.get(),

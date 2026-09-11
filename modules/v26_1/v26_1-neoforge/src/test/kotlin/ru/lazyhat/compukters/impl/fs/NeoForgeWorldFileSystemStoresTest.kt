@@ -159,6 +159,18 @@ class NeoForgeWorldFileSystemStoresTest {
     }
 
     @Test
+    fun `world captures configured computer capacity when its store opens`() {
+        var configuredCapacity = 1
+        val fixture = Fixture(capacitySource = { configuredCapacity })
+        configuredCapacity = 2
+
+        fixture.attach()
+
+        assertFalse(fixture.registry.available(world, SECOND))
+        fixture.stop()
+    }
+
+    @Test
     fun `blocked native flush does not hold registry monitor or lose a later save`() {
         val entered = CountDownLatch(1)
         val unblock = CountDownLatch(1)
@@ -203,6 +215,7 @@ class NeoForgeWorldFileSystemStoresTest {
 
     private inner class Fixture(
         capacity: Int = 1024,
+        capacitySource: () -> Int = { capacity },
         flush: ((Long) -> Unit)? = null,
     ) {
         val executor = ManualExecutor()
@@ -222,7 +235,7 @@ class NeoForgeWorldFileSystemStoresTest {
                 tombstoner = { _, _ -> events += "tombstone" },
                 recoverer = { _, _ -> events += "recover" },
                 closer = { events += "close" },
-                maximumComputers = capacity,
+                maximumComputers = capacitySource,
                 executorFactory = { executor },
                 reportFailure = { failures += it },
             )

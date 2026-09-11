@@ -79,6 +79,7 @@ open class ComputerBlockEntity internal constructor(
     private var committedRedstoneOutput = 0
     private var sampledRedstoneInputs = IntArray(RedstoneWire.SIDE_COUNT)
     private var dirtyRedstoneInputs = RedstoneWire.ALL_SIDES_MASK
+    private var carrierRetryTicks = 0
     private val redstoneHostPort = RedstoneHostPort(::commitRedstoneOutput)
 
     var terminalMachineId: Long? = null
@@ -93,8 +94,7 @@ open class ComputerBlockEntity internal constructor(
         carrier?.terminalFullStateAsync() ?: CompletableFuture.completedFuture(null)
 
     fun prepareTerminalAsync(): CompletableFuture<TerminalState?> {
-        if (carrier == null && !filesystemAvailable()) return CompletableFuture.completedFuture(null)
-        val current = carrier ?: createCarrier()?.also { carrier = it } ?: return CompletableFuture.completedFuture(null)
+        val current = carrier ?: attachCarrier() ?: return CompletableFuture.completedFuture(null)
         if (current.state == neverStarted()) runtimeState = current.turnOn()
         return current.terminalFullStateAsync()
     }
@@ -177,8 +177,11 @@ open class ComputerBlockEntity internal constructor(
     }
 
     internal fun serverTick() {
-        if (carrier == null && !filesystemAvailable()) return
-        val current = carrier ?: createCarrier()?.also { carrier = it } ?: return
+        if (carrier == null && carrierRetryTicks > 0) {
+            carrierRetryTicks--
+            return
+        }
+        val current = carrier ?: attachCarrier() ?: return
         if (current.state == neverStarted()) {
             runtimeState = current.turnOn()
         }
@@ -252,6 +255,24 @@ open class ComputerBlockEntity internal constructor(
         return created
     }
 
+    private fun attachCarrier(): ComputerCarrier? {
+        if (!filesystemAvailable()) {
+            scheduleCarrierRetry()
+            return null
+        }
+        return createCarrier()?.also {
+            carrier = it
+            carrierRetryTicks = 0
+        } ?: run {
+            scheduleCarrierRetry()
+            null
+        }
+    }
+
+    private fun scheduleCarrierRetry() {
+        carrierRetryTicks = CARRIER_RETRY_INTERVAL_TICKS - 1
+    }
+
     private fun filesystemAvailable(): Boolean =
         (level as? ServerLevel)?.let { filesystemContextSource?.available(it, identity.id()) } != false
 
@@ -275,6 +296,7 @@ open class ComputerBlockEntity internal constructor(
     private fun closeCarrier() {
         val current = carrier
         carrier = null
+        carrierRetryTicks = 0
         terminalMachineId = null
         val closed = current?.closeAsync() ?: CompletableFuture.completedFuture<Long?>(null)
         filesystemLease?.release(closed)?.whenComplete { _, _ -> }
@@ -284,6 +306,7 @@ open class ComputerBlockEntity internal constructor(
     private fun drainCarrier(): CompletableFuture<Long?> {
         val current = carrier
         carrier = null
+        carrierRetryTicks = 0
         terminalMachineId = null
         filesystemLease = null
         return current?.closeAsync() ?: CompletableFuture.completedFuture(null)
@@ -302,6 +325,7 @@ open class ComputerBlockEntity internal constructor(
     private companion object {
         const val ROOT_KEY = "compukters"
         const val REDSTONE_OUTPUT_KEY = "redstoneOutput"
+        const val CARRIER_RETRY_INTERVAL_TICKS = 20
 
         fun neverStarted(): ProgramComputerState = ProgramComputerState.PoweredOff(ProgramComputerStopReason.NeverStarted)
     }
