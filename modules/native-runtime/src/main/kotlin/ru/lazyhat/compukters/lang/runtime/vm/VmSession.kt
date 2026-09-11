@@ -85,6 +85,7 @@ class VmSession private constructor(
     ) {
         when (response) {
             HostResponse.UnitSuccess -> resumeUnit(identity)
+            is HostResponse.BoolSuccess -> resumeBool(identity, response.value)
             is HostResponse.StringSuccess -> resumeString(identity, response.value)
             is HostResponse.Failure -> resumeFailure(identity, response.kind, response.code)
         }
@@ -98,6 +99,16 @@ class VmSession private constructor(
     fun resumeUnit(identity: VmHostRequestIdentity) = bridge.resumeUnit(requireHandle(), identity.taskId, identity.requestId)
 
     fun resumeUnit(requestId: Long) = resumeUnit(VmHostRequestIdentity(1, requestId))
+
+    fun resumeBool(
+        identity: VmHostRequestIdentity,
+        value: Boolean,
+    ) = bridge.resumeBool(requireHandle(), identity.taskId, identity.requestId, value)
+
+    fun resumeBool(
+        requestId: Long,
+        value: Boolean,
+    ) = resumeBool(VmHostRequestIdentity(1, requestId), value)
 
     fun resumeString(
         identity: VmHostRequestIdentity,

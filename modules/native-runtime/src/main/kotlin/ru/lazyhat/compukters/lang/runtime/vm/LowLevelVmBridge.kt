@@ -157,6 +157,13 @@ internal interface LowLevelVmBridge {
         requestId: Long,
     )
 
+    fun resumeBool(
+        handle: Long,
+        taskId: Int,
+        requestId: Long,
+        value: Boolean,
+    ): Unit = error("Boolean host responses are unavailable")
+
     fun resumeString(
         handle: Long,
         taskId: Int,

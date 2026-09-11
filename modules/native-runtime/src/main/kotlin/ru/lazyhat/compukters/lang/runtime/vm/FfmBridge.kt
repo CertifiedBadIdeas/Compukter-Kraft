@@ -61,6 +61,7 @@ internal class FfmBridge private constructor(
     private val compilationRequestCopyHandle: MethodHandle,
     private val compilationCompleteHandle: MethodHandle,
     private val resumeUnitHandle: MethodHandle,
+    private val resumeBoolHandle: MethodHandle,
     private val resumeStringHandle: MethodHandle,
     private val resumeFailureHandle: MethodHandle,
     private val closeHandle: MethodHandle,
@@ -498,6 +499,16 @@ internal class FfmBridge private constructor(
         requestId: Long,
     ) = requireSuccess("resume unit", resumeUnitHandle.invokeExact(handle, taskId, requestId) as Int)
 
+    override fun resumeBool(
+        handle: Long,
+        taskId: Int,
+        requestId: Long,
+        value: Boolean,
+    ) = requireSuccess(
+        "resume bool",
+        resumeBoolHandle.invokeExact(handle, taskId, requestId, if (value) 1 else 0) as Int,
+    )
+
     override fun resumeString(
         handle: Long,
         taskId: Int,
@@ -880,6 +891,8 @@ internal class FfmBridge private constructor(
                         downcall(FfmAbiFunction.COMPILATION_COMPLETE),
                     resumeUnitHandle =
                         downcall(FfmAbiFunction.RESUME_UNIT),
+                    resumeBoolHandle =
+                        downcall(FfmAbiFunction.RESUME_BOOL),
                     resumeStringHandle =
                         downcall(FfmAbiFunction.RESUME_STRING),
                     resumeFailureHandle =
@@ -897,7 +910,7 @@ internal class FfmBridge private constructor(
                     terminalTextHandle =
                         downcall(FfmAbiFunction.TERMINAL_TEXT),
                 ).also { bridge ->
-                    if (bridge.abiVersion() != 10) throw VmBridgeException("unsupported Compukter FFM ABI")
+                    if (bridge.abiVersion() != 11) throw VmBridgeException("unsupported Compukter FFM ABI")
                 }
             } catch (error: Throwable) {
                 arena.close()

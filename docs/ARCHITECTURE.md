@@ -201,8 +201,9 @@ close. Initial store opening happens during server startup rather than an ordina
 native world-store handle are serialized by a fair lock across VM actors and persistence work, while ordinary VM
 execution stays on actor workers.
 
-The versioned FFM ABI exposes opaque world-store lifecycle operations, machine creation inside a store, stateless
-artifact verification, and dedicated bounded compilation request and completion calls. Kotlin can select a world
+The versioned FFM ABI v11 exposes opaque world-store lifecycle operations, machine creation inside a store, stateless
+artifact verification, dedicated bounded compilation request and completion calls, and typed `Unit`, `Boolean`,
+`String`, or failure host-request completion. Kotlin can select a world
 store, identify a computer, request flush, tombstone, or recovery, and route compiler results, but it cannot perform
 arbitrary guest file operations. Guest code reaches Rust-owned state only through declared capabilities. The guest
 filesystem facade exposes bounded `stat`, `list`, `readText`, and `writeText`; Rust validates paths, UTF-8, permissions,

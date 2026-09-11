@@ -379,12 +379,14 @@ class VmSessionTest {
         val session = VmSession.open(byteArrayOf(1), bridge)
 
         session.resume(VmHostRequestIdentity(2, 7), HostResponse.UnitSuccess)
-        session.resume(VmHostRequestIdentity(3, 8), HostResponse.StringSuccess("A\ud800B"))
-        session.resume(VmHostRequestIdentity(4, 9), HostResponse.Failure(HostFailureKind.END_OF_FILE, 17))
+        session.resume(VmHostRequestIdentity(3, 8), HostResponse.BoolSuccess(true))
+        session.resume(VmHostRequestIdentity(4, 9), HostResponse.StringSuccess("A\ud800B"))
+        session.resume(VmHostRequestIdentity(5, 10), HostResponse.Failure(HostFailureKind.END_OF_FILE, 17))
 
         assertEquals(listOf(UnitResponse(11, 2, 7)), bridge.unitResponses)
-        assertEquals(listOf(StringResponse(11, 3, 8, "A\ud800B".toCharArray().toList())), bridge.stringResponses)
-        assertEquals(listOf(FailureResponse(11, 4, 9, 0, 17)), bridge.failures)
+        assertEquals(listOf(BoolResponse(11, 3, 8, true)), bridge.boolResponses)
+        assertEquals(listOf(StringResponse(11, 4, 9, "A\ud800B".toCharArray().toList())), bridge.stringResponses)
+        assertEquals(listOf(FailureResponse(11, 5, 10, 0, 17)), bridge.failures)
     }
 
     @Test
@@ -570,6 +572,7 @@ class VmSessionTest {
         val advances = mutableListOf<AdvanceCall>()
         val closed = mutableListOf<Long>()
         val unitResponses = mutableListOf<UnitResponse>()
+        val boolResponses = mutableListOf<BoolResponse>()
         val stringResponses = mutableListOf<StringResponse>()
         val failures = mutableListOf<FailureResponse>()
         var terminalState = ByteArray(0)
@@ -727,6 +730,15 @@ class VmSessionTest {
             stringResponses += StringResponse(handle, taskId, requestId, value.toList())
         }
 
+        override fun resumeBool(
+            handle: Long,
+            taskId: Int,
+            requestId: Long,
+            value: Boolean,
+        ) {
+            boolResponses += BoolResponse(handle, taskId, requestId, value)
+        }
+
         override fun resumeFailure(
             handle: Long,
             taskId: Int,
@@ -795,6 +807,13 @@ class VmSessionTest {
         val handle: Long,
         val taskId: Int,
         val requestId: Long,
+    )
+
+    private data class BoolResponse(
+        val handle: Long,
+        val taskId: Int,
+        val requestId: Long,
+        val value: Boolean,
     )
 
     private data class AdvanceCall(

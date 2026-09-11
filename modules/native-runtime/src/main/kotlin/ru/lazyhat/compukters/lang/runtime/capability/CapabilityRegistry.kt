@@ -25,6 +25,10 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmHostRequest
 sealed interface HostResponse {
     data object UnitSuccess : HostResponse
 
+    data class BoolSuccess(
+        val value: Boolean,
+    ) : HostResponse
+
     data class StringSuccess(
         val value: String,
     ) : HostResponse
