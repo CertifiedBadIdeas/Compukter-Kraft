@@ -19,9 +19,10 @@
 package compukter.system.vmbench
 
 import compukter.io.Stderr
+import compukter.redstone.Redstone
 
 fun main(args: Array<String>) {
-    if (args.size != 2 || args[0] != "cpu") {
+    if (args.size != 2) {
         writeUsage()
         return
     }
@@ -31,6 +32,16 @@ fun main(args: Array<String>) {
         return
     }
 
+    if (args[0] == "cpu") {
+        runCpu(rounds)
+    } else if (args[0] == "redstone") {
+        runRedstone(rounds)
+    } else {
+        writeUsage()
+    }
+}
+
+private fun runCpu(rounds: Int) {
     print("vmbench cpu: rounds=")
     print(rounds)
     println(", iterations per round=1024")
@@ -39,6 +50,24 @@ fun main(args: Array<String>) {
     println(checksum)
 }
 
+private fun runRedstone(rounds: Int) {
+    val transitions = rounds * 2
+    print("vmbench redstone: rounds=")
+    print(rounds)
+    println(", transitions per round=2")
+
+    Redstone.top.set(0)
+    var round = 0
+    while (round < rounds) {
+        Redstone.top.set(15)
+        Redstone.top.set(0)
+        round = round + 1
+    }
+
+    print("vmbench redstone: acknowledged transitions=")
+    println(transitions)
+}
+
 private fun writeUsage() {
-    Stderr.write("usage: vmbench cpu <rounds 1..1000000>\n")
+    Stderr.write("usage: vmbench <cpu|redstone> <rounds 1..1000000>\n")
 }
