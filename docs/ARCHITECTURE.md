@@ -120,9 +120,11 @@ than an equal-CPU or delivery-latency contract.
 
 `ActorProgramComputer` is the asynchronous carrier implementation for that migration. Its server-side state is an
 observation from actor replies, and terminal, filesystem, deployment, and input requests return futures. It keeps at
-most one advance in flight, suppresses obsolete lifecycle replies, and performs redstone and sound world actions on
-its owning server thread. A full actor mailbox retains the world-action acknowledgement for retry without repeating
-the mutation.
+most one execution command in flight, suppresses obsolete lifecycle replies, and performs redstone and sound world
+actions on its owning server thread. On a later server tick it submits one typed continuation containing the immutable
+world-action result. The actor validates and applies that completion before using the same command to perform the next
+bounded advance; its single reply both completes the old deferred request and may publish the next one. A full actor
+mailbox retains the exact continuation for retry without repeating the world mutation.
 Its close future reports the final filesystem generation after accepted work drains and native resources close; this
 barrier does not depend on server result pumping and may complete on a worker thread.
 
@@ -137,7 +139,8 @@ host counts Guest and maintenance budgets only when it actually invokes native a
 counters saturate explicitly instead of overflowing. These values describe VM work and granted capacity, not host CPU
 percentage. No sampling loop, history buffer, heap-content scan, or unsolicited FFM call runs for unobserved computers.
 
-The Minecraft carrier owns exactly one actor endpoint and submits at most one advance for each server tick. Rust starts
+The Minecraft carrier owns exactly one actor endpoint and submits at most one ordinary advance or host continuation
+for each server tick. Rust starts
 `/rom/boot`, compiled from `system/programs/boot.kt`; boot delegates to `/rom/shell`, compiled from
 `system/programs/shell.kt`. A foreground child suspends its parent until it exits or fails. There is one active
 foreground lane today, while the runtime contract leaves room for later parallel execution. Reboot replaces the
@@ -161,8 +164,9 @@ Minecraft owns the persistent 30-bit redstone output register and samples dirty 
 Rust owns the complete input snapshot, predicate waiters, and confirmed output mirror. Input crosses FFI as one scalar
 changed-mask-plus-levels packet; output requests are reduced in publication order and committed through one
 loader-independent host port at most once per computer per tick. A successful physical commit is confirmed to Rust
-before every original blocking request resumes. VM halt, fault, shutdown, reboot, and replacement never synthesize a
-zero output.
+before every original blocking request resumes. Completion and the next bounded advance share one actor command and
+one result without allowing multiple advances in a server tick. VM halt, fault, shutdown, reboot, and replacement never
+synthesize a zero output.
 
 One-shot sound requests cross the same actor boundary as immutable `(note, volume)` batches. Minecraft emits the
 vanilla note-block pling in the block sound category, using equal-temperament pitch around neutral note 12, before the

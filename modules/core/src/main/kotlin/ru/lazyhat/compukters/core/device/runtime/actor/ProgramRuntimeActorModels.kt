@@ -186,23 +186,27 @@ sealed interface ProgramRuntimeActorCommand {
         val packet: Int,
     ) : ProgramRuntimeActorCommand
 
-    data class CompleteRedstoneOutput(
+    data class ContinueRedstoneOutput(
         override val requestId: ProgramRuntimeRequestId,
+        val worldTick: Long,
         val outputRequestId: ProgramRuntimeRequestId,
         val packed: Int,
         val result: RedstoneCommitResult,
     ) : ProgramRuntimeActorCommand {
         init {
+            require(worldTick >= 0) { "world tick must not be negative" }
             require(result != RedstoneCommitResult.Deferred) { "redstone completion cannot be deferred" }
         }
     }
 
-    data class CompleteSound(
+    data class ContinueSound(
         override val requestId: ProgramRuntimeRequestId,
+        val worldTick: Long,
         val soundRequestId: ProgramRuntimeRequestId,
         val result: SoundCommitResult,
     ) : ProgramRuntimeActorCommand {
         init {
+            require(worldTick >= 0) { "world tick must not be negative" }
             require(result != SoundCommitResult.Deferred) { "sound completion cannot be deferred" }
         }
     }

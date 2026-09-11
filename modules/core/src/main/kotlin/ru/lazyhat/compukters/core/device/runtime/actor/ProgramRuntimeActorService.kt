@@ -114,8 +114,8 @@ class ProgramRuntimeActorService(
         val pendingRequest =
             PendingRequest(
                 future,
-                preparedCommand is ProgramRuntimeActorCommand.CompleteRedstoneOutput ||
-                    preparedCommand is ProgramRuntimeActorCommand.CompleteSound,
+                preparedCommand is ProgramRuntimeActorCommand.ContinueRedstoneOutput ||
+                    preparedCommand is ProgramRuntimeActorCommand.ContinueSound,
             )
         check(pending.putIfAbsent(address, pendingRequest) == null) { "runtime request id collision" }
         val submission = scheduler.submit(endpoint, preparedCommand)
@@ -220,8 +220,8 @@ class ProgramRuntimeActorService(
                 this is ProgramRuntimeActorCommand.SendTerminalText ||
                 this is ProgramRuntimeActorCommand.SubmitCanonicalLine ||
                 this is ProgramRuntimeActorCommand.SubmitRedstoneInput ||
-                this is ProgramRuntimeActorCommand.CompleteRedstoneOutput ||
-                this is ProgramRuntimeActorCommand.CompleteSound
+                this is ProgramRuntimeActorCommand.ContinueRedstoneOutput ||
+                this is ProgramRuntimeActorCommand.ContinueSound
     }
 }
 

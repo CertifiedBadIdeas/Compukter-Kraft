@@ -97,23 +97,7 @@ internal class ProgramRuntimeActorProcessor(
             }
 
             is ProgramRuntimeActorCommand.Advance -> {
-                host.serverTick()
-                val redstone =
-                    redstonePort
-                        ?.takeRequestedOutput()
-                        ?.let { packed ->
-                            pendingRedstoneRequest = command.requestId
-                            ProgramRuntimeActorValue.RedstoneOutputRequested(packed)
-                        }
-                val sound =
-                    soundPort
-                        ?.takeRequestedSounds()
-                        ?.let { requests ->
-                            pendingSoundRequest = command.requestId
-                            ProgramRuntimeActorValue.SoundRequested(requests)
-                        }
-                check(redstone == null || sound == null) { "one actor advance cannot defer two world request batches" }
-                redstone ?: sound ?: ProgramRuntimeActorValue.None
+                advance(command.requestId)
             }
 
             is ProgramRuntimeActorCommand.TerminalFullState -> {
@@ -179,20 +163,28 @@ internal class ProgramRuntimeActorProcessor(
                 ProgramRuntimeActorValue.Accepted(host.submitRedstoneInput(command.packet))
             }
 
-            is ProgramRuntimeActorCommand.CompleteRedstoneOutput -> {
+            is ProgramRuntimeActorCommand.ContinueRedstoneOutput -> {
                 val accepted =
                     pendingRedstoneRequest == command.outputRequestId &&
                         host.completeRedstoneOutput(command.packed, command.result)
-                if (accepted) pendingRedstoneRequest = null
-                ProgramRuntimeActorValue.Accepted(accepted)
+                if (!accepted) {
+                    ProgramRuntimeActorValue.Accepted(false)
+                } else {
+                    pendingRedstoneRequest = null
+                    advance(command.requestId)
+                }
             }
 
-            is ProgramRuntimeActorCommand.CompleteSound -> {
+            is ProgramRuntimeActorCommand.ContinueSound -> {
                 val accepted =
                     pendingSoundRequest == command.soundRequestId &&
                         host.completeSound(command.result)
-                if (accepted) pendingSoundRequest = null
-                ProgramRuntimeActorValue.Accepted(accepted)
+                if (!accepted) {
+                    ProgramRuntimeActorValue.Accepted(false)
+                } else {
+                    pendingSoundRequest = null
+                    advance(command.requestId)
+                }
             }
 
             is ProgramRuntimeActorCommand.Shutdown -> {
@@ -213,6 +205,26 @@ internal class ProgramRuntimeActorProcessor(
                 ProgramRuntimeActorValue.Start(host.startBoot())
             }
         }
+
+    private fun advance(requestId: ProgramRuntimeRequestId): ProgramRuntimeActorValue {
+        host.serverTick()
+        val redstone =
+            redstonePort
+                ?.takeRequestedOutput()
+                ?.let { packed ->
+                    pendingRedstoneRequest = requestId
+                    ProgramRuntimeActorValue.RedstoneOutputRequested(packed)
+                }
+        val sound =
+            soundPort
+                ?.takeRequestedSounds()
+                ?.let { requests ->
+                    pendingSoundRequest = requestId
+                    ProgramRuntimeActorValue.SoundRequested(requests)
+                }
+        check(redstone == null || sound == null) { "one actor advance cannot defer two world request batches" }
+        return redstone ?: sound ?: ProgramRuntimeActorValue.None
+    }
 
     private fun prepareDeployment(command: ProgramRuntimeActorCommand.PrepareDeployment): ProgramRuntimeActorValue {
         val candidate =

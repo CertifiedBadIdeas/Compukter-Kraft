@@ -57,6 +57,7 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmOutcome
 import ru.lazyhat.compukters.lang.runtime.vm.VmResourceSnapshot
 import ru.lazyhat.compukters.lang.runtime.vm.VmValue
 import ru.lazyhat.compukters.lang.runtime.vm.VmVerificationException
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -165,12 +166,13 @@ class ProgramRuntimeActorProcessorTest {
                 )
             carrier.serverTick(1)
             awaitQueuedResult()
-            repeat(10) { carrier.serverTick(it.toLong() + 2) }
             assertEquals(1, service.metrics().queuedResults)
             service.pump(1)
             assertEquals(1, commits)
             assertEquals(1, service.runtimeMetrics().deferredWorldRequests)
             assertEquals(1, service.runtimeMetrics().totalDeferredWorldRequests)
+            assertEquals(0, service.metrics().queuedResults)
+            carrier.serverTick(2)
             awaitQueuedResult()
             service.pump(1)
             assertEquals(0, service.runtimeMetrics().deferredWorldRequests)
@@ -216,6 +218,7 @@ class ProgramRuntimeActorProcessorTest {
             carrier.turnOn()
             awaitQueuedResult(service)
             service.pump(1)
+            assertEquals(ProgramRuntimeState.Running, carrier.state)
             session.nextOutcome =
                 VmOutcome.HostRequestBatch(
                     listOf(VmHostRequest(1, SOUND, 0, listOf(VmValue.I32(12), VmValue.I32(75)))),
@@ -226,19 +229,80 @@ class ProgramRuntimeActorProcessorTest {
             service.pump(1)
             assertEquals(1, emissions)
             assertEquals(1, service.runtimeMetrics().deferredWorldRequests)
-            awaitQueuedResult(service)
+            assertEquals(0, service.metrics().queuedResults)
             carrier.serverTick(2)
+            awaitQueuedResult(service)
             service.pump(1)
 
             assertEquals(listOf<HostResponse>(HostResponse.BoolSuccess(true)), session.responses)
             assertEquals(0, service.runtimeMetrics().deferredWorldRequests)
+            val metrics = service.runtimeMetrics()
+            assertEquals(1, metrics.hostContinuationSamples)
+            assertEquals(1, metrics.totalHostContinuationDelayTicks)
+            assertEquals(1, metrics.maximumHostContinuationDelayTicks)
+            carrier.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
+    fun `mailbox rejection retains world completion for a later continuation`() {
+        val session = RecordingSession()
+        val port = ActorRedstoneHostPort()
+        val host =
+            ProgramRuntimeHost(
+                object : ProgramVmSessionFactory {
+                    override fun open(artifact: ByteArray): ProgramVmSession = session
+
+                    override fun boot(): ProgramVmSession = session
+                },
+                redstoneHostPort = port,
+            )
+        val endpoint = VmActorEndpoint(ComputerId.fromLongs(11, 12), 1)
+        val config = schedulerConfig(mailboxCapacity = 2)
+        ProgramRuntimeActorService(config).use { service ->
+            var commits = 0
+            val carrier =
+                ActorProgramComputer(service, requireNotNull(service.attach(endpoint, host, port)), {
+                    commits++
+                    RedstoneCommitResult.Committed
+                })
+            carrier.turnOn()
+            awaitQueuedResult(service)
+            service.pump(1)
+            assertEquals(ProgramRuntimeState.Running, carrier.state)
+            session.nextOutcome =
+                VmOutcome.HostRequestBatch(
+                    listOf(VmHostRequest(1, REDSTONE, 6, listOf(VmValue.I32(2), VmValue.I32(7)))),
+                )
+            carrier.serverTick(1)
+            awaitQueuedResult(service)
+            service.pump(1)
+            assertEquals(1, commits)
+
+            val entered = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            session.terminalStateBarrier = entered to release
+            carrier.request(ProgramRuntimeActorCommand::TerminalFullState)
+            assertTrue(entered.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+            carrier.request(ProgramRuntimeActorCommand::ResourceSnapshot)
+            carrier.request(ProgramRuntimeActorCommand::FileSystemGeneration)
+            carrier.serverTick(2)
+
+            assertEquals(1, service.metrics().mailboxFullRejections)
+            assertEquals(0, service.runtimeMetrics().hostContinuationSamples)
+            assertEquals(1, commits)
+            release.countDown()
+            awaitQueuedResults(service, 3)
+            service.pump(3)
+
             carrier.serverTick(3)
             awaitQueuedResult(service)
             service.pump(1)
-            val metrics = service.runtimeMetrics()
-            assertEquals(1, metrics.hostContinuationSamples)
-            assertEquals(2, metrics.totalHostContinuationDelayTicks)
-            assertEquals(2, metrics.maximumHostContinuationDelayTicks)
+            assertEquals(1, commits)
+            assertEquals(listOf<HostResponse>(HostResponse.UnitSuccess), session.responses)
+            assertEquals(0, service.runtimeMetrics().deferredWorldRequests)
+            assertEquals(1, service.runtimeMetrics().hostContinuationSamples)
+            assertEquals(2, service.runtimeMetrics().totalHostContinuationDelayTicks)
             carrier.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
         }
     }
@@ -269,7 +333,7 @@ class ProgramRuntimeActorProcessorTest {
     }
 
     @Test
-    fun `stale redstone acknowledgement cannot complete a newer identical output`() {
+    fun `stale redstone continuation cannot complete or advance a newer identical output`() {
         val session = RecordingSession()
         val port = ActorRedstoneHostPort()
         val host = ProgramRuntimeHost(ProgramVmSessionFactory { session }, redstoneHostPort = port)
@@ -289,21 +353,36 @@ class ProgramRuntimeActorProcessorTest {
             processor.process(ProgramRuntimeActorCommand.Shutdown(request(3)))
             processor.process(ProgramRuntimeActorCommand.Start(request(4), byteArrayOf(1)))
             assertEquals(packed, output(5))
+            val advancesBeforeStale = session.calls.count { it.startsWith("advance:") }
             val stale =
                 processor.process(
-                    ProgramRuntimeActorCommand.CompleteRedstoneOutput(request(6), request(2), packed, RedstoneCommitResult.Committed),
+                    ProgramRuntimeActorCommand.ContinueRedstoneOutput(
+                        request(6),
+                        worldTick = 6,
+                        outputRequestId = request(2),
+                        packed = packed,
+                        result = RedstoneCommitResult.Committed,
+                    ),
                 )
             assertEquals(false, assertIs<ProgramRuntimeActorValue.Accepted>(stale.value).accepted)
+            assertEquals(advancesBeforeStale, session.calls.count { it.startsWith("advance:") })
             val current =
                 processor.process(
-                    ProgramRuntimeActorCommand.CompleteRedstoneOutput(request(7), request(5), packed, RedstoneCommitResult.Committed),
+                    ProgramRuntimeActorCommand.ContinueRedstoneOutput(
+                        request(7),
+                        worldTick = 7,
+                        outputRequestId = request(5),
+                        packed = packed,
+                        result = RedstoneCommitResult.Committed,
+                    ),
                 )
-            assertTrue(assertIs<ProgramRuntimeActorValue.Accepted>(current.value).accepted)
+            assertIs<ProgramRuntimeActorValue.None>(current.value)
+            assertTrue(session.calls.count { it.startsWith("advance:") } > advancesBeforeStale)
         }
     }
 
     @Test
-    fun `redstone output crosses the actor boundary as a deferred world request`() {
+    fun `redstone continuation can return the next deferred world request`() {
         val session = RecordingSession()
         session.nextOutcome =
             VmOutcome.HostRequestBatch(
@@ -321,18 +400,37 @@ class ProgramRuntimeActorProcessorTest {
 
             val request = assertIs<ProgramRuntimeActorValue.RedstoneOutputRequested>(scheduler.awaitReplies(1).single().value)
             assertEquals(expected, request.packed)
+            session.nextOutcome =
+                VmOutcome.HostRequestBatch(
+                    listOf(VmHostRequest(2, REDSTONE, 6, listOf(VmValue.I32(3), VmValue.I32(9)))),
+                )
 
             scheduler.submit(
                 endpoint,
-                ProgramRuntimeActorCommand.CompleteRedstoneOutput(
+                ProgramRuntimeActorCommand.ContinueRedstoneOutput(
                     request(3),
-                    request(2),
-                    request.packed,
-                    RedstoneCommitResult.Committed,
+                    worldTick = 101,
+                    outputRequestId = request(2),
+                    packed = request.packed,
+                    result = RedstoneCommitResult.Committed,
                 ),
             )
-            assertTrue(assertIs<ProgramRuntimeActorValue.Accepted>(scheduler.awaitReplies(1).single().value).accepted)
-            assertTrue(session.calls.any { it.startsWith("resume:") })
+            val nextRequest =
+                assertIs<ProgramRuntimeActorValue.RedstoneOutputRequested>(scheduler.awaitReplies(1).single().value)
+            assertEquals(RedstoneWire.replaceOutput(expected, 3, 9), nextRequest.packed)
+
+            scheduler.submit(
+                endpoint,
+                ProgramRuntimeActorCommand.ContinueRedstoneOutput(
+                    request(4),
+                    worldTick = 102,
+                    outputRequestId = request(3),
+                    packed = nextRequest.packed,
+                    result = RedstoneCommitResult.Committed,
+                ),
+            )
+            assertIs<ProgramRuntimeActorValue.None>(scheduler.awaitReplies(1).single().value)
+            assertEquals(2, session.calls.count { it.startsWith("resume:") })
         }
     }
 
@@ -356,13 +454,14 @@ class ProgramRuntimeActorProcessorTest {
 
             val completed =
                 processor.process(
-                    ProgramRuntimeActorCommand.CompleteSound(
+                    ProgramRuntimeActorCommand.ContinueSound(
                         request(3),
-                        request(2),
-                        SoundCommitResult.Completed(listOf(true)),
+                        worldTick = 101,
+                        soundRequestId = request(2),
+                        result = SoundCommitResult.Completed(listOf(true)),
                     ),
                 )
-            assertTrue(assertIs<ProgramRuntimeActorValue.Accepted>(completed.value).accepted)
+            assertIs<ProgramRuntimeActorValue.None>(completed.value)
             assertEquals(listOf<HostResponse>(HostResponse.BoolSuccess(true)), session.responses)
         }
     }
@@ -463,11 +562,11 @@ class ProgramRuntimeActorProcessorTest {
         }
     }
 
-    private fun schedulerConfig(): VmActorSchedulerConfig =
+    private fun schedulerConfig(mailboxCapacity: Int = 32): VmActorSchedulerConfig =
         VmActorSchedulerConfig(
             workerCount = 1,
             maximumActors = 4,
-            mailboxCapacity = 32,
+            mailboxCapacity = mailboxCapacity,
             messagesPerTurn = 4,
             resultCapacityPerWorker = 32,
         )
@@ -475,9 +574,16 @@ class ProgramRuntimeActorProcessorTest {
     private fun request(value: Long) = ProgramRuntimeRequestId(value)
 
     private fun awaitQueuedResult(service: ProgramRuntimeActorService) {
+        awaitQueuedResults(service, 1)
+    }
+
+    private fun awaitQueuedResults(
+        service: ProgramRuntimeActorService,
+        count: Int,
+    ) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
-        while (service.metrics().queuedResults == 0 && System.nanoTime() < deadline) Thread.onSpinWait()
-        assertTrue(service.metrics().queuedResults > 0)
+        while (service.metrics().queuedResults < count && System.nanoTime() < deadline) Thread.onSpinWait()
+        assertTrue(service.metrics().queuedResults >= count, "queued actor results: ${service.metrics()}")
     }
 
     private fun VmActorScheduler<ProgramRuntimeActorCommand, ProgramRuntimeActorReply>.awaitReplies(
@@ -514,6 +620,7 @@ class ProgramRuntimeActorProcessorTest {
         var nextOutcome: VmOutcome = VmOutcome.SliceExhausted
         var rejectVerification = false
         var rejectCanonicalLine = false
+        var terminalStateBarrier: Pair<CountDownLatch, CountDownLatch>? = null
 
         override fun advance(
             guestBudget: Int,
@@ -541,7 +648,15 @@ class ProgramRuntimeActorProcessorTest {
 
         override fun commitTerminal() = record("commitTerminal") { }
 
-        override fun terminalFullState(): TerminalState = record("terminalFullState") { terminal }
+        override fun terminalFullState(): TerminalState =
+            record("terminalFullState") {
+                terminalStateBarrier?.let { (entered, release) ->
+                    entered.countDown()
+                    check(release.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)) { "terminal state barrier timed out" }
+                    terminalStateBarrier = null
+                }
+                terminal
+            }
 
         override fun terminalChangesSince(revision: Long): TerminalUpdate =
             record("terminalChangesSince") { TerminalUpdate.Unchanged(revision) }

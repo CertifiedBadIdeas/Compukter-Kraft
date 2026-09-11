@@ -167,7 +167,8 @@ that is part of the experiment. Keep all benchmark chunks loaded without relying
    before the next run.
 
 Compare MSPT/TPS together with deltas, not absolute lifetime counters. `worldDeferred` is the current number of actors
-waiting on a world acknowledgement, while the `worldTotal` delta counts world requests surfaced during the interval.
+waiting to submit or finish a world-result continuation, while the `worldTotal` delta counts world requests surfaced
+during the interval.
 Also record `results`, `queueAvgUs`/`queueMaxUs`, `resultAvgUs`/`resultMaxUs`, `drainedLast`, `pumpLastUs`,
 `inputRejected`, and `mailboxRejected`. A healthy saturation curve increases queue and completion latency under the
 fixed server-thread bound; it must not turn one tick into unbounded world work. A `worldTotal` delta of twice the round
