@@ -125,6 +125,8 @@ barrier does not depend on server result pumping and may complete on a worker th
 `ProgramRuntimeHost` owns one current Rust `ComputerMachine`, advances it with bounded guest and maintenance budgets,
 commits terminal changes once per active server tick, and exposes typed full/delta states and failures through JDK 25
 FFM. It does not own a second grid or output transcript. It is loader-independent and confined to its actor worker.
+The production execution profile reserves a 256 KiB managed heap for each active foreground process; child-process
+capacity is charged independently while its parent is suspended. Heap arenas are released with their owning machine.
 An explicit actor request can also compose one immutable resource snapshot from host lifecycle/configuration and the
 native machine's semantic work, Guest heap, admitted mutable execution-resident, and filesystem quota counters. The
 host counts Guest and maintenance budgets only when it actually invokes native advancement; both host and native
