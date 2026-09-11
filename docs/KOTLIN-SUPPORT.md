@@ -204,13 +204,19 @@ supported.
   [`kotlin_writer.rs`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs),
   test `k2_suspend_project_call_resumes_across_async_capability`.
 
-- [ ] **Default arguments — Partial** — omitted `Array<String>` parameters are
-  supported only for direct `emptyArray()` or direct `arrayOf` call defaults;
-  general default expressions and constructor defaults are rejected.
+- [ ] **Default arguments — Partial** — platform APIs may publish constant
+  `Int` or qualified enum-entry defaults, which direct platform calls lower
+  without JVM mask dispatchers. Omitted `Array<String>` parameters in project
+  functions are supported only for direct `emptyArray()` or direct `arrayOf`
+  call defaults; general default expressions and constructor defaults are
+  rejected.
   Evidence:
   [`MinimalScriptLoweringTest`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/compiler-k2/src/test/kotlin/ru/lazyhat/compukters/compiler/worker/k2/MinimalScriptLoweringTest.kt),
-  tests `string arrays support copyOfRange and supported default arguments`
-  and `guest object subset rejects mutable generic initialized secondary and explicitly cast shapes`.
+  tests `sound beep lowers deterministically to a blocking Boolean capability operation`,
+  `string arrays support copyOfRange and supported default arguments`, and
+  `guest object subset rejects mutable generic initialized secondary and explicitly cast shapes`;
+  [`ParameterInfoQueryTest`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/ide-analysis-k2/src/test/kotlin/ru/lazyhat/compukters/ide/analysis/k2/query/ParameterInfoQueryTest.kt),
+  test `parameter info exposes a platform Int default`.
   Tracking: not scheduled
 
 - [ ] **Extension functions and overloads — Partial** — K2 resolves project
@@ -470,8 +476,7 @@ cannot become one merely by copying its package, name, and signature.
 
 ## Compukters Guest APIs
 
-- [x] **One-shot sound** — `Sound.beep(note)` and
-  `Sound.beep(note, volume)` emit the vanilla note-block pling from the
+- [x] **One-shot sound** — `Sound.beep(note, volume = 100)` emits the vanilla note-block pling from the
   computer and return whether the server admitted it. Notes are bounded to
   `0..24`, with `12` as neutral pitch; volume is bounded to `1..100` and
   defaults to `100`. A computer may emit once every four ticks, the server

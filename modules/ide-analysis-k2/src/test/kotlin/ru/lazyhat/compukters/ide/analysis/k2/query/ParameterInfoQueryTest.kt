@@ -84,6 +84,22 @@ class ParameterInfoQueryTest {
         }
     }
 
+    @Test
+    fun `parameter info exposes a platform Int default`() {
+        val source =
+            """
+            import compukter.sound.Sound
+
+            fun main() { Sound.beep(12, ) }
+            """.trimIndent()
+        K2QueryFixture.sourceWithGuestApi(false, "main.kt" to source).use { fixture ->
+            val info = assertNotNull(fixture.parameterInfo(source.indexOf(",") + 2))
+
+            assertEquals(listOf("beep(note: Int, volume: Int = …): Boolean"), info.items.map { it.signature })
+            assertEquals("volume: Int = …", info.items.single().activeText())
+        }
+    }
+
     private fun K2QueryFixture.parameterInfo(offset: Int) =
         (execute(AnalysisQuery.ParameterInfo(identity, VirtualSourcePath.kotlin("main.kt"), offset)) as AnalysisResult.ParameterInfo).value
 

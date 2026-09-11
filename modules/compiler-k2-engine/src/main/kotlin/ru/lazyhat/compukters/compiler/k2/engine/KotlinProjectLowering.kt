@@ -628,8 +628,12 @@ internal object KotlinProjectLowering {
         val literalIds = literals.withIndex().associate { (index, value) -> value to Utf16LiteralId.of(index.toUInt()) }
         val constantPool = ConstantPoolBuilder()
         (
-            (literalCollector.values + inlineValueClasses.constantValues() + platformScalars.constantValues())
-                .map { value -> value.toArtifactConstant(literalIds) } +
+            (
+                literalCollector.values +
+                    inlineValueClasses.constantValues() +
+                    platformScalars.constantValues() +
+                    linkedSymbols.defaultIntValues
+            ).map { value -> value.toArtifactConstant(literalIds) } +
                 Constant.I32(0) +
                 listOfNotNull(Constant.I32(-1).takeIf { needsAllBitsI32 }) +
                 Constant.Bool(false)
@@ -1588,6 +1592,7 @@ private data class LinkedPlatformSymbols(
     val fieldsByGetter: Map<IrSimpleFunctionSymbol, ExternalFieldTarget>,
     val enumEntries: Map<IrEnumEntrySymbol, ExternalFieldTarget>,
     val defaultEnumEntries: Map<String, ExternalFieldTarget>,
+    val defaultIntValues: Set<Int>,
 )
 
 @OptIn(UnsafeDuringIrConstructionAPI::class)
@@ -1694,7 +1699,11 @@ private fun linkedPlatformSymbols(
             require(field.static) { "platform enum default entry is not static: ${argument.symbol}" }
             defaultEnumEntries[argument.symbol] = field
         }
-    return LinkedPlatformSymbols(types, fieldsByGetter, enumEntries, defaultEnumEntries)
+    val defaultIntValues =
+        neededDefaultArguments
+            .filterIsInstance<PlatformDefaultArgument.IntValue>()
+            .mapTo(linkedSetOf(), PlatformDefaultArgument.IntValue::value)
+    return LinkedPlatformSymbols(types, fieldsByGetter, enumEntries, defaultEnumEntries, defaultIntValues)
 }
 
 @OptIn(UnsafeDuringIrConstructionAPI::class)
@@ -2255,6 +2264,15 @@ private class FunctionCompiler(
 
             is ResolvedCallArgument.PlatformDefault -> {
                 when (val value = argument.value) {
+                    is PlatformDefaultArgument.IntValue -> {
+                        val constantId =
+                            constantIds[Constant.I32(value.value)]
+                                ?: throw IllegalArgumentException("platform Int default is absent from canonical pool: ${value.value}")
+                        allocate(ValueType.I32).also { destination ->
+                            emit(Instruction.Const(destination, constantId))
+                        }
+                    }
+
                     is PlatformDefaultArgument.EnumEntry -> {
                         val field =
                             externalDefaultEnumEntries[value.symbol]

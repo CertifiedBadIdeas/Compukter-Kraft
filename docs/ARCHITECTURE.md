@@ -23,6 +23,8 @@ Guest Kotlin declarations are authored in `guest-platform` as separately version
 canonical platform bundle consumed by both compilation and IDE analysis. `platform-bundle` owns the bundle model,
 codec, module graph, and default imports; `platform-k2` exposes that metadata to K2 without making the K2
 implementation part of the platform format.
+Constant `Int` and qualified enum-entry defaults cross this bundle explicitly; compiler lowering materializes an
+omitted platform argument without a JVM-style mask dispatcher. Other platform default expressions remain unsupported.
 
 Compiler and analysis workers are pinned, isolated JVM processes. Their payloads are assembled into one bounded
 `k2-tooling-workers.zip.xz`: nested runtime JARs and the carrier ZIP use canonical stored entries, then the complete
