@@ -79,11 +79,13 @@ class CanonicalPlatformSourceTest {
                 "compukter:compiler",
                 "compukter:process",
                 "compukter:redstone",
+                "compukter:sound",
             ),
             modulesById.keys,
         )
         assertTrue(modulesById.getValue("kotlin:builtins").dependencies.isEmpty())
         assertEquals("2.0.0", modulesById.getValue("compukter:redstone").version)
+        assertEquals("1.0.0", modulesById.getValue("compukter:sound").version)
         catalog.modules.forEach { module ->
             assertTrue(MODULE_ID.matches(module.id), "invalid module id ${module.id}")
             assertTrue(VERSION.matches(module.version), "invalid module version ${module.version}")

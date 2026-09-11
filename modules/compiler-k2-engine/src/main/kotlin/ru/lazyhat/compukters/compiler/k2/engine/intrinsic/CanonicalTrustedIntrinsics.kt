@@ -30,9 +30,10 @@ object CanonicalTrustedIntrinsics {
     val filesystem = PlatformCapabilityId("compukter", "filesystem", 1)
     val compiler = PlatformCapabilityId("compukter", "compiler", 1)
     val redstone = PlatformCapabilityId("compukter", "redstone", 1)
+    val sound = PlatformCapabilityId("compukter", "sound", 1)
 
     val executableCapabilities: Set<PlatformCapabilityId> =
-        setOf(terminal, stdio, process, filesystem, compiler, redstone)
+        setOf(terminal, stdio, process, filesystem, compiler, redstone, sound)
 
     val registry: TrustedIntrinsicRegistry = TrustedIntrinsicRegistry.create(registrations())
 
@@ -153,6 +154,17 @@ object CanonicalTrustedIntrinsics {
                     blocking,
                 )
             }
+
+            capability(
+                "compukter",
+                "sound",
+                "compukter.sound",
+                "SoundBindings.beep",
+                "fun(Int,Int):Boolean",
+                sound,
+                0u,
+                true,
+            )
 
             listOf(
                 Triple("stat", "fun(String):Int", 0u),

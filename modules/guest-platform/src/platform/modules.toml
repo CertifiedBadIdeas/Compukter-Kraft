@@ -45,3 +45,9 @@ id = "compukter:redstone"
 version = "2.0.0"
 dependencies = ["stdlib:core", "stdlib:ranges"]
 sources = ["libraries/compukter-redstone/**/*.kt"]
+
+[[module]]
+id = "compukter:sound"
+version = "1.0.0"
+dependencies = ["stdlib:core"]
+sources = ["libraries/compukter-sound/**/*.kt"]

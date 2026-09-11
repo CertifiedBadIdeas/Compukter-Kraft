@@ -70,6 +70,29 @@ import kotlin.test.assertTrue
 
 class MinimalScriptLoweringTest {
     @Test
+    fun `sound beep lowers deterministically to a blocking Boolean capability operation`() =
+        withAdapter { adapter ->
+            val source =
+                """
+                import compukter.sound.Sound
+
+                fun main() {
+                    if (Sound.beep(12)) {
+                        Sound.beep(24, 50)
+                    }
+                }
+                """.trimIndent()
+            val first = adapter.compile(request(source))
+            val second = adapter.compile(request(source))
+            val artifact = assertNotNull(first.artifact, first.diagnostics.joinToString()).toByteArray()
+            val opcodes = allOpcodes(artifact)
+
+            assertContentEquals(artifact, assertNotNull(second.artifact).toByteArray())
+            assertTrue(first.diagnostics.none { it.severity.name == "ERROR" }, first.diagnostics.toString())
+            assertEquals(1, opcodes.count { it == 0xe9 }, "the shared beep implementation must block on its VM task: $opcodes")
+        }
+
+    @Test
     fun `redstone program lowers deterministically for vm conformance`() =
         withAdapter { adapter ->
             val source =

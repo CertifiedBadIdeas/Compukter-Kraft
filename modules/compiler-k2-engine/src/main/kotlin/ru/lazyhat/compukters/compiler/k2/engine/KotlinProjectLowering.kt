@@ -3294,6 +3294,7 @@ private fun capabilityOperationCount(
         "compukter" to "filesystem" -> 7u
         "compukter" to "compiler" -> 2u
         "compukter" to "redstone" -> 8u
+        "compukter" to "sound" -> 1u
         else -> error("unknown Compukters capability $namespace:$name")
     }
 
