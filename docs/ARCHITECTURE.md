@@ -246,9 +246,10 @@ ordinary foreground process and VM quota path. It exists to measure aggregate in
 timing capability, privileged execution budget, or benchmark-only host path. See the
 [in-world VM benchmark guide](https://certifiedbadideas.github.io/Compukters/VM-BENCHMARK/) for the controlled scaling procedure.
 An operator-only harness can run up to 4096 internal headless artifacts through the same verified session and actor
-scheduler, or dispatch the ordinary `/rom/vmbench` command to at most 1000 loaded physical computers in a bounded
-area. The harness owns no persistent computer identity, never loads chunks, and does not provide a guest-visible fleet
-protocol.
+scheduler, including a phased capacity run that settles actors at terminal input, observes 100 idle ticks, samples
+their existing resource counters once, and wakes them with an ordinary Text event. It can also dispatch the ordinary
+`/rom/vmbench` command to at most 1000 loaded physical computers in a bounded area. The harness owns no persistent
+computer identity, never loads chunks, and does not provide a guest-visible fleet protocol.
 
 Terminal, standard output and error, redstone, process, filesystem, and compiler declarations live in the
 `guest-platform` bundle as separately identifiable modules. Compilation and IDE analysis resolve the same module graph

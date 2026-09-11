@@ -63,6 +63,26 @@ internal object VmBenchmarkCommands {
                                                         context.source,
                                                         IntegerArgumentType.getInteger(context, "count"),
                                                         IntegerArgumentType.getInteger(context, "rounds"),
+                                                        HeadlessVmBenchmarkMode.CPU,
+                                                    )
+                                                },
+                                        ),
+                                ),
+                        ).then(
+                            Commands
+                                .literal("capacity")
+                                .then(
+                                    Commands
+                                        .argument("count", IntegerArgumentType.integer(1, MAXIMUM_ACTORS))
+                                        .then(
+                                            Commands
+                                                .argument("rounds", IntegerArgumentType.integer(1, MAXIMUM_ROUNDS))
+                                                .executes { context ->
+                                                    start(
+                                                        context.source,
+                                                        IntegerArgumentType.getInteger(context, "count"),
+                                                        IntegerArgumentType.getInteger(context, "rounds"),
+                                                        HeadlessVmBenchmarkMode.CAPACITY,
                                                     )
                                                 },
                                         ),
@@ -103,7 +123,7 @@ internal object VmBenchmarkCommands {
         fleet.tick(worldTick)
         val report = automaticReports[event.server] ?: return
         val snapshot = fleet.snapshot(event.server.currentMspt())
-        if (report.schedule.shouldReport(worldTick, snapshot.status)) {
+        if (report.schedule.shouldReport(worldTick, snapshot.status, snapshot.phase)) {
             report.source.sendSuccess({ Component.literal(snapshot.describe()) }, false)
             if (snapshot.status.isTerminal()) automaticReports.remove(event.server)
         }
@@ -120,23 +140,25 @@ internal object VmBenchmarkCommands {
         source: CommandSourceStack,
         count: Int,
         rounds: Int,
+        mode: HeadlessVmBenchmarkMode,
     ): Int =
         runCatching {
+            val worldTick = source.server.tickCount.toLong()
             val result =
-                fleet(source.server).start(
-                    count,
-                    rounds,
-                    source.server.tickCount.toLong(),
-                )
+                when (mode) {
+                    HeadlessVmBenchmarkMode.CPU -> fleet(source.server).start(count, rounds, worldTick)
+                    HeadlessVmBenchmarkMode.CAPACITY -> fleet(source.server).startCapacity(count, rounds, worldTick)
+                }
             automaticReports[source.server] =
                 AutomaticReport(
                     source,
-                    VmBenchmarkReportSchedule(source.server.tickCount.toLong()),
+                    VmBenchmarkReportSchedule(worldTick, initialPhase = mode.initialPhase()),
                 )
             source.sendSuccess(
                 {
                     Component.literal(
-                        "Headless VM benchmark admitted ${result.admittedActors}/${result.requestedActors} actors " +
+                        "Headless VM ${mode.startDescription()} admitted " +
+                            "${result.admittedActors}/${result.requestedActors} actors " +
                             "for $rounds rounds",
                     )
                 },
@@ -222,15 +244,33 @@ internal object VmBenchmarkCommands {
         val executionNanos = (metrics.scheduler.totalExecutionNanos - baseline.scheduler.totalExecutionNanos).coerceAtLeast(0)
         val resultNanos =
             (metrics.scheduler.totalResultLatencyNanos - baseline.scheduler.totalResultLatencyNanos).coerceAtLeast(0)
-        return "Headless VM benchmark: $status; actors=$activeActors active/$completedActors completed/$failedActors failed/" +
+        val phaseDetails = if (mode == HeadlessVmBenchmarkMode.CAPACITY) "mode=$mode, phase=$phase, " else ""
+        val waitingDetails = if (mode == HeadlessVmBenchmarkMode.CAPACITY) "/$waitingActors waiting" else ""
+        val capacityDetails =
+            if (mode == HeadlessVmBenchmarkMode.CAPACITY) {
+                ", settle=${settleTicks.describe()}, wake=${wakeTicks.describe()}, " +
+                    "completion=${completionTicks.describe()}, memory=${memory.describe()}"
+            } else {
+                ""
+            }
+        return "Headless VM benchmark: $status; $phaseDetails" +
+            "actors=$activeActors active$waitingDetails/$completedActors completed/$failedActors failed/" +
             "$admittedActors admitted ($requestedActors requested), closing=$closingActors, rounds=$rounds, " +
             "ticks=$elapsedTicks, MSPT=${"%.3f".format(Locale.ROOT, currentMspt)}, mailbox=${metrics.scheduler.queuedMessages}, " +
             "results=${metrics.scheduler.queuedResults}, workers=${metrics.scheduler.busyWorkers}, " +
             "queueAvgUs=${queueNanos / processed / 1_000}, executionAvgUs=${executionNanos / processed / 1_000}, " +
             "resultAvgUs=${resultNanos / drained / 1_000}, drainedLast=${metrics.lastPumpEvents}, " +
             "pumpLastUs=${metrics.lastPumpNanos / 1_000}, " +
-            "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}"
+            "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}" +
+            capacityDetails
     }
+
+    private fun VmBenchmarkTickDistribution.describe(): String =
+        if (samples == 0) "n=0" else "n=$samples/median=$medianTicks/p95=$p95Ticks/max=$maximumTicks ticks"
+
+    private fun VmBenchmarkMemorySummary.describe(): String =
+        "samples=$availableSamples available/$unavailableSamples unavailable, " +
+            "heap=$heapUsedBytes/$heapCapacityBytes bytes, executionResident=$executionResidentBytes bytes"
 
     private const val MAXIMUM_ACTORS = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS
     private const val MAXIMUM_ROUNDS = 1_000_000
@@ -244,9 +284,11 @@ internal object VmBenchmarkCommands {
 internal class VmBenchmarkReportSchedule(
     startedTick: Long,
     private val intervalTicks: Long = REPORT_INTERVAL_TICKS,
+    initialPhase: HeadlessVmBenchmarkPhase = HeadlessVmBenchmarkPhase.IDLE,
 ) {
     private var nextReportTick = startedTick + intervalTicks
     private var terminalReported = false
+    private var observedPhase = initialPhase
 
     init {
         require(startedTick >= 0) { "benchmark start tick must not be negative" }
@@ -256,11 +298,17 @@ internal class VmBenchmarkReportSchedule(
     fun shouldReport(
         worldTick: Long,
         status: HeadlessVmBenchmarkStatus,
+        phase: HeadlessVmBenchmarkPhase,
     ): Boolean {
         require(worldTick >= 0) { "world tick must not be negative" }
         if (terminalReported) return false
         if (status.isTerminal()) {
             terminalReported = true
+            return true
+        }
+        if (phase != observedPhase) {
+            observedPhase = phase
+            nextReportTick = worldTick + intervalTicks
             return true
         }
         if (worldTick < nextReportTick) return false
@@ -275,3 +323,15 @@ internal class VmBenchmarkReportSchedule(
 
 private fun HeadlessVmBenchmarkStatus.isTerminal(): Boolean =
     this == HeadlessVmBenchmarkStatus.COMPLETED || this == HeadlessVmBenchmarkStatus.STOPPED
+
+private fun HeadlessVmBenchmarkMode.initialPhase(): HeadlessVmBenchmarkPhase =
+    when (this) {
+        HeadlessVmBenchmarkMode.CPU -> HeadlessVmBenchmarkPhase.CPU
+        HeadlessVmBenchmarkMode.CAPACITY -> HeadlessVmBenchmarkPhase.SETTLING
+    }
+
+private fun HeadlessVmBenchmarkMode.startDescription(): String =
+    when (this) {
+        HeadlessVmBenchmarkMode.CPU -> "benchmark"
+        HeadlessVmBenchmarkMode.CAPACITY -> "capacity benchmark"
+    }

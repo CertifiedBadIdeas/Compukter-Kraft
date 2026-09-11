@@ -206,7 +206,7 @@ internal class HeadlessVmBenchmarkFleet(
             }
 
             HeadlessVmBenchmarkPhase.IDLE -> {
-                if (current.lastTick - current.phaseStartedTick >= IDLE_OBSERVATION_TICKS) startSampling(current)
+                if (current.lastTick - current.phaseStartedTick > IDLE_OBSERVATION_TICKS) startSampling(current)
             }
 
             HeadlessVmBenchmarkPhase.SAMPLING -> {

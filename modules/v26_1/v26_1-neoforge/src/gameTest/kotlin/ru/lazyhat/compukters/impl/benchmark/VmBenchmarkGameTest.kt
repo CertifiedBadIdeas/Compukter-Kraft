@@ -66,6 +66,28 @@ internal class VmBenchmarkGameTest(
                 helper.assertTrue(snapshot.admittedActors == 2, "headless benchmark did not admit both actors")
                 helper.assertTrue(snapshot.completedActors == 2, "headless benchmark actors did not halt")
                 helper.assertTrue(snapshot.failedActors == 0, "headless benchmark actor failed")
+            }.thenExecute {
+                server.commands.performPrefixedCommand(
+                    server.createCommandSourceStack(),
+                    "compukters vmbench capacity 2 2",
+                )
+            }.thenWaitUntil {
+                val snapshot = VmBenchmarkCommands.snapshot(server)
+                helper.assertTrue(snapshot != null, "capacity benchmark command did not create a fleet")
+                helper.assertTrue(
+                    snapshot!!.status == HeadlessVmBenchmarkStatus.COMPLETED,
+                    "capacity benchmark is still ${snapshot.status}/${snapshot.phase}: " +
+                        "active=${snapshot.activeActors}, waiting=${snapshot.waitingActors}, failed=${snapshot.failedActors}",
+                )
+            }.thenExecute {
+                val snapshot = requireNotNull(VmBenchmarkCommands.snapshot(server))
+                helper.assertTrue(snapshot.mode == HeadlessVmBenchmarkMode.CAPACITY, "capacity benchmark mode was not retained")
+                helper.assertTrue(snapshot.completedActors == 2, "capacity benchmark actors did not halt")
+                helper.assertTrue(snapshot.failedActors == 0, "capacity benchmark actor failed")
+                helper.assertTrue(snapshot.settleTicks.samples == 2, "capacity settle distribution is incomplete")
+                helper.assertTrue(snapshot.wakeTicks.samples == 2, "capacity wake distribution is incomplete")
+                helper.assertTrue(snapshot.completionTicks.samples == 2, "capacity completion distribution is incomplete")
+                helper.assertTrue(snapshot.memory.availableSamples == 2, "capacity memory samples are incomplete")
             }.thenWaitUntil {
                 helper.assertTrue(
                     first.runtimeState == ProgramComputerState.WaitingForInput &&

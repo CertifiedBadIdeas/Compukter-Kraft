@@ -46,6 +46,7 @@ With cheats or server-operator permission, start up to 4096 ephemeral benchmark 
 
 ```text
 /compukters vmbench start <count 1..4096> <rounds 1..1000000>
+/compukters vmbench capacity <count 1..4096> <rounds 1..1000000>
 /compukters vmbench status
 /compukters vmbench stop
 ```
@@ -55,17 +56,30 @@ computers. The artifact receives `rounds` through an ordinary terminal Text even
 It has no persistent filesystem or block entity and is closed through the actor lifecycle barrier after completion,
 explicit stop, or server shutdown.
 
+`capacity` runs the same artifact as a phased sequence. It first advances every admitted VM until the program is
+waiting for terminal input, then leaves the settled fleet untouched for 100 server ticks. At the end of that idle
+window it requests one resource snapshot from each waiting actor, sends the ordinary rounds Text event to wake the
+whole fleet, and executes the same CPU workload as `start`. The idle window therefore measures resident capacity
+without benchmark-generated VM execution; normal actor-service bookkeeping and unrelated server work continue.
+
 `status` reports admitted, active, completed, failed, and closing actors; elapsed ticks and current smoothed Minecraft
 MSPT; worker, mailbox, and result occupancy; average command-queue, execution, and completed-result latency; the last
-server pump size and duration; and mailbox rejection deltas. While a fleet is running or stopping, the command source
-that started it receives this report automatically every five seconds, plus the final `COMPLETED` or `STOPPED` report;
-the explicit `status` command remains available for an immediate snapshot. Admission may be lower than requested when
-ordinary computers already occupy the configured actor capacity. Run `stop` before changing the workload, and wait for
-`STOPPED` before starting another fleet.
+server pump size and duration; and mailbox rejection deltas. Capacity reports additionally include the current phase
+and waiting count; nearest-rank median, p95, and maximum settle, wake, and completion tick counts; and aggregate heap
+used/capacity plus mutable execution-resident bytes. Missing resource replies are counted separately. While a fleet is
+running or stopping, the command source that started it receives this report on every phase transition, automatically
+every five seconds within a phase, and once more for the final `COMPLETED` or `STOPPED` state. The explicit `status`
+command remains available for an immediate snapshot. Admission may be lower than requested when ordinary computers
+already occupy the configured actor capacity. Run `stop` before changing the workload, and wait for `STOPPED` before
+starting another fleet.
 
 For an initial saturation profile, record an idle baseline and compare equal intervals at 1, 10, 100, 500, 1000, and
 4096 actors. Use enough rounds that the fleet remains active for the complete observation interval. Scheduler
 saturation should increase queue latency and completion time rather than Minecraft MSPT.
+
+For the production capacity check requested by issue #606, run
+`/compukters vmbench capacity 1000 1000000`. Preserve the automatic phase reports: the idle report describes resident
+cost after settling, while wake and CPU reports show the scheduler burst and sustained execution separately.
 
 ## Dispatch to physical computers
 

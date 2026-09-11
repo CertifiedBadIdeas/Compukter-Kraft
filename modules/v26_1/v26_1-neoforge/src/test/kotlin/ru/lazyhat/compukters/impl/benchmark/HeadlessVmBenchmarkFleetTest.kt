@@ -56,10 +56,12 @@ class HeadlessVmBenchmarkFleetTest {
         assertEquals(listOf(0, 0), runtime.actors.map(FakeActor::resourceCalls))
 
         fleet.tick(112)
-        assertEquals(listOf(1, 1), runtime.actors.map(FakeActor::resourceCalls))
+        assertEquals(listOf(0, 0), runtime.actors.map(FakeActor::resourceCalls))
         fleet.tick(113)
-        assertEquals(listOf(7, 7), runtime.actors.map(FakeActor::rounds))
+        assertEquals(listOf(1, 1), runtime.actors.map(FakeActor::resourceCalls))
         fleet.tick(114)
+        assertEquals(listOf(7, 7), runtime.actors.map(FakeActor::rounds))
+        fleet.tick(115)
         runtime.actors[0]
             .advances
             .last()
@@ -68,7 +70,7 @@ class HeadlessVmBenchmarkFleetTest {
             .advances
             .last()
             .complete(ProgramRuntimeState.Halted(null))
-        fleet.tick(115)
+        fleet.tick(116)
 
         val snapshot = fleet.snapshot(1.5)
         assertEquals(HeadlessVmBenchmarkStatus.COMPLETED, snapshot.status)
@@ -99,14 +101,20 @@ class HeadlessVmBenchmarkFleetTest {
 
     @Test
     fun `automatic reports follow their interval and emit terminal status once`() {
-        val schedule = VmBenchmarkReportSchedule(startedTick = 10, intervalTicks = 100)
+        val schedule =
+            VmBenchmarkReportSchedule(
+                startedTick = 10,
+                intervalTicks = 100,
+                initialPhase = HeadlessVmBenchmarkPhase.SETTLING,
+            )
 
-        assertEquals(false, schedule.shouldReport(109, HeadlessVmBenchmarkStatus.RUNNING))
-        assertEquals(true, schedule.shouldReport(110, HeadlessVmBenchmarkStatus.RUNNING))
-        assertEquals(false, schedule.shouldReport(209, HeadlessVmBenchmarkStatus.STOPPING))
-        assertEquals(true, schedule.shouldReport(210, HeadlessVmBenchmarkStatus.STOPPING))
-        assertEquals(true, schedule.shouldReport(211, HeadlessVmBenchmarkStatus.STOPPED))
-        assertEquals(false, schedule.shouldReport(310, HeadlessVmBenchmarkStatus.STOPPED))
+        assertEquals(false, schedule.shouldReport(109, HeadlessVmBenchmarkStatus.RUNNING, HeadlessVmBenchmarkPhase.SETTLING))
+        assertEquals(true, schedule.shouldReport(110, HeadlessVmBenchmarkStatus.RUNNING, HeadlessVmBenchmarkPhase.SETTLING))
+        assertEquals(true, schedule.shouldReport(111, HeadlessVmBenchmarkStatus.RUNNING, HeadlessVmBenchmarkPhase.IDLE))
+        assertEquals(false, schedule.shouldReport(210, HeadlessVmBenchmarkStatus.STOPPING, HeadlessVmBenchmarkPhase.IDLE))
+        assertEquals(true, schedule.shouldReport(211, HeadlessVmBenchmarkStatus.STOPPING, HeadlessVmBenchmarkPhase.CLOSING))
+        assertEquals(true, schedule.shouldReport(212, HeadlessVmBenchmarkStatus.STOPPED, HeadlessVmBenchmarkPhase.STOPPED))
+        assertEquals(false, schedule.shouldReport(311, HeadlessVmBenchmarkStatus.STOPPED, HeadlessVmBenchmarkPhase.STOPPED))
     }
 
     @Test
