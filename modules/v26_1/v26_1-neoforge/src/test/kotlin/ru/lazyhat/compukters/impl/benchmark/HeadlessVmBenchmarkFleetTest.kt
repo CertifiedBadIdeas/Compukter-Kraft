@@ -22,13 +22,81 @@ import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorMetric
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEndpoint
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerMetrics
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramFailure
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramTickBudget
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class HeadlessVmBenchmarkFleetTest {
+    @Test
+    fun `capacity fleet settles stays quiescent samples once and wakes through terminal text`() {
+        val runtime = FakeRuntime(capacity = 2)
+        val fleet = HeadlessVmBenchmarkFleet(runtime, byteArrayOf(1), maximumActors = 2)
+
+        assertEquals(HeadlessVmBenchmarkStart(2, 2), fleet.startCapacity(2, 7, 10))
+        assertEquals(listOf(0, 0), runtime.actors.map(FakeActor::rounds))
+
+        fleet.tick(11)
+        runtime.actors[0]
+            .advances
+            .single()
+            .complete(ProgramRuntimeState.WaitingForInput)
+        runtime.actors[1]
+            .advances
+            .single()
+            .complete(ProgramRuntimeState.WaitingForInput)
+        fleet.tick(12)
+        assertEquals(HeadlessVmBenchmarkPhase.IDLE, fleet.snapshot(1.0).phase)
+
+        fleet.tick(111)
+        assertEquals(listOf(1, 1), runtime.actors.map { it.advances.size })
+        assertEquals(listOf(0, 0), runtime.actors.map(FakeActor::resourceCalls))
+
+        fleet.tick(112)
+        assertEquals(listOf(1, 1), runtime.actors.map(FakeActor::resourceCalls))
+        fleet.tick(113)
+        assertEquals(listOf(7, 7), runtime.actors.map(FakeActor::rounds))
+        fleet.tick(114)
+        runtime.actors[0]
+            .advances
+            .last()
+            .complete(ProgramRuntimeState.Halted(null))
+        runtime.actors[1]
+            .advances
+            .last()
+            .complete(ProgramRuntimeState.Halted(null))
+        fleet.tick(115)
+
+        val snapshot = fleet.snapshot(1.5)
+        assertEquals(HeadlessVmBenchmarkStatus.COMPLETED, snapshot.status)
+        assertEquals(HeadlessVmBenchmarkPhase.COMPLETED, snapshot.phase)
+        assertEquals(VmBenchmarkTickDistribution(2, 1, 1, 1), snapshot.settleTicks)
+        assertEquals(VmBenchmarkTickDistribution(2, 0, 0, 0), snapshot.wakeTicks)
+        assertEquals(VmBenchmarkTickDistribution(2, 1, 1, 1), snapshot.completionTicks)
+        assertEquals(VmBenchmarkMemorySummary(2, 0, 6, 20, 14), snapshot.memory)
+    }
+
+    @Test
+    fun `capacity distributions use nearest rank and memory sums saturate`() {
+        assertEquals(
+            VmBenchmarkTickDistribution(5, 3, 100, 100),
+            VmBenchmarkTickDistribution.from(listOf(100, 1, 2, 3, 4)),
+        )
+        assertEquals(
+            VmBenchmarkMemorySummary(2, 1, Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE),
+            VmBenchmarkMemorySummary.from(
+                listOf(
+                    resource(heapUsed = Long.MAX_VALUE, heapCapacity = Long.MAX_VALUE, resident = Long.MAX_VALUE),
+                    resource(heapUsed = 1, heapCapacity = 1, resident = 1),
+                    null,
+                ),
+            ),
+        )
+    }
+
     @Test
     fun `automatic reports follow their interval and emit terminal status once`() {
         val schedule = VmBenchmarkReportSchedule(startedTick = 10, intervalTicks = 100)
@@ -109,6 +177,7 @@ class HeadlessVmBenchmarkFleetTest {
         var rounds = 0
         var closeCalls = 0
         var closed = false
+        var resourceCalls = 0
 
         override fun start(artifact: ByteArray): CompletableFuture<ProgramRuntimeState> =
             CompletableFuture.completedFuture(ProgramRuntimeState.Running)
@@ -121,6 +190,11 @@ class HeadlessVmBenchmarkFleetTest {
         override fun advance(worldTick: Long): CompletableFuture<ProgramRuntimeState> =
             CompletableFuture<ProgramRuntimeState>().also(advances::add)
 
+        override fun resourceSnapshot(): CompletableFuture<ProgramResourceSnapshot?> {
+            resourceCalls++
+            return CompletableFuture.completedFuture(resource())
+        }
+
         override fun closeAsync(): CompletableFuture<*> {
             closeCalls++
             closed = true
@@ -129,6 +203,31 @@ class HeadlessVmBenchmarkFleetTest {
     }
 
     private companion object {
+        fun resource(
+            heapUsed: Long = 3,
+            heapCapacity: Long = 10,
+            resident: Long = 7,
+        ) = ProgramResourceSnapshot.Available(
+            state = ProgramRuntimeState.WaitingForInput,
+            configuredBudget = ProgramTickBudget(),
+            grantedGuestUnits = 1,
+            grantedMaintenanceUnits = 1,
+            fixedGuestUnits = 1,
+            dynamicGuestUnits = 0,
+            maintenanceUnits = 0,
+            enteredBlocks = 1,
+            executedInstructions = 1,
+            heapCapacityBytes = heapCapacity,
+            heapUsedBytes = heapUsed,
+            liveObjects = 0,
+            mutableExecutionResidentBytes = resident,
+            filesystemLogicalBytes = 0,
+            filesystemLogicalCapacityBytes = 1,
+            filesystemNodes = 0,
+            filesystemNodeCapacity = 1,
+            countersSaturated = false,
+        )
+
         fun metrics(registered: Int) =
             ProgramRuntimeActorMetrics(
                 scheduler =

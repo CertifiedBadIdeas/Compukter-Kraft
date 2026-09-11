@@ -25,6 +25,7 @@ import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorServic
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorValue
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorEndpoint
 import ru.lazyhat.compukters.core.device.runtime.actor.VmActorSchedulerConfig
+import ru.lazyhat.compukters.core.device.runtime.program.ProgramResourceSnapshot
 import ru.lazyhat.compukters.core.device.runtime.program.ProgramRuntimeState
 import ru.lazyhat.compukters.lang.runtime.fs.ComputerId
 import java.util.UUID
@@ -49,6 +50,19 @@ internal class HeadlessVmBenchmarkFleet(
         count: Int,
         rounds: Int,
         worldTick: Long,
+    ): HeadlessVmBenchmarkStart = start(count, rounds, worldTick, HeadlessVmBenchmarkMode.CPU)
+
+    fun startCapacity(
+        count: Int,
+        rounds: Int,
+        worldTick: Long,
+    ): HeadlessVmBenchmarkStart = start(count, rounds, worldTick, HeadlessVmBenchmarkMode.CAPACITY)
+
+    private fun start(
+        count: Int,
+        rounds: Int,
+        worldTick: Long,
+        mode: HeadlessVmBenchmarkMode,
     ): HeadlessVmBenchmarkStart {
         checkOwner()
         require(count in 1..maximumActors) { "benchmark actor count must be in 1..$maximumActors" }
@@ -58,7 +72,7 @@ internal class HeadlessVmBenchmarkFleet(
 
         generation = if (generation == Long.MAX_VALUE) 1 else generation + 1
         val identity = UUID.randomUUID()
-        val next = Run(count, rounds, worldTick, runtime.metrics())
+        val next = Run(mode, count, rounds, worldTick, runtime.metrics())
         run = next
         repeat(count) { index ->
             val endpoint = benchmarkEndpoint(identity, generation, index)
@@ -92,7 +106,14 @@ internal class HeadlessVmBenchmarkFleet(
                         actor.phase = ActorPhase.READY
                     }
 
+                    state == ProgramRuntimeState.WaitingForInput && current.mode == HeadlessVmBenchmarkMode.CAPACITY &&
+                        current.phase == HeadlessVmBenchmarkPhase.SETTLING -> {
+                        actor.phase = ActorPhase.WAITING
+                        actor.settleTicks = current.elapsedTicks()
+                    }
+
                     state is ProgramRuntimeState.Halted -> {
+                        actor.completionTicks = current.wakeStartedTick?.let { (current.lastTick - it).coerceAtLeast(0) }
                         finishActor(actor, failed = false)
                     }
 
@@ -102,6 +123,8 @@ internal class HeadlessVmBenchmarkFleet(
                 }
             }
         }
+        advanceCapacityPhase(current)
+        advanceTerminalPhase(current)
     }
 
     fun stop(): Int {
@@ -145,6 +168,13 @@ internal class HeadlessVmBenchmarkFleet(
             currentMspt = currentMspt,
             baseline = current.baseline,
             metrics = runtime.metrics(),
+            mode = current.mode,
+            phase = current.reportPhase(status),
+            waitingActors = current.actors.count { it.phase == ActorPhase.WAITING },
+            settleTicks = VmBenchmarkTickDistribution.from(current.actors.mapNotNull(Actor::settleTicks)),
+            wakeTicks = VmBenchmarkTickDistribution.from(current.actors.mapNotNull(Actor::wakeTicks)),
+            completionTicks = VmBenchmarkTickDistribution.from(current.actors.mapNotNull(Actor::completionTicks)),
+            memory = VmBenchmarkMemorySummary.from(current.actors.filter { it.resourceRequested }.map(Actor::resources)),
         )
     }
 
@@ -152,21 +182,89 @@ internal class HeadlessVmBenchmarkFleet(
         current: Run,
         actor: Actor,
     ) {
-        actor.runtime
-            .start(artifact)
-            .thenCompose { state ->
-                if (state != ProgramRuntimeState.Running) {
-                    CompletableFuture.failedFuture(IllegalStateException("benchmark VM did not start: $state"))
-                } else {
-                    actor.runtime.sendRounds(current.rounds)
+        actor.runtime.start(artifact).whenComplete { state, failure ->
+            if (run !== current || current.stopping) return@whenComplete
+            if (failure != null || state != ProgramRuntimeState.Running) {
+                finishActor(actor, failed = true)
+            } else if (current.mode == HeadlessVmBenchmarkMode.CAPACITY) {
+                actor.phase = ActorPhase.READY
+            } else {
+                wakeActor(current, actor)
+            }
+        }
+    }
+
+    private fun advanceCapacityPhase(current: Run) {
+        when (current.phase) {
+            HeadlessVmBenchmarkPhase.SETTLING -> {
+                if (current.actors.none { it.phase.isStartingOrRunnable() }) {
+                    if (current.actors.any { it.phase == ActorPhase.WAITING }) {
+                        current.phase = HeadlessVmBenchmarkPhase.IDLE
+                        current.phaseStartedTick = current.lastTick
+                    }
                 }
-            }.whenComplete { accepted, failure ->
+            }
+
+            HeadlessVmBenchmarkPhase.IDLE -> {
+                if (current.lastTick - current.phaseStartedTick >= IDLE_OBSERVATION_TICKS) startSampling(current)
+            }
+
+            HeadlessVmBenchmarkPhase.SAMPLING -> {
+                if (current.actors.none { it.phase == ActorPhase.SAMPLING }) startWakeup(current)
+            }
+
+            HeadlessVmBenchmarkPhase.WAKING -> {
+                if (current.actors.none { it.phase == ActorPhase.WAKING }) current.phase = HeadlessVmBenchmarkPhase.CPU
+            }
+
+            else -> {}
+        }
+    }
+
+    private fun startSampling(current: Run) {
+        current.phase = HeadlessVmBenchmarkPhase.SAMPLING
+        current.phaseStartedTick = current.lastTick
+        current.actors.filter { it.phase == ActorPhase.WAITING }.forEach { actor ->
+            actor.phase = ActorPhase.SAMPLING
+            actor.resourceRequested = true
+            actor.runtime.resourceSnapshot().whenComplete { snapshot, _ ->
                 if (run !== current || current.stopping) return@whenComplete
-                if (failure == null && accepted == true) {
-                    actor.phase = ActorPhase.READY
-                } else {
-                    finishActor(actor, failed = true)
-                }
+                actor.resources = snapshot as? ProgramResourceSnapshot.Available
+                actor.phase = ActorPhase.WAITING
+            }
+        }
+    }
+
+    private fun startWakeup(current: Run) {
+        current.phase = HeadlessVmBenchmarkPhase.WAKING
+        current.phaseStartedTick = current.lastTick
+        current.wakeStartedTick = current.lastTick
+        current.actors.filter { it.phase == ActorPhase.WAITING }.forEach { wakeActor(current, it) }
+    }
+
+    private fun wakeActor(
+        current: Run,
+        actor: Actor,
+    ) {
+        actor.phase = ActorPhase.WAKING
+        actor.runtime.sendRounds(current.rounds).whenComplete { accepted, failure ->
+            if (run !== current || current.stopping) return@whenComplete
+            if (failure == null && accepted == true) {
+                actor.wakeTicks = current.wakeStartedTick?.let { (current.lastTick - it).coerceAtLeast(0) }
+                actor.phase = ActorPhase.READY
+            } else {
+                finishActor(actor, failed = true)
+            }
+        }
+    }
+
+    private fun advanceTerminalPhase(current: Run) {
+        if (current.actors.any { !it.phase.isTerminal() }) return
+        current.phase =
+            if (current.actors.any { it.closeFuture?.isDone == false }) {
+                HeadlessVmBenchmarkPhase.CLOSING
+            } else {
+                HeadlessVmBenchmarkPhase.COMPLETED
             }
     }
 
@@ -185,6 +283,7 @@ internal class HeadlessVmBenchmarkFleet(
     private fun checkOwner() = check(Thread.currentThread() === owner) { "benchmark fleet must run on its server thread" }
 
     private class Run(
+        val mode: HeadlessVmBenchmarkMode,
         val requestedActors: Int,
         val rounds: Int,
         val startedTick: Long,
@@ -193,6 +292,19 @@ internal class HeadlessVmBenchmarkFleet(
         val actors = mutableListOf<Actor>()
         var lastTick = startedTick
         var stopping = false
+        var phase = if (mode == HeadlessVmBenchmarkMode.CAPACITY) HeadlessVmBenchmarkPhase.SETTLING else HeadlessVmBenchmarkPhase.CPU
+        var phaseStartedTick = startedTick
+        var wakeStartedTick: Long? = if (mode == HeadlessVmBenchmarkMode.CPU) startedTick else null
+
+        fun elapsedTicks(): Long = (lastTick - startedTick).coerceAtLeast(0)
+
+        fun reportPhase(status: HeadlessVmBenchmarkStatus): HeadlessVmBenchmarkPhase =
+            when (status) {
+                HeadlessVmBenchmarkStatus.STOPPING -> HeadlessVmBenchmarkPhase.CLOSING
+                HeadlessVmBenchmarkStatus.STOPPED -> HeadlessVmBenchmarkPhase.STOPPED
+                HeadlessVmBenchmarkStatus.COMPLETED -> HeadlessVmBenchmarkPhase.COMPLETED
+                else -> phase
+            }
 
         fun isActive(): Boolean =
             (!stopping && actors.any { it.phase != ActorPhase.COMPLETED && it.phase != ActorPhase.FAILED }) ||
@@ -204,19 +316,33 @@ internal class HeadlessVmBenchmarkFleet(
     ) {
         var phase = ActorPhase.STARTING
         var closeFuture: CompletableFuture<*>? = null
+        var settleTicks: Long? = null
+        var wakeTicks: Long? = null
+        var completionTicks: Long? = null
+        var resourceRequested = false
+        var resources: ProgramResourceSnapshot.Available? = null
     }
 
     private enum class ActorPhase {
         STARTING,
         READY,
         ADVANCING,
+        WAITING,
+        SAMPLING,
+        WAKING,
         COMPLETED,
         FAILED,
+        ;
+
+        fun isStartingOrRunnable(): Boolean = this == STARTING || this == READY || this == ADVANCING
+
+        fun isTerminal(): Boolean = this == COMPLETED || this == FAILED
     }
 
     private companion object {
         const val MAXIMUM_ACTORS = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS
         const val MAXIMUM_ROUNDS = 1_000_000
+        const val IDLE_OBSERVATION_TICKS = 100L
 
         fun benchmarkEndpoint(
             identity: UUID,
@@ -242,6 +368,8 @@ internal interface HeadlessVmBenchmarkActor {
     fun sendRounds(rounds: Int): CompletableFuture<Boolean>
 
     fun advance(worldTick: Long): CompletableFuture<ProgramRuntimeState>
+
+    fun resourceSnapshot(): CompletableFuture<ProgramResourceSnapshot?>
 
     fun closeAsync(): CompletableFuture<*>
 }
@@ -270,6 +398,11 @@ private class ActorServiceBenchmarkActor(
     override fun advance(worldTick: Long): CompletableFuture<ProgramRuntimeState> =
         service.request(lease.endpoint) { ProgramRuntimeActorCommand.Advance(it, worldTick) }.thenApply { it.state }
 
+    override fun resourceSnapshot(): CompletableFuture<ProgramResourceSnapshot?> =
+        service.request(lease.endpoint) { ProgramRuntimeActorCommand.ResourceSnapshot(it) }.thenApply {
+            (it.value as? ProgramRuntimeActorValue.ResourceSnapshotValue)?.snapshot
+        }
+
     override fun closeAsync(): CompletableFuture<*> = lease.closeAsync()
 }
 
@@ -291,6 +424,13 @@ internal data class HeadlessVmBenchmarkSnapshot(
     val currentMspt: Double,
     val baseline: ProgramRuntimeActorMetrics,
     val metrics: ProgramRuntimeActorMetrics,
+    val mode: HeadlessVmBenchmarkMode? = null,
+    val phase: HeadlessVmBenchmarkPhase = HeadlessVmBenchmarkPhase.IDLE,
+    val waitingActors: Int = 0,
+    val settleTicks: VmBenchmarkTickDistribution = VmBenchmarkTickDistribution.EMPTY,
+    val wakeTicks: VmBenchmarkTickDistribution = VmBenchmarkTickDistribution.EMPTY,
+    val completionTicks: VmBenchmarkTickDistribution = VmBenchmarkTickDistribution.EMPTY,
+    val memory: VmBenchmarkMemorySummary = VmBenchmarkMemorySummary.EMPTY,
 ) {
     companion object {
         fun idle(
@@ -310,6 +450,86 @@ internal data class HeadlessVmBenchmarkSnapshot(
             metrics,
             metrics,
         )
+    }
+}
+
+internal enum class HeadlessVmBenchmarkMode {
+    CPU,
+    CAPACITY,
+}
+
+internal enum class HeadlessVmBenchmarkPhase {
+    IDLE,
+    SETTLING,
+    SAMPLING,
+    WAKING,
+    CPU,
+    CLOSING,
+    COMPLETED,
+    STOPPED,
+}
+
+internal data class VmBenchmarkTickDistribution(
+    val samples: Int,
+    val medianTicks: Long?,
+    val p95Ticks: Long?,
+    val maximumTicks: Long?,
+) {
+    companion object {
+        val EMPTY = VmBenchmarkTickDistribution(0, null, null, null)
+
+        fun from(values: List<Long>): VmBenchmarkTickDistribution {
+            if (values.isEmpty()) return EMPTY
+            require(values.all { it >= 0 }) { "benchmark tick samples must not be negative" }
+            val sorted = values.sorted()
+            return VmBenchmarkTickDistribution(
+                samples = sorted.size,
+                medianTicks = percentile(sorted, 50),
+                p95Ticks = percentile(sorted, 95),
+                maximumTicks = sorted.last(),
+            )
+        }
+
+        private fun percentile(
+            sorted: List<Long>,
+            percentile: Int,
+        ): Long {
+            val rank = (sorted.size * percentile + 99) / 100
+            return sorted[(rank - 1).coerceAtLeast(0)]
+        }
+    }
+}
+
+internal data class VmBenchmarkMemorySummary(
+    val availableSamples: Int,
+    val unavailableSamples: Int,
+    val heapUsedBytes: Long,
+    val heapCapacityBytes: Long,
+    val executionResidentBytes: Long,
+) {
+    companion object {
+        val EMPTY = VmBenchmarkMemorySummary(0, 0, 0, 0, 0)
+
+        fun from(samples: List<ProgramResourceSnapshot.Available?>): VmBenchmarkMemorySummary {
+            if (samples.isEmpty()) return EMPTY
+            val available = samples.filterNotNull()
+            return VmBenchmarkMemorySummary(
+                availableSamples = available.size,
+                unavailableSamples = samples.size - available.size,
+                heapUsedBytes = available.saturatingSum(ProgramResourceSnapshot.Available::heapUsedBytes),
+                heapCapacityBytes = available.saturatingSum(ProgramResourceSnapshot.Available::heapCapacityBytes),
+                executionResidentBytes = available.saturatingSum(ProgramResourceSnapshot.Available::mutableExecutionResidentBytes),
+            )
+        }
+
+        private fun <T> List<T>.saturatingSum(value: (T) -> Long): Long {
+            var total = 0L
+            forEach { item ->
+                val next = value(item)
+                total = if (total > Long.MAX_VALUE - next) Long.MAX_VALUE else total + next
+            }
+            return total
+        }
     }
 }
 
