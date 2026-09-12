@@ -256,6 +256,10 @@ internal fun Instruction.readRegisters(): List<RegisterId> =
 
         is Instruction.CallSuspend -> arguments
 
+        is Instruction.TaskSpawn -> arguments
+
+        is Instruction.TaskJoin -> listOf(task)
+
         is Instruction.StringConcat -> listOf(left, right)
 
         is Instruction.StringValueOf -> listOf(source)
@@ -345,6 +349,10 @@ internal fun Instruction.writtenRegisters(): List<RegisterId> =
 
         is Instruction.CallSuspend -> (destination as? Destination.Register)?.let { listOf(it.id) }.orEmpty()
 
+        is Instruction.TaskSpawn -> listOf(destination)
+
+        is Instruction.TaskJoin -> (destination as? Destination.Register)?.let { listOf(it.id) }.orEmpty()
+
         is Instruction.StringConcat -> listOf(destination)
 
         is Instruction.StringValueOf -> listOf(destination)
@@ -379,6 +387,7 @@ internal fun Instruction.successors(): List<BlockId> =
         is Instruction.Jump -> listOf(target)
         is Instruction.Branch -> listOf(trueTarget, falseTarget)
         is Instruction.CallSuspend -> listOf(resumeBlock)
+        is Instruction.TaskJoin -> listOf(resumeBlock)
         is Instruction.CapabilityCallAsync -> listOf(resumeBlock)
         else -> emptyList()
     }
@@ -396,6 +405,8 @@ internal fun Instruction.mayThrow(): Boolean =
         this is Instruction.CheckedCast ||
         this is Instruction.Call ||
         this is Instruction.CallSuspend ||
+        this is Instruction.TaskSpawn ||
+        this is Instruction.TaskJoin ||
         this is Instruction.CapabilityCallSync ||
         this is Instruction.CapabilityCallAsync ||
         this is Instruction.StringGet ||

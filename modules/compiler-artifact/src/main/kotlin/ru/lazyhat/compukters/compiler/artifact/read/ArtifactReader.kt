@@ -718,6 +718,14 @@ private fun decodeCode(bytes: ByteArray): List<Instruction> {
                     Instruction.CapabilityCallSync(d(), CapabilityId.of(frame.uleb()), frame.uleb(), args())
                 }
 
+                0x50u -> {
+                    Instruction.TaskSpawn(r(), frame.uleb().functionRef(), args())
+                }
+
+                0xe8u -> {
+                    Instruction.TaskJoin(d(), r(), BlockId.of(frame.uleb()))
+                }
+
                 0xe9u -> {
                     Instruction.CapabilityCallAsync(d(), CapabilityId.of(frame.uleb()), frame.uleb(), args(), BlockId.of(frame.uleb()))
                 }

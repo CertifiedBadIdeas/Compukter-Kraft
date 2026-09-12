@@ -68,6 +68,65 @@ private fun exactRoots(artifact: Artifact): Artifact = ReferenceLiveness.derive(
 
 class ArtifactValidatorTest {
     @Test
+    fun `task instructions require runtime ABI 1 1`() {
+        val source = minimalArtifact()
+        val module = source.modules.single()
+        val taskArtifact =
+            exactRoots(
+                source.copy(
+                    manifest = Manifest.minimal(maximumBlockCost = 5u),
+                    semanticFeatures = setOf(SemanticFeature.COROUTINES),
+                    modules =
+                        listOf(
+                            module.copy(
+                                types =
+                                    listOf(
+                                        (module.types.single() as NominalType.Function).copy(suspending = true),
+                                    ),
+                                functions =
+                                    listOf(
+                                        module.functions.single().copy(
+                                            flags = setOf(FunctionFlag.STATIC, FunctionFlag.SUSPENDING),
+                                            values = listOf(FunctionValue.scalar(ValueType.I32)),
+                                            blockCount = 2u,
+                                        ),
+                                    ),
+                                blocks =
+                                    listOf(
+                                        Block(
+                                            owner = FunctionId.of(0u),
+                                            loopHeaderSafepoint = false,
+                                            instructions =
+                                                listOf(
+                                                    Instruction.Const(RegisterId.of(0u), ConstantId.of(0u)),
+                                                    Instruction.TaskJoin(
+                                                        Destination.Unit,
+                                                        RegisterId.of(0u),
+                                                        BlockId.of(1u),
+                                                    ),
+                                                ),
+                                        ),
+                                        Block(
+                                            owner = FunctionId.of(0u),
+                                            loopHeaderSafepoint = false,
+                                            instructions = listOf(Instruction.Return(Destination.Unit)),
+                                        ),
+                                    ),
+                                constants = listOf(Constant.I32(1)),
+                            ),
+                        ),
+                ),
+            )
+
+        val oldAbiErrors = validateArtifact(taskArtifact, ArtifactWriteLimits())
+        assertTrue(oldAbiErrors.any { it.detail.contains("runtime ABI 1.1") }, oldAbiErrors.toString())
+
+        val currentErrors =
+            validateArtifact(taskArtifact.copy(minimumRuntimeAbi = AbiVersion(1u, 1u)), ArtifactWriteLimits())
+        assertTrue(currentErrors.isEmpty(), currentErrors.toString())
+    }
+
+    @Test
     fun `functions require exact safepoint roots`() {
         val source = languageRuntimeArtifact()
         val module = source.modules.single()

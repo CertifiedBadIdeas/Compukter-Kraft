@@ -287,6 +287,32 @@ class InstructionEncoderTest {
     }
 
     @Test
+    fun `task instructions encode integer handle and resume block`() {
+        val spawn =
+            encodeInstruction(
+                Instruction.TaskSpawn(
+                    RegisterId.of(1u),
+                    FunctionRef.Local(FunctionId.of(2u)),
+                    emptyList(),
+                ),
+                64,
+            )
+        val join =
+            encodeInstruction(
+                Instruction.TaskJoin(Destination.Unit, RegisterId.of(1u), BlockId.of(3u)),
+                64,
+            )
+
+        assertContentEquals(byteArrayOf(0x50, 0, 8, 0, 1, 0, 2, 0), spawn.bytes)
+        assertEquals(6u, spawn.fixedCost)
+        assertContentEquals(
+            byteArrayOf(0xe8.toByte(), 0, 9, 0, 0xff.toByte(), 0xff.toByte(), 1, 0, 3),
+            join.bytes,
+        )
+        assertEquals(4u, join.fixedCost)
+    }
+
+    @Test
     fun `string concat encodes three registers at fixed cost one`() {
         val encoded =
             encodeInstruction(

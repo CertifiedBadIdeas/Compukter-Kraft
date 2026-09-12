@@ -281,6 +281,7 @@ internal class ReachabilityGraph(
             is Instruction.CheckedCast -> markType(module, instruction.type)
             is Instruction.Call -> markFunction(module, instruction.function)
             is Instruction.CallSuspend -> markFunction(module, instruction.function)
+            is Instruction.TaskSpawn -> markFunction(module, instruction.function)
             is Instruction.CapabilityCallSync -> capabilities += instruction.capability.value.toInt()
             is Instruction.CapabilityCallAsync -> capabilities += instruction.capability.value.toInt()
             else -> Unit

@@ -311,6 +311,30 @@ sealed interface Instruction {
             "CapabilityCallSync(destination=$destination, capability=$capability, operation=$operation, arguments=$arguments)"
     }
 
+    class TaskSpawn(
+        val destination: RegisterId,
+        val function: FunctionRef,
+        arguments: List<RegisterId>,
+    ) : Instruction {
+        val arguments: List<RegisterId> = Collections.unmodifiableList(ArrayList(arguments))
+
+        override fun equals(other: Any?): Boolean =
+            other is TaskSpawn &&
+                destination == other.destination &&
+                function == other.function &&
+                arguments == other.arguments
+
+        override fun hashCode(): Int = 31 * (31 * destination.hashCode() + function.hashCode()) + arguments.hashCode()
+
+        override fun toString(): String = "TaskSpawn(destination=$destination, function=$function, arguments=$arguments)"
+    }
+
+    data class TaskJoin(
+        val destination: Destination,
+        val task: RegisterId,
+        val resumeBlock: BlockId,
+    ) : Instruction
+
     class CapabilityCallAsync(
         val destination: Destination,
         val capability: CapabilityId,

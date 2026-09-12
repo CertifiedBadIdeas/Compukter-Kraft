@@ -555,6 +555,18 @@ private fun relocateInstruction(
             )
         }
 
+        is Instruction.TaskSpawn -> {
+            Instruction.TaskSpawn(
+                instruction.destination,
+                ids.function(instruction.function),
+                instruction.arguments,
+            )
+        }
+
+        is Instruction.TaskJoin -> {
+            instruction.copy(resumeBlock = ids.block(instruction.resumeBlock))
+        }
+
         is Instruction.CapabilityCallSync -> {
             Instruction.CapabilityCallSync(
                 instruction.destination,

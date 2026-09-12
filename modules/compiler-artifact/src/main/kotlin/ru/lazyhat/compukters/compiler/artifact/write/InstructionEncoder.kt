@@ -307,6 +307,20 @@ internal fun encodeInstruction(
             operands.writeArguments(instruction.arguments)
         }
 
+        is Instruction.TaskSpawn -> {
+            opcode = 0x50u
+            operands.writeRegister(instruction.destination)
+            operands.writeUleb128(encodeFunctionRef(instruction.function))
+            operands.writeArguments(instruction.arguments)
+        }
+
+        is Instruction.TaskJoin -> {
+            opcode = 0xe8u
+            operands.writeDestination(instruction.destination)
+            operands.writeRegister(instruction.task)
+            operands.writeUleb128(instruction.resumeBlock.value)
+        }
+
         is Instruction.CapabilityCallAsync -> {
             opcode = 0xe9u
             operands.writeDestination(instruction.destination)
@@ -451,6 +465,10 @@ internal fun instructionFixedCost(instruction: Instruction): UInt =
         is Instruction.Call -> variableCost(4u, instruction.arguments.size)
 
         is Instruction.CallSuspend -> variableCost(5u, instruction.arguments.size)
+
+        is Instruction.TaskSpawn -> variableCost(6u, instruction.arguments.size)
+
+        is Instruction.TaskJoin -> 4u
 
         is Instruction.CapabilityCallSync -> variableCost(5u, instruction.arguments.size)
 

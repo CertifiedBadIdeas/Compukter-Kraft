@@ -23,6 +23,7 @@ import ru.lazyhat.compukters.compiler.artifact.analysis.mayThrow
 import ru.lazyhat.compukters.compiler.artifact.analysis.readRegisters
 import ru.lazyhat.compukters.compiler.artifact.analysis.successors
 import ru.lazyhat.compukters.compiler.artifact.analysis.writtenRegisters
+import ru.lazyhat.compukters.compiler.artifact.model.AbiVersion
 import ru.lazyhat.compukters.compiler.artifact.model.Artifact
 import ru.lazyhat.compukters.compiler.artifact.model.BlockId
 import ru.lazyhat.compukters.compiler.artifact.model.Destination
@@ -407,7 +408,9 @@ internal fun validateArtifact(
         if (
             module.functions.any { FunctionFlag.SUSPENDING in it.flags } ||
             module.blocks.any { block ->
-                block.instructions.any { it is Instruction.CallSuspend }
+                block.instructions.any {
+                    it is Instruction.CallSuspend || it is Instruction.TaskSpawn || it is Instruction.TaskJoin
+                }
             }
         ) {
             expectedFeatures += SemanticFeature.COROUTINES
@@ -427,6 +430,19 @@ internal fun validateArtifact(
         add(
             ArtifactWriteErrorCode.INCOMPATIBLE_FEATURE_SET,
             "semantic feature bits do not exactly match artifact use",
+        )
+    }
+    val usesTasks =
+        artifact.modules.any { module ->
+            module.blocks.any { block ->
+                block.instructions
+                    .any { it is Instruction.TaskSpawn || it is Instruction.TaskJoin }
+            }
+        }
+    if (usesTasks && artifact.minimumRuntimeAbi < AbiVersion(1u, 1u)) {
+        add(
+            ArtifactWriteErrorCode.INVALID_RANGE,
+            "task instructions require minimum runtime ABI 1.1",
         )
     }
 
@@ -1101,6 +1117,26 @@ internal fun validateArtifact(
                             successor(instruction.resumeBlock, "resume")
                         }
 
+                        is Instruction.TaskSpawn -> {
+                            call(instruction.function, Destination.Unit, instruction.arguments, suspending = true)
+                            val task = register(instruction.destination, "destination")
+                            if (task != null && task != ValueType.I32) {
+                                add(ArtifactWriteErrorCode.INVALID_RANGE, "task handle destination is not I32", location)
+                            }
+                        }
+
+                        is Instruction.TaskJoin -> {
+                            destination(instruction.destination)
+                            if (instruction.destination != Destination.Unit) {
+                                add(ArtifactWriteErrorCode.INVALID_RANGE, "task join destination must be Unit", location)
+                            }
+                            val task = register(instruction.task, "task")
+                            if (task != null && task != ValueType.I32) {
+                                add(ArtifactWriteErrorCode.INVALID_RANGE, "task handle is not I32", location)
+                            }
+                            successor(instruction.resumeBlock, "resume")
+                        }
+
                         is Instruction.StringConcat -> {
                             val expected = stringIdentity()
                             listOf(
@@ -1575,6 +1611,7 @@ private fun Instruction.isTerminator(): Boolean =
         this is Instruction.Throw ||
         this is Instruction.Unreachable ||
         this is Instruction.CallSuspend ||
+        this is Instruction.TaskJoin ||
         this is Instruction.CapabilityCallAsync
 
-private fun Instruction.isKotlinSuspendingTerminator(): Boolean = this is Instruction.CallSuspend
+private fun Instruction.isKotlinSuspendingTerminator(): Boolean = this is Instruction.CallSuspend || this is Instruction.TaskJoin

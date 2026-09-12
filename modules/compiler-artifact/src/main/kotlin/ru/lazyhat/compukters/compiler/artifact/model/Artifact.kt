@@ -21,7 +21,9 @@ package ru.lazyhat.compukters.compiler.artifact.model
 data class AbiVersion(
     val major: UShort,
     val minor: UShort,
-)
+) : Comparable<AbiVersion> {
+    override fun compareTo(other: AbiVersion): Int = compareValuesBy(this, other, AbiVersion::major, AbiVersion::minor)
+}
 
 enum class SemanticFeature {
     EXCEPTIONS,
