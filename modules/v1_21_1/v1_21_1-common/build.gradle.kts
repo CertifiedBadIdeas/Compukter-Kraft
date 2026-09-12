@@ -17,11 +17,21 @@
  */
 
 plugins {
-    alias(libs.plugins.v261)
+    alias(libs.plugins.v1211)
     alias(libs.plugins.commonConvention)
     alias(libs.plugins.commonRuntimeResourcesConvention)
 }
 
 architectury {
     common("neoforge")
+}
+
+sourceSets.main {
+    kotlin.srcDir(rootProject.file("modules/v26_1/v26_1-common/src/main/kotlin"))
+    kotlin.exclude("**/ComputerBlock.kt", "**/ComputerBlockEntity.kt", "**/ComputerIdentityStorage.kt")
+}
+
+sourceSets.test {
+    kotlin.srcDir(rootProject.file("modules/v26_1/v26_1-common/src/test/kotlin"))
+    kotlin.exclude("**/ComputerBlockEntityTest.kt", "**/ComputerIdentityStorageTest.kt")
 }

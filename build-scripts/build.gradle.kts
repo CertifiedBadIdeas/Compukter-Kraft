@@ -33,6 +33,7 @@ dependencies {
     implementation(plugin(libs.plugins.kotlin))
     implementation(plugin(libs.plugins.kotlinter))
     implementation(plugin(libs.plugins.architectury.loom.no.remap))
+    implementation(plugin(libs.plugins.architectury.loom.regular))
     implementation(plugin(libs.plugins.architectury.plugin))
     implementation(plugin(libs.plugins.shadow))
     implementation("org.apache.commons:commons-compress:1.28.0")

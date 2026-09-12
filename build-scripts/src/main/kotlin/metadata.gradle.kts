@@ -37,17 +37,17 @@ base.archivesName = modProperties.getValue("mod_id").replace(" ", "")
 val generateModMetadata =
     tasks.register("generateModMetadata", ProcessResources::class) {
         val replaceProperties = modProperties.toMap()
-        val from = file("src/main/resources")
+        val template = rootProject.layout.projectDirectory.file("config/neoforge.mods.toml")
         val intoDir = file("build/generated/resources")
 
         inputs.properties(replaceProperties)
-        inputs.dir(from)
+        inputs.file(template)
 
         outputs.dir(intoDir)
 
-        from(from) {
-            include("META-INF/neoforge.mods.toml", "fabric.mod.json")
+        from(template) {
             expand(replaceProperties)
+            into("META-INF")
         }
         into(intoDir)
     }

@@ -43,12 +43,6 @@ fun RunConfigSettings.applyShared() {
 
 private val DEV_CLIENT_USERNAMES = listOf("DevA", "DevB", "DevC")
 
-tasks.register("buildProductionUniversalJar") {
-    group = "build"
-    description = "Build the unobfuscated production mod jar."
-    dependsOn(tasks.named("shadowJar"))
-}
-
 val loom = extensions.getByType<LoomGradleExtensionAPI>()
 val runs = loom.runs
 

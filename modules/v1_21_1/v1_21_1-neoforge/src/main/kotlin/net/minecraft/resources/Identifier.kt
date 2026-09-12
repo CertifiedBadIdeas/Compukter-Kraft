@@ -16,12 +16,6 @@
  * limitations under the License.
  */
 
-plugins {
-    alias(libs.plugins.v261)
-    alias(libs.plugins.commonConvention)
-    alias(libs.plugins.commonRuntimeResourcesConvention)
-}
+package net.minecraft.resources
 
-architectury {
-    common("neoforge")
-}
+typealias Identifier = ResourceLocation

@@ -19,38 +19,40 @@
 package ru.lazyhat.compukters.impl.terminal
 
 import net.minecraft.client.Minecraft
-import net.neoforged.api.distmarker.Dist
-import net.neoforged.bus.api.SubscribeEvent
-import net.neoforged.fml.common.EventBusSubscriber
-import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent
-import ru.lazyhat.compukters.core.MOD_ID
+import net.neoforged.neoforge.network.handling.IPayloadContext
 
-@EventBusSubscriber(modid = MOD_ID, value = [Dist.CLIENT])
 object TerminalClientNetwork {
     private fun currentTerminal(): TerminalScreen? = Minecraft.getInstance().screen as? TerminalScreen
 
-    @JvmStatic
-    @SubscribeEvent
-    fun register(event: RegisterClientPayloadHandlersEvent) {
-        event.register(TerminalFullPayload.TYPE) { payload, _ ->
-            val minecraft = Minecraft.getInstance()
-            val current = currentTerminal()
-            if (current is TerminalScreen && current.position == payload.position) {
-                current.update(payload)
-            } else if (shouldOpenStandaloneTerminal(minecraft.screen != null, payload.openScreen)) {
-                minecraft.setScreen(TerminalScreen(payload))
-            }
-        }
-        event.register(TerminalDeltaPayload.TYPE) deltaHandler@{ payload, _ ->
-            val current = currentTerminal() ?: return@deltaHandler
-            if (current.position != payload.position || !current.update(payload)) {
-                current.requestResync()
-            }
-        }
-        event.register(TerminalResourcePayload.TYPE) resourceHandler@{ payload, _ ->
-            val current = currentTerminal() ?: return@resourceHandler
+    internal fun handleFull(
+        payload: TerminalFullPayload,
+        @Suppress("UNUSED_PARAMETER") context: IPayloadContext,
+    ) {
+        val minecraft = Minecraft.getInstance()
+        val current = currentTerminal()
+        if (current is TerminalScreen && current.position == payload.position) {
             current.update(payload)
+        } else if (shouldOpenStandaloneTerminal(minecraft.screen != null, payload.openScreen)) {
+            minecraft.setScreen(TerminalScreen(payload))
         }
+    }
+
+    internal fun handleDelta(
+        payload: TerminalDeltaPayload,
+        @Suppress("UNUSED_PARAMETER") context: IPayloadContext,
+    ) {
+        val current = currentTerminal() ?: return
+        if (current.position != payload.position || !current.update(payload)) {
+            current.requestResync()
+        }
+    }
+
+    internal fun handleResource(
+        payload: TerminalResourcePayload,
+        @Suppress("UNUSED_PARAMETER") context: IPayloadContext,
+    ) {
+        val current = currentTerminal() ?: return
+        current.update(payload)
     }
 }
 

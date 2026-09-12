@@ -17,11 +17,6 @@
  */
 
 plugins {
-    alias(libs.plugins.v261)
-    alias(libs.plugins.commonConvention)
-    alias(libs.plugins.commonRuntimeResourcesConvention)
-}
-
-architectury {
-    common("neoforge")
+    id("dev.architectury.loom")
+    id("neoforge-base-convention")
 }

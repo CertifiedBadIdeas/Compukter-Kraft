@@ -23,9 +23,11 @@ NeoForge GameTests cover registration, automatic boot, two computers compiling
 and executing the same source, nested program execution, reboot, ticking,
 removal, VM shutdown, and recovery of a tombstoned persistent filesystem.
 
-The active game baseline is **Minecraft 26.1.2**, **NeoForge 26.1.2.97**, and
-**JDK 25**. The production archive uses Minecraft's official names directly;
-there is no remap stage or Architectury runtime dependency.
+The primary game baseline is **Minecraft 26.1.2**, **NeoForge 26.1.2.97**, and
+**JDK 25**. A compatibility build targets **Minecraft 1.21.1**, **NeoForge
+21.1.250**, and **Java 21** through the JNI runtime. The 26.1.2 production
+archive uses Minecraft's official names directly; the 1.21.1 archive is remapped
+during packaging. Neither archive requires Architectury at runtime.
 
 See the [Guest Kotlin support matrix](docs/KOTLIN-SUPPORT.md) for the current
 language, standard-library, Guest API, and IDE compatibility boundaries.
@@ -49,6 +51,8 @@ installation:
 ./gradlew-sandbox-dev-parallel :v26_1-neoforge:runClient
 ./gradlew-sandbox-dev-parallel :v26_1-neoforge:runGameTestServer
 ./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildProductionUniversalJar
+./gradlew-sandbox-dev-parallel :v1_21_1-neoforge:runClient
+./gradlew-sandbox-dev-parallel :v1_21_1-neoforge:buildProductionUniversalJar
 ```
 
 For fast feedback, `./gradlew-sandbox-dev-parallel verifyLocalFast` runs policy,

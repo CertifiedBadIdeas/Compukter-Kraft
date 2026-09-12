@@ -48,9 +48,9 @@ object TerminalNetwork {
 
     fun register(event: RegisterPayloadHandlersEvent) {
         val registrar = event.registrar("3")
-        registrar.playToClient(TerminalFullPayload.TYPE, TerminalFullPayload.STREAM_CODEC)
-        registrar.playToClient(TerminalDeltaPayload.TYPE, TerminalDeltaPayload.STREAM_CODEC)
-        registrar.playToClient(TerminalResourcePayload.TYPE, TerminalResourcePayload.STREAM_CODEC)
+        registrar.playToClient(TerminalFullPayload.TYPE, TerminalFullPayload.STREAM_CODEC, TerminalClientNetwork::handleFull)
+        registrar.playToClient(TerminalDeltaPayload.TYPE, TerminalDeltaPayload.STREAM_CODEC, TerminalClientNetwork::handleDelta)
+        registrar.playToClient(TerminalResourcePayload.TYPE, TerminalResourcePayload.STREAM_CODEC, TerminalClientNetwork::handleResource)
         registrar.playToServer(TerminalResyncPayload.TYPE, TerminalResyncPayload.STREAM_CODEC, ::handleResync)
         registrar.playToServer(TerminalClosePayload.TYPE, TerminalClosePayload.STREAM_CODEC, ::handleClose)
         registrar.playToServer(TerminalKeyPayload.TYPE, TerminalKeyPayload.STREAM_CODEC, ::handleKey)
@@ -72,8 +72,9 @@ object TerminalNetwork {
         operations.submit(player.uuid) { entity.prepareTerminalAsync().awaitServerResult() }?.whenComplete { state, failure ->
             if (!pendingOpens.remove(player.uuid, marker) || failure != null || state == null) return@whenComplete
             val machineId = entity.terminalMachineId ?: return@whenComplete
-            if (!player.isValidViewer(player.level(), entity.blockPos)) return@whenComplete
-            viewers[player.uuid] = Viewer(player.level().dimension(), entity.blockPos, machineId, state.revision)
+            val level = player.level() as? ServerLevel ?: return@whenComplete
+            if (!player.isValidViewer(level, entity.blockPos)) return@whenComplete
+            viewers[player.uuid] = Viewer(level.dimension(), entity.blockPos, machineId, state.revision)
             PacketDistributor.sendToPlayer(player, TerminalFullPayload(entity.blockPos, machineId, state, openScreen))
         } ?: pendingOpens.remove(player.uuid, marker)
     }
@@ -84,10 +85,11 @@ object TerminalNetwork {
         machineId: Long,
     ): Boolean {
         val viewer = viewers[player.uuid] ?: return false
-        return viewer.dimension == player.level().dimension() &&
+        val level = player.level() as? ServerLevel ?: return false
+        return viewer.dimension == level.dimension() &&
             viewer.position == position &&
             viewer.machineId == machineId &&
-            player.isValidViewer(player.level(), position)
+            player.isValidViewer(level, position)
     }
 
     @JvmStatic
@@ -260,10 +262,7 @@ object TerminalNetwork {
         if (viewer.position != position || viewer.machineId != machineId) return
         if (!TerminalInputAdmission.accept(
                 player.uuid,
-                player
-                    .level()
-                    .server.tickCount
-                    .toLong(),
+                (player.level() as? ServerLevel)?.server?.tickCount?.toLong() ?: return,
             )
         ) {
             return
@@ -274,8 +273,9 @@ object TerminalNetwork {
     }
 
     private fun ServerPlayer.computerAt(position: BlockPos): ComputerBlockEntity? {
-        if (!isValidViewer(level(), position)) return null
-        return level().getBlockEntity(position) as? ComputerBlockEntity
+        val level = level() as? ServerLevel ?: return null
+        if (!isValidViewer(level, position)) return null
+        return level.getBlockEntity(position) as? ComputerBlockEntity
     }
 
     private fun ServerPlayer.isValidViewer(

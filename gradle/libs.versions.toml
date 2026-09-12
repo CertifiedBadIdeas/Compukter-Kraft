@@ -5,7 +5,9 @@
 # buildSrc
 kotlinConvention = { id = "kotlin-convention" }
 commonConvention = { id = "common-convention" }
+commonRuntimeResourcesConvention = { id = "common-runtime-resources" }
 neoforgeConvention = { id = "neoforge-convention" }
+neoforge1211Convention = { id = "neoforge-1.21.1-convention" }
 metadataConvention = { id = "metadata" }
 releaseConvention = { id = "release-convention" }
 
@@ -16,9 +18,11 @@ kotlinter = { id = "org.jmailen.kotlinter", version = "5.7.0" }
 shadow = { id = "com.gradleup.shadow", version = "9.6.1" }
 
 architectury-loom-no-remap = { id = "dev.architectury.loom-no-remap", version = "1.17.491" }
+architectury-loom-regular = { id = "dev.architectury.loom", version = "1.17.491" }
 architectury-plugin = { id = "architectury-plugin", version = "3.5.169" }
 
 v261 = { id = "26.1-convention" }
+v1211 = { id = "1.21.1-convention" }
 
 [versions]
 
@@ -40,6 +44,9 @@ xz = "1.10"
 
 # 26.1
 minecraft-v261 = "26.1.2"
+
+# 1.21.1
+minecraft-v1211 = "1.21.1"
 
 [libraries]
 
@@ -73,3 +80,8 @@ xz = { module = "org.tukaani:xz", version.ref = "xz" }
 # 26.1
 minecraft-v261 = { module = "net.minecraft:minecraft", version.ref = "minecraft-v261" }
 neoforge-v261 = "net.neoforged:neoforge:26.1.2.97"
+
+# 1.21.1
+minecraft-v1211 = { module = "net.minecraft:minecraft", version.ref = "minecraft-v1211" }
+parchment-v1211 = "org.parchmentmc.data:parchment-1.21.1:2024.11.17"
+neoforge-v1211 = "net.neoforged:neoforge:21.1.250"

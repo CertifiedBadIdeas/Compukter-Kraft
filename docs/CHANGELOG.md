@@ -22,6 +22,8 @@ headings so this page has one stable URL that can be shared outside the reposito
 
 ### Runtime and computers
 
+- Added a NeoForge 1.21.1 / Java 21 port backed by the JNI runtime transport; the existing 26.1.2 build continues to
+  use JDK 25 FFM.
 - Moved production computers onto the asynchronous actor runtime with bounded admission, worker execution, result
   delivery, and clean close barriers.
 - Moved Guest task scheduling and channel handoff into the Rust VM; channel traffic does not make a server request.
@@ -59,9 +61,12 @@ headings so this page has one stable URL that can be shared outside the reposito
 
 ### Compatibility notes
 
+- Minecraft 1.21.1 with NeoForge 21.1.250 or newer is supported on Java 21. Its initial compatibility build includes
+  computers, persistence, redstone, sound, compilation, and the terminal; the integrated IDE remains available in the
+  Minecraft 26.1.2 build while its client UI is ported separately.
 - Channel-enabled executables use artifact/runtime contract 1.2 and require the matching 0.4 runtime. Older artifacts
   whose channel limits are zero remain valid under the extended contract.
-- Minecraft 26.1.2, NeoForge 26.1.2.97 or newer, and Java 25 remain the active baseline.
+- Minecraft 26.1.2 with NeoForge 26.1.2.97 or newer remains the primary Java 25 baseline.
 
 [Compare v0.3.0 with the current branch](https://github.com/CertifiedBadIdeas/Compukters/compare/v0.3.0...dev).
 

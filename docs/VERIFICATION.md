@@ -36,6 +36,7 @@ replacement for deterministic runtime and conformance checks.
 | `./gradlew-sandbox-dev-parallel verifyKotlinVmConformance` | Every execution-conformance scenario registered through the root build's conformance registration path | Unrelated JVM, IDE, Minecraft, or release behavior |
 | `./gradlew-sandbox-dev-parallel verifyLocalFull` | Complete current checkout: all subproject checks, registered conformance, Rust/FFM/JNI and Runtime-version consistency, integrations, real GameTests, and the production artifact for the locally configured native platform | Clean-tag state or Linux-and-Windows universal release readiness |
 | `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildProductionUniversalJar` | Official-name production JAR and archive checks for the configured local native resources | A clean tagged universal release or unconfigured target platforms |
+| `./gradlew-sandbox-dev-parallel :v1_21_1-neoforge:buildProductionUniversalJar` | Remapped Minecraft 1.21.1 production JAR, Java 21 JNI runtime, metadata, and archive resources | Feature parity for the 26.1-only IDE UI or multi-platform release readiness |
 | `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildReleaseUniversalJar` | Clean exact-tag release state, Linux and Windows native bundles, archive contents, and packaged-native execution | Publication, upload, push, or external release creation |
 
 The production task retains its historical `UniversalJar` name, but it selects universal native bundles only when the

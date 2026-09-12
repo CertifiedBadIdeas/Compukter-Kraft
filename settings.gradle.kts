@@ -84,4 +84,8 @@ val v26_1Dir = modulesDir.resolve("v26_1")
 include("v26_1-common", v26_1Dir)
 include("v26_1-neoforge", v26_1Dir)
 
+val v1_21_1Dir = modulesDir.resolve("v1_21_1")
+include("v1_21_1-common", v1_21_1Dir)
+include("v1_21_1-neoforge", v1_21_1Dir)
+
 rootProject.name = "Compukters"
