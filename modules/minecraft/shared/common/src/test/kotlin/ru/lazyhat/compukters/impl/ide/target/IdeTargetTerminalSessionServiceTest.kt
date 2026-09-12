@@ -39,7 +39,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class IdeTargetTerminalSessionServiceTest {
+internal class IdeTargetTerminalSessionServiceTest {
     @Test
     fun `a late open reply cannot replace a newer viewer session`() {
         val firstSnapshot = java.util.concurrent.CompletableFuture<TerminalState?>()
@@ -54,9 +54,9 @@ class IdeTargetTerminalSessionServiceTest {
         assertFalse(first.isDone)
         assertFalse(second.isDone)
         secondSnapshot.complete(state(1))
-        assertEquals(2L, assertIs<IdeTerminalOpenedPayload>(second.join()).generation)
+        assertEquals(2L, assertIs<IdeTerminalOpened>(second.join()).generation)
         firstSnapshot.complete(state(1))
-        assertIs<IdeTerminalFailedPayload>(first.join())
+        assertIs<IdeTerminalFailed>(first.join())
         fixture.service.close()
         fixture.leases.close()
     }
@@ -76,7 +76,7 @@ class IdeTargetTerminalSessionServiceTest {
         fixture.machineId = 8
         completion.complete(TerminalUpdate.Full(state(2)))
         val delivery = fixture.service.publish(6).single()
-        assertIs<IdeTerminalFailedPayload>(delivery.payload)
+        assertIs<IdeTerminalFailed>(delivery.event)
         fixture.service.close()
         fixture.leases.close()
     }
@@ -85,7 +85,7 @@ class IdeTargetTerminalSessionServiceTest {
     fun `open publishes the initial state and subsequent deltas for the leased target`() =
         runServerTest {
             val fixture = fixture()
-            val opened = assertIs<IdeTerminalOpenedPayload>(fixture.service.open(OWNER, 3, fixture.reference, tick = 2))
+            val opened = assertIs<IdeTerminalOpened>(fixture.service.open(OWNER, 3, fixture.reference, tick = 2))
 
             assertEquals(TOKEN, opened.token)
             assertEquals(7, opened.machineId)
@@ -93,7 +93,7 @@ class IdeTargetTerminalSessionServiceTest {
 
             fixture.update = TerminalUpdate.Delta(1, 2, listOf(TerminalChange.Cursor(TerminalPosition(1, 0), true)))
             val delivery = fixture.service.publish(tick = 3).single()
-            val delta = assertIs<IdeTerminalDeltaPayload>(delivery.payload)
+            val delta = assertIs<IdeTerminalDelta>(delivery.event)
             assertEquals(OWNER, delivery.player)
             assertEquals(TOKEN, delta.token)
             assertEquals(2, delta.delta.targetRevision)
@@ -108,15 +108,15 @@ class IdeTargetTerminalSessionServiceTest {
             fixture.service.open(OWNER, 1, fixture.reference, tick = 1)
             fixture.update = TerminalUpdate.Delta(1, 2, listOf(TerminalChange.Reset))
 
-            assertIs<IdeTerminalDeltaPayload>(
-                fixture.service.resync(OWNER, IdeTerminalResyncPayload(TOKEN, 7, 1), tick = 2),
+            assertIs<IdeTerminalDelta>(
+                fixture.service.resync(OWNER, IdeTerminalResync(TOKEN, 7, 1), tick = 2),
             )
-            assertEquals(null, fixture.service.resync(ATTACKER, IdeTerminalResyncPayload(TOKEN, 7, 1), tick = 2))
+            assertEquals(null, fixture.service.resync(ATTACKER, IdeTerminalResync(TOKEN, 7, 1), tick = 2))
 
             fixture.update = null
             currentState = state(2)
-            assertIs<IdeTerminalFullPayload>(
-                fixture.service.resync(OWNER, IdeTerminalResyncPayload(TOKEN, 7, 2), tick = 2),
+            assertIs<IdeTerminalFull>(
+                fixture.service.resync(OWNER, IdeTerminalResync(TOKEN, 7, 2), tick = 2),
             )
         }
 
@@ -129,24 +129,24 @@ class IdeTargetTerminalSessionServiceTest {
         fixture.update = null
         val resync =
             serverOperation {
-                fixture.service.resync(OWNER, IdeTerminalResyncPayload(TOKEN, 7, 1), 2)
+                fixture.service.resync(OWNER, IdeTerminalResync(TOKEN, 7, 1), 2)
             }
         assertFalse(resync.isDone)
         fixture.update = TerminalUpdate.Delta(1, 2, listOf(TerminalChange.Reset))
-        assertIs<IdeTerminalDeltaPayload>(
+        assertIs<IdeTerminalDelta>(
             fixture.service
                 .publish(3)
                 .single()
-                .payload,
+                .event,
         )
         snapshot.complete(state(1))
         assertEquals(null, resync.join())
         fixture.update = TerminalUpdate.Delta(2, 3, listOf(TerminalChange.Reset))
-        assertIs<IdeTerminalDeltaPayload>(
+        assertIs<IdeTerminalDelta>(
             fixture.service
                 .publish(4)
                 .single()
-                .payload,
+                .event,
         )
         fixture.service.close()
         fixture.leases.close()
@@ -162,13 +162,13 @@ class IdeTargetTerminalSessionServiceTest {
             assertTrue(
                 fixture.service.key(
                     OWNER,
-                    IdeTerminalKeyPayload(TOKEN, 7, TerminalKey.ENTER, TerminalKeyAction.PRESS, setOf(TerminalModifier.CONTROL)),
+                    IdeTerminalKeyInput(TOKEN, 7, TerminalKey.ENTER, TerminalKeyAction.PRESS, setOf(TerminalModifier.CONTROL)),
                     tick = 5,
                 ),
             )
-            assertFalse(fixture.service.text(OWNER, IdeTerminalTextPayload(TOKEN, 7, "x"), tick = 5))
-            assertFalse(fixture.service.text(ATTACKER, IdeTerminalTextPayload(TOKEN, 7, "x"), tick = 6))
-            assertFalse(fixture.service.text(OWNER, IdeTerminalTextPayload(TOKEN, 8, "x"), tick = 6))
+            assertFalse(fixture.service.text(OWNER, IdeTerminalTextInput(TOKEN, 7, "x"), tick = 5))
+            assertFalse(fixture.service.text(ATTACKER, IdeTerminalTextInput(TOKEN, 7, "x"), tick = 6))
+            assertFalse(fixture.service.text(OWNER, IdeTerminalTextInput(TOKEN, 8, "x"), tick = 6))
             assertEquals(listOf("key:ENTER:PRESS:CONTROL"), fixture.inputs)
         }
 
@@ -180,26 +180,26 @@ class IdeTargetTerminalSessionServiceTest {
             fixture.machineId = 9
 
             val failed =
-                assertIs<IdeTerminalFailedPayload>(
+                assertIs<IdeTerminalFailed>(
                     fixture.service
                         .publish(tick = 2)
                         .single()
-                        .payload,
+                        .event,
                 )
             assertEquals(8, failed.generation)
             assertEquals(TOKEN, failed.token)
             assertEquals(IdeTargetFailureKind.TargetLost, failed.kind)
-            assertFalse(fixture.service.close(OWNER, IdeTerminalClosePayload(TOKEN)))
+            assertFalse(fixture.service.close(OWNER, IdeTerminalClose(TOKEN)))
 
             fixture.machineId = 7
             fixture.service.open(OWNER, 9, fixture.reference, tick = 3)
             fixture.leases.detach(OWNER, fixture.attached)
-            assertFalse(fixture.service.close(OWNER, IdeTerminalClosePayload(TOKEN)))
-            assertIs<IdeTerminalFailedPayload>(
+            assertFalse(fixture.service.close(OWNER, IdeTerminalClose(TOKEN)))
+            assertIs<IdeTerminalFailed>(
                 fixture.service
                     .publish(tick = 4)
                     .single()
-                    .payload,
+                    .event,
             )
         }
 
@@ -208,7 +208,7 @@ class IdeTargetTerminalSessionServiceTest {
         runServerTest {
             val fixture = fixture(terminal = false)
 
-            val failed = assertIs<IdeTerminalFailedPayload>(fixture.service.open(OWNER, 1, fixture.reference, tick = 1))
+            val failed = assertIs<IdeTerminalFailed>(fixture.service.open(OWNER, 1, fixture.reference, tick = 1))
 
             assertEquals(null, failed.token)
             assertEquals(IdeTargetFailureKind.Unsupported, failed.kind)

@@ -12,7 +12,6 @@
 
 package ru.lazyhat.compukters.impl.ide.target
 
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import ru.lazyhat.compukters.ide.client.target.IdeAttachedTarget
 import ru.lazyhat.compukters.ide.client.target.IdeTargetFailureKind
 import ru.lazyhat.compukters.impl.network.ServerOperationScope
@@ -20,12 +19,12 @@ import ru.lazyhat.compukters.impl.terminal.TerminalInputAdmission
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import java.util.UUID
 
-internal data class IdeTerminalDelivery(
+data class IdeTerminalDelivery(
     val player: UUID,
-    val payload: CustomPacketPayload,
+    val event: IdeTerminalEvent,
 )
 
-internal class IdeTargetTerminalSessionService(
+class IdeTargetTerminalSessionService(
     private val leases: IdeTargetLeaseService,
     private val tokens: () -> UUID = UUID::randomUUID,
     private val inputAdmission: (UUID, Long) -> Boolean,
@@ -48,7 +47,7 @@ internal class IdeTargetTerminalSessionService(
         generation: Long,
         target: IdeTargetReference,
         tick: Long,
-    ): CustomPacketPayload {
+    ): IdeTerminalEvent {
         checkOpen()
         val attached =
             leases.attached(player, target, tick)
@@ -83,7 +82,7 @@ internal class IdeTargetTerminalSessionService(
         require(token !in playersByToken) { "terminal session token must be unique" }
         sessionsByPlayer[player] = Session(generation, token, attached, resolved, terminal, machineId, state.revision)
         playersByToken[token] = player
-        return IdeTerminalOpenedPayload(generation, token, machineId, state)
+        return IdeTerminalOpened(generation, token, machineId, state)
     }
 
     fun publish(tick: Long): List<IdeTerminalDelivery> {
@@ -119,7 +118,7 @@ internal class IdeTargetTerminalSessionService(
         player: UUID,
         session: Session,
         tick: Long,
-    ): CustomPacketPayload? {
+    ): IdeTerminalEvent? {
         val update = session.terminal.changesSince(session.revision)
         if (!isCurrent(player, session, tick)) return null
         return when (update) {
@@ -129,14 +128,14 @@ internal class IdeTargetTerminalSessionService(
                     snapshot(player, session, tick)
                 } else {
                     session.revision = update.targetRevision
-                    IdeTerminalDeltaPayload(session.token, session.machineId, update)
+                    IdeTerminalDelta(session.token, session.machineId, update)
                 }
             }
 
             is TerminalUpdate.Full -> {
                 if (update.state.revision < session.revision) return null
                 session.revision = update.state.revision
-                IdeTerminalFullPayload(session.token, session.machineId, update.state)
+                IdeTerminalFull(session.token, session.machineId, update.state)
             }
 
             is TerminalUpdate.Unchanged,
@@ -149,24 +148,24 @@ internal class IdeTargetTerminalSessionService(
 
     suspend fun resync(
         player: UUID,
-        payload: IdeTerminalResyncPayload,
+        command: IdeTerminalResync,
         tick: Long,
-    ): CustomPacketPayload? {
+    ): IdeTerminalEvent? {
         checkOpen()
-        val session = matching(player, payload.token, payload.machineId, tick) ?: return null
-        val update = session.terminal.changesSince(payload.revision)
+        val session = matching(player, command.token, command.machineId, tick) ?: return null
+        val update = session.terminal.changesSince(command.revision)
         if (!isCurrent(player, session, tick)) return null
         return when (update) {
             is TerminalUpdate.Delta -> {
                 if (update.targetRevision < session.revision) return snapshot(player, session, tick)
-                IdeTerminalDeltaPayload(session.token, session.machineId, update).also {
+                IdeTerminalDelta(session.token, session.machineId, update).also {
                     session.revision = maxOf(session.revision, update.targetRevision)
                 }
             }
 
             is TerminalUpdate.Full -> {
                 if (update.state.revision < session.revision) return snapshot(player, session, tick)
-                IdeTerminalFullPayload(session.token, session.machineId, update.state).also {
+                IdeTerminalFull(session.token, session.machineId, update.state).also {
                     session.revision = maxOf(session.revision, update.state.revision)
                 }
             }
@@ -183,32 +182,32 @@ internal class IdeTargetTerminalSessionService(
 
     suspend fun key(
         player: UUID,
-        payload: IdeTerminalKeyPayload,
+        command: IdeTerminalKeyInput,
         tick: Long,
     ): Boolean {
         checkOpen()
-        val session = matching(player, payload.token, payload.machineId, tick) ?: return false
+        val session = matching(player, command.token, command.machineId, tick) ?: return false
         if (!inputAdmission(player, tick)) return false
-        return session.terminal.submitKey(payload.key, payload.action, payload.modifiers)
+        return session.terminal.submitKey(command.key, command.action, command.modifiers)
     }
 
     suspend fun text(
         player: UUID,
-        payload: IdeTerminalTextPayload,
+        command: IdeTerminalTextInput,
         tick: Long,
     ): Boolean {
         checkOpen()
-        val session = matching(player, payload.token, payload.machineId, tick) ?: return false
+        val session = matching(player, command.token, command.machineId, tick) ?: return false
         if (!inputAdmission(player, tick)) return false
-        return session.terminal.submitText(payload.text)
+        return session.terminal.submitText(command.text)
     }
 
     fun close(
         player: UUID,
-        payload: IdeTerminalClosePayload,
+        command: IdeTerminalClose,
     ): Boolean {
         checkOpen()
-        if (playersByToken[payload.token] != player) return false
+        if (playersByToken[command.token] != player) return false
         remove(player)
         return true
     }
@@ -246,8 +245,8 @@ internal class IdeTargetTerminalSessionService(
         tick: Long,
     ): Boolean = leases.access(player, session.attached, tick) === session.resolved
 
-    private suspend fun full(session: Session): IdeTerminalFullPayload? =
-        session.terminal.fullState()?.let { IdeTerminalFullPayload(session.token, session.machineId, it) }
+    private suspend fun full(session: Session): IdeTerminalFull? =
+        session.terminal.fullState()?.let { IdeTerminalFull(session.token, session.machineId, it) }
 
     private fun isCurrent(
         player: UUID,
@@ -261,7 +260,7 @@ internal class IdeTargetTerminalSessionService(
         player: UUID,
         session: Session,
         tick: Long,
-    ): IdeTerminalFullPayload? =
+    ): IdeTerminalFull? =
         full(session)?.takeIf { isCurrent(player, session, tick) && it.state.revision >= session.revision }?.also {
             session.revision = it.state.revision
         }
@@ -291,7 +290,7 @@ internal class IdeTargetTerminalSessionService(
         kind: IdeTargetFailureKind,
         detail: String,
         retryable: Boolean,
-    ) = IdeTerminalFailedPayload(generation, token, kind, detail, retryable)
+    ) = IdeTerminalFailed(generation, token, kind, detail, retryable)
 
     private fun checkOpen() = check(!closed) { "target terminal session service is closed" }
 

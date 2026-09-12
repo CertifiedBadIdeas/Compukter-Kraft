@@ -12,6 +12,7 @@
 
 package ru.lazyhat.compukters.impl.ide.target
 
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
 import net.neoforged.bus.api.SubscribeEvent
@@ -79,14 +80,16 @@ internal object IdeTargetNetwork {
         pending.whenComplete { reply, _ ->
             if (!transport.operations.closed) {
                 context.reply(
-                    reply
-                        ?: IdeTerminalFailedPayload(
-                            payload.generation,
-                            null,
-                            IdeTargetFailureKind.TargetLost,
-                            "Target terminal is unavailable",
-                            true,
-                        ),
+                    (
+                        reply
+                            ?: IdeTerminalFailed(
+                                payload.generation,
+                                null,
+                                IdeTargetFailureKind.TargetLost,
+                                "Target terminal is unavailable",
+                                true,
+                            )
+                    ).toPayload(),
                 )
             }
         }
@@ -102,14 +105,14 @@ internal object IdeTargetNetwork {
             .submit(player.uuid) {
                 transport.terminals.resync(
                     player.uuid,
-                    payload,
+                    IdeTerminalResync(payload.token, payload.machineId, payload.revision),
                     player
                         .level()
                         .server.tickCount
                         .toLong(),
                 )
             }?.thenAccept { reply ->
-                if (!transport.operations.closed) reply?.let(context::reply)
+                if (!transport.operations.closed) reply?.toPayload()?.let(context::reply)
             }
     }
 
@@ -122,7 +125,7 @@ internal object IdeTargetNetwork {
         transport.operations.submit(player.uuid) {
             transport.terminals.key(
                 player.uuid,
-                payload,
+                IdeTerminalKeyInput(payload.token, payload.machineId, payload.key, payload.action, payload.modifiers),
                 player
                     .level()
                     .server.tickCount
@@ -140,7 +143,7 @@ internal object IdeTargetNetwork {
         transport.operations.submit(player.uuid) {
             transport.terminals.text(
                 player.uuid,
-                payload,
+                IdeTerminalTextInput(payload.token, payload.machineId, payload.text),
                 player
                     .level()
                     .server.tickCount
@@ -154,7 +157,7 @@ internal object IdeTargetNetwork {
         context: IPayloadContext,
     ) {
         val player = context.player() as? ServerPlayer ?: return
-        transport(player).terminals.close(player.uuid, payload)
+        transport(player).terminals.close(player.uuid, IdeTerminalClose(payload.token))
     }
 
     private fun transport(player: ServerPlayer): ServerTransport {
@@ -211,7 +214,7 @@ internal object IdeTargetNetwork {
             deployments.expire(tick)
             terminals.publish(tick).forEach { delivery ->
                 server.playerList.getPlayer(delivery.player)?.let { player ->
-                    PacketDistributor.sendToPlayer(player, delivery.payload)
+                    PacketDistributor.sendToPlayer(player, delivery.event.toPayload())
                 }
             }
         }
@@ -228,4 +231,12 @@ internal object IdeTargetNetwork {
         detail: String,
         retryable: Boolean,
     ) = IdeTargetReply.Failed(IdeTargetFailure(IdeTargetFailureKind.Other, detail), retryable)
+
+    private fun IdeTerminalEvent.toPayload(): CustomPacketPayload =
+        when (this) {
+            is IdeTerminalOpened -> IdeTerminalOpenedPayload(generation, token, machineId, state)
+            is IdeTerminalFull -> IdeTerminalFullPayload(token, machineId, state)
+            is IdeTerminalDelta -> IdeTerminalDeltaPayload(token, machineId, delta)
+            is IdeTerminalFailed -> IdeTerminalFailedPayload(generation, token, kind, detail, retryable)
+        }
 }
