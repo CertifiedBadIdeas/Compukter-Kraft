@@ -170,7 +170,6 @@ class ReleaseSupportTest {
     fun onlyTheExplicitReleaseAssemblyTaskSelectsUniversalRuntimeMode() {
         assertEquals(true, requestsUniversalReleaseBuild(listOf(":v26_1-neoforge:buildReleaseUniversalJar")))
         assertEquals(true, requestsUniversalReleaseBuild(listOf("buildReleaseUniversalJar")))
-        assertEquals(true, requestsUniversalReleaseBuild(listOf("buildReleaseArtifacts")))
         assertEquals(false, requestsUniversalReleaseBuild(listOf(":v26_1-neoforge:buildProductionUniversalJar")))
         assertEquals(false, requestsUniversalReleaseBuild(listOf("release")))
     }

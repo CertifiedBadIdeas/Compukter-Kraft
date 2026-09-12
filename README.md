@@ -73,10 +73,11 @@ Rust and FFM checks, runtime integrations, the real GameTest server, and the
 production artifacts for the locally configured native platform.
 
 A distributable multi-platform release has a stricter, separate gate:
-`buildReleaseArtifacts` requires a clean exact-tag checkout and the pinned Linux
-and Windows Runtime bundles, then assembles and verifies both the 26.1.2 FFM and
-1.21.1 JNI artifacts. A successful local full verification does not by itself
-establish release readiness.
+running `buildReleaseUniversalJar` from the repository root selects both
+version-specific tasks. It requires a clean exact-tag checkout and the pinned
+Linux and Windows Runtime bundles, then assembles and verifies both the 26.1.2
+FFM and 1.21.1 JNI artifacts. A successful local full verification does not by
+itself establish release readiness.
 
 ## Runtime boundary
 

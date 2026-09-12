@@ -39,7 +39,7 @@ replacement for deterministic runtime and conformance checks.
 | `./gradlew-sandbox-dev-parallel :v1_21_1-neoforge:buildProductionUniversalJar` | Remapped Minecraft 1.21.1 production JAR, Java 21 JNI runtime, metadata, and archive resources | Feature parity for the 26.1-only IDE UI or multi-platform release readiness |
 | `./gradlew-sandbox-dev-parallel-summary :v1_21_1-neoforge:buildReleaseUniversalJar` | Clean exact-tag release state, Linux and Windows JNI resources, 1.21.1 archive contents, and packaged JNI execution | The 26.1.2 artifact or external publication |
 | `./gradlew-sandbox-dev-parallel-summary :v26_1-neoforge:buildReleaseUniversalJar` | Clean exact-tag release state, Linux and Windows FFI resources, 26.1.2 archive contents, and packaged FFM execution | The 1.21.1 artifact or external publication |
-| `./gradlew-sandbox-dev-parallel-summary buildReleaseArtifacts` | Both distributable JARs from the same validated dual-transport Runtime bundles on a clean exact tag | Publication, upload, push, or external release creation |
+| `./gradlew-sandbox-dev-parallel-summary buildReleaseUniversalJar` from the repository root | Gradle selects both version-specific tasks and builds both distributable JARs from the same validated dual-transport Runtime bundles on a clean exact tag | Publication, upload, push, or external release creation |
 
 The production task retains its historical `UniversalJar` name, but it selects universal native bundles only when the
 release runtime bundle configuration is present. Use the release task—not the production task name—as the universal
@@ -64,7 +64,7 @@ FFI, Kotlin-to-VM conformance, runtime-host integration, and NeoForge GameTests.
 | Minecraft lifecycle, registration, persistence adapter, redstone, or server-visible networking | Owning common/NeoForge checks and `:v26_1-neoforge:runGameTestServer` when world or lifecycle behavior changes | `verifyLocalFull` |
 | Client UI, input, rendering, or other inherently visual behavior | Owning module checks plus a development-client scenario with the observation recorded | `verifyLocalFull` plus the required manual observation |
 | Metadata, resources, native packaging, access transformers, or archive composition | `:v26_1-neoforge:buildProductionUniversalJar` and inspection produced by its verification tasks | `verifyLocalFull`; use the release gate as well only for a release candidate |
-| Tagged distributable release | `verifyLocalFull` on the exact candidate revision before tagging | `buildReleaseArtifacts` from the clean exact tag with the published Runtime bundles |
+| Tagged distributable release | `verifyLocalFull` on the exact candidate revision before tagging | `buildReleaseUniversalJar` from the repository root on the clean exact tag with the published Runtime bundles |
 
 ## Manual client scenarios
 

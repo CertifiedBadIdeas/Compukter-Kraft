@@ -121,8 +121,7 @@ fun expectedNativeResources(
 
 fun requestsUniversalReleaseBuild(taskNames: List<String>): Boolean =
     taskNames.any {
-        it.substringAfterLast(':') == "buildReleaseUniversalJar" ||
-            it.substringAfterLast(':') == "buildReleaseArtifacts"
+        it.substringAfterLast(':') == "buildReleaseUniversalJar"
     }
 
 fun validateNativeResources(

@@ -176,7 +176,7 @@ tasks.register("release") {
             },
         )
         println("Release commit tagged; gradle.properties was not changed.")
-        println("Run 'buildReleaseArtifacts' before publishing the tag.")
+        println("Run 'buildReleaseUniversalJar' from the repository root before publishing the tag.")
     }
 }
 

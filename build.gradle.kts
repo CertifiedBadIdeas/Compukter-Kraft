@@ -709,10 +709,3 @@ tasks.register("verifyLocalFull") {
     dependsOn(":v1_21_1-neoforge:runGameTestServer")
     dependsOn(":v26_1-neoforge:runGameTestServer")
 }
-
-tasks.register("buildReleaseArtifacts") {
-    description = "Builds and verifies both clean tagged NeoForge release artifacts."
-    group = "build"
-    dependsOn(":v1_21_1-neoforge:buildReleaseUniversalJar")
-    dependsOn(":v26_1-neoforge:buildReleaseUniversalJar")
-}

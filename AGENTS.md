@@ -49,7 +49,8 @@ VM code lives in `host/compukter-vm`. Documentation is in
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runClient` launches the NeoForge dev client.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runGameTestServer` runs the real NeoForge GameTest server.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildProductionUniversalJar` builds the official-name production mod jar without a remap stage.
-- `./gradlew-sandbox-dev-parallel-summary buildReleaseArtifacts` is the separate tagged release gate. It requires a
+- `./gradlew-sandbox-dev-parallel-summary buildReleaseUniversalJar` is the separate tagged release gate. From the
+  repository root, Gradle selects both version-specific tasks. It requires a
   clean exact-tag checkout and the pinned Linux and Windows dual-transport Runtime bundles, then verifies both the
   26.1.2 FFM and 1.21.1 JNI artifacts; local full verification does not claim this release state.
 - `cargo test --manifest-path host/compukter-vm/Cargo.toml --locked --offline` runs the managed Compukter VM tests.
