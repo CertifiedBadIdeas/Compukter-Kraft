@@ -18,8 +18,7 @@
 
 package ru.lazyhat.compukters.impl.compat
 
-import net.minecraft.resources.ResourceKey
+import net.minecraft.server.MinecraftServer
+import net.minecraft.server.level.ServerPlayer
 
-typealias Identifier = net.minecraft.resources.ResourceLocation
-
-fun ResourceKey<*>.compuktersIdentifier(): Identifier = location()
+fun ServerPlayer.compuktersServer(): MinecraftServer = requireNotNull(level().server) { "server player is not attached to a server" }

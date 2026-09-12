@@ -34,6 +34,7 @@ import ru.lazyhat.compukters.impl.computer.NeoForgeVmActorServices
 import ru.lazyhat.compukters.impl.config.CompuktersClientConfig
 import ru.lazyhat.compukters.impl.config.CompuktersServerConfig
 import ru.lazyhat.compukters.impl.fs.NeoForgeWorldFileSystemStores
+import ru.lazyhat.compukters.impl.ide.target.IdeTargetNetwork
 import ru.lazyhat.compukters.impl.registry.CompuktersRegistry
 import ru.lazyhat.compukters.impl.terminal.TerminalNetwork
 import ru.lazyhat.compukters.lang.runtime.vm.JniRuntimeBackend
@@ -48,6 +49,7 @@ class CompuktersMod(
         val native = requireNativeRuntime()
         CompuktersRegistry.register(eventBus)
         eventBus.addListener(TerminalNetwork::register)
+        eventBus.addListener(IdeTargetNetwork::register)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onLevelSave)
         NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::onServerStarting)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onServerStarting)

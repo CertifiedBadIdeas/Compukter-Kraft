@@ -18,4 +18,8 @@
 
 package ru.lazyhat.compukters.impl.compat
 
+import net.minecraft.resources.ResourceKey
+
 typealias Identifier = net.minecraft.resources.Identifier
+
+fun ResourceKey<*>.compuktersIdentifier(): Identifier = identifier()

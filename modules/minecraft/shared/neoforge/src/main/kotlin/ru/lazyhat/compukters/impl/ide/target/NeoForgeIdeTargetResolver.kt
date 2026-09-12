@@ -22,6 +22,7 @@ import ru.lazyhat.compukters.ide.client.target.IdeTargetFailure
 import ru.lazyhat.compukters.ide.client.target.IdeTargetFailureKind
 import ru.lazyhat.compukters.ide.client.target.IdeTargetProfileId
 import ru.lazyhat.compukters.ide.compiler.profile.TargetCompileProfileIdentity
+import ru.lazyhat.compukters.impl.compat.compuktersIdentifier
 import ru.lazyhat.compukters.impl.compiler.NeoForgeCompilerServices
 import ru.lazyhat.compukters.impl.network.awaitServerResult
 import ru.lazyhat.compukters.impl.terminal.TerminalNetwork
@@ -41,7 +42,7 @@ internal class NeoForgeIdeTargetResolver(
             serverPlayer
                 .level()
                 .dimension()
-                .identifier()
+                .compuktersIdentifier()
                 .toString()
         ) {
             return rejected("Target is in another dimension")
@@ -58,7 +59,7 @@ internal class NeoForgeIdeTargetResolver(
             serverPlayer
                 .level()
                 .dimension()
-                .identifier()
+                .compuktersIdentifier()
                 .toString()
         val position = entity.blockPos
         return IdeClaimResolution.Resolved(

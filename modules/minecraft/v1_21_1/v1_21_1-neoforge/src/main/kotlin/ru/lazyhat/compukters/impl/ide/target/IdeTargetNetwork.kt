@@ -24,10 +24,10 @@ internal object IdeTargetNetwork {
     fun register(event: RegisterPayloadHandlersEvent) {
         val registrar = event.registrar("1")
         IdeTargetServerNetwork.register(registrar)
-        registrar.playToClient(IdeTargetReplyPayload.TYPE, IdeTargetReplyPayload.STREAM_CODEC)
-        registrar.playToClient(IdeTerminalOpenedPayload.TYPE, IdeTerminalOpenedPayload.STREAM_CODEC)
-        registrar.playToClient(IdeTerminalFullPayload.TYPE, IdeTerminalFullPayload.STREAM_CODEC)
-        registrar.playToClient(IdeTerminalDeltaPayload.TYPE, IdeTerminalDeltaPayload.STREAM_CODEC)
-        registrar.playToClient(IdeTerminalFailedPayload.TYPE, IdeTerminalFailedPayload.STREAM_CODEC)
+        registrar.playToClient(IdeTargetReplyPayload.TYPE, IdeTargetReplyPayload.STREAM_CODEC, IdeTargetClientNetwork::handleReply)
+        registrar.playToClient(IdeTerminalOpenedPayload.TYPE, IdeTerminalOpenedPayload.STREAM_CODEC, IdeTargetClientNetwork::handleOpened)
+        registrar.playToClient(IdeTerminalFullPayload.TYPE, IdeTerminalFullPayload.STREAM_CODEC, IdeTargetClientNetwork::handleFull)
+        registrar.playToClient(IdeTerminalDeltaPayload.TYPE, IdeTerminalDeltaPayload.STREAM_CODEC, IdeTargetClientNetwork::handleDelta)
+        registrar.playToClient(IdeTerminalFailedPayload.TYPE, IdeTerminalFailedPayload.STREAM_CODEC, IdeTargetClientNetwork::handleFailed)
     }
 }
