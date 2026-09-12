@@ -20,14 +20,10 @@ package ru.lazyhat.compukters.minecraft.computer
 
 import net.minecraft.SharedConstants
 import net.minecraft.core.BlockPos
-import net.minecraft.core.HolderLookup
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.server.Bootstrap
-import net.minecraft.util.ProblemReporter
 import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.entity.BlockEntityType
-import net.minecraft.world.level.storage.TagValueInput
-import net.minecraft.world.level.storage.TagValueOutput
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStateSink
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerStopReason
@@ -46,7 +42,6 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import java.util.concurrent.CompletableFuture
-import java.util.stream.Stream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -70,25 +65,22 @@ class ComputerBlockEntityTest {
     fun `output register persists exactly and malformed reserved bits sanitize to zero`() {
         val fresh = fixture()
         val freshTag = fresh.entity.saveForTest()
-        assertEquals(0, freshTag.getCompoundOrEmpty("compukters").getIntOr("redstoneOutput", -1))
+        assertEquals(0, ComputerBlockEntityTestPersistence.redstoneOutput(freshTag))
 
         val valid = 1 or (17 shl 5) or (31 shl 25)
         val validTag = fresh.entity.saveForTest()
-        validTag.getCompoundOrEmpty("compukters").putInt("redstoneOutput", valid)
+        ComputerBlockEntityTestPersistence.writeRedstoneOutput(validTag, valid)
         val restored = fixture()
         restored.entity.loadForTest(validTag)
         restored.entity.serverTick()
         assertEquals(valid, restored.carriers.single().initialRedstoneOutput)
         assertEquals(
             valid,
-            restored.entity
-                .saveForTest()
-                .getCompoundOrEmpty("compukters")
-                .getIntOr("redstoneOutput", -1),
+            ComputerBlockEntityTestPersistence.redstoneOutput(restored.entity.saveForTest()),
         )
 
         val malformedTag = fresh.entity.saveForTest()
-        malformedTag.getCompoundOrEmpty("compukters").putInt("redstoneOutput", 1 shl 30)
+        ComputerBlockEntityTestPersistence.writeRedstoneOutput(malformedTag, 1 shl 30)
         val sanitized = fixture()
         sanitized.entity.loadForTest(malformedTag)
         sanitized.entity.serverTick()
@@ -260,7 +252,7 @@ class ComputerBlockEntityTest {
         assertNull(restored.entity.terminalFullStateAsync().getNow(null))
         assertEquals(neverStarted(), restored.entity.runtimeState)
         assertTrue(restored.carriers.isEmpty())
-        assertEquals(setOf("compukters"), tag.keySet())
+        assertEquals(setOf("compukters"), ComputerBlockEntityTestPersistence.keys(tag))
         assertFalse(tag.toString().contains("artifact"))
     }
 
@@ -272,7 +264,7 @@ class ComputerBlockEntityTest {
         val legacy = fixture.entity.saveForTest()
         val legacyPayload = CompoundTag()
         legacyPayload.putByteArray("artifact", byteArrayOf(1, 2, 3))
-        legacy.put("compukters", legacyPayload)
+        ComputerBlockEntityTestPersistence.replacePayload(legacy, legacyPayload)
 
         fixture.entity.loadForTest(legacy)
         fixture.entity.serverTick()
@@ -311,20 +303,12 @@ class ComputerBlockEntityTest {
 
     private class TestComputerBlockEntity(
         carrierFactory: ComputerCarrierFactory,
-    ) : ComputerBlockEntity(
+    ) : ComputerBlockEntityTestPersistence(
             TEST_TYPE,
             BlockPos(2, 3, 4),
             Blocks.FURNACE.defaultBlockState(),
             carrierFactory,
-        ) {
-        fun saveForTest(): CompoundTag {
-            val output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, EMPTY_PROVIDER)
-            saveAdditional(output)
-            return output.buildResult()
-        }
-
-        fun loadForTest(tag: CompoundTag) = loadAdditional(TagValueInput.create(ProblemReporter.DISCARDING, EMPTY_PROVIDER, tag))
-    }
+        )
 
     private class FakeCarrier(
         private val deviceId: Int,
@@ -465,8 +449,6 @@ class ComputerBlockEntityTest {
                 SharedConstants.tryDetectVersion()
                 Bootstrap.bootStrap()
             }
-
-        private val EMPTY_PROVIDER = HolderLookup.Provider.create(Stream.empty())
 
         @Suppress("UNCHECKED_CAST")
         private val TEST_TYPE = BlockEntityType.FURNACE as BlockEntityType<ComputerBlockEntity>
