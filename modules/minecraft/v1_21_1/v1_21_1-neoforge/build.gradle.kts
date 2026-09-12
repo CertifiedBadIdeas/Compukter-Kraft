@@ -18,6 +18,7 @@
 
 import net.fabricmc.loom.task.RemapJarTask
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 plugins {
     alias(libs.plugins.v1211)
@@ -62,19 +63,73 @@ val verifyProductionJar =
             listOf(
                 "META-INF/neoforge.mods.toml",
                 "ru/lazyhat/compukters/impl/CompuktersMod.class",
+                "ru/lazyhat/compukters/impl/ide/IdeClientBootstrap.class",
+                "ru/lazyhat/compukters/impl/ide/IdeRenderer.class",
+                "ru/lazyhat/compukters/impl/ide/IdeScreen.class",
+                "ru/lazyhat/compukters/impl/ide/target/IdeTargetNetwork.class",
+                "ru/lazyhat/compukters/ide/client/target/IdeTargetPort.class",
                 "system/programs/boot",
                 "system/programs/shell",
                 "system/programs/kotlinc",
                 "system/programs/edit",
+                "system/programs/vmbench",
                 "tooling/workers/k2-tooling-workers.bundle",
                 "tooling/workers/k2-tooling-workers.zip.xz",
                 "assets/compukters/blockstates/compukter.json",
                 "assets/compukters/models/block/compukter.json",
                 "assets/compukters/models/item/compukter.json",
                 "assets/compukters/lang/en_us.json",
-            ).forEach { required -> check(required in entries) { "$required is missing from ${archive.name}" } }
+                "assets/compukters/textures/gui/ide_toolbar.png",
+            ).forEach { required ->
+                check(entries.count { it == required } == 1) {
+                    "$required is missing or duplicated in ${archive.name}"
+                }
+            }
+            check(entries.size == entries.toSet().size) { "duplicate archive entries found in ${archive.name}" }
             check(entries.any { it.matches(Regex("META-INF/natives/[^/]+/[^/]+/(lib)?compukter_jni\\.(so|dll|dylib)")) }) {
                 "the Java 21 JNI runtime is missing from ${archive.name}"
+            }
+            check(entries.none { "compukter_ffi" in it || it.endsWith("/FfmRuntimeBackend.class") }) {
+                "Java 25 FFM runtime content leaked into ${archive.name}"
+            }
+            check(
+                entries.none { entry ->
+                    entry.startsWith("ru/lazyhat/compukters/") && entry.substringAfterLast('/').contains("GameTest")
+                } && entries.none { it.startsWith("fixtures/") },
+            ) {
+                "GameTest classes or fixtures leaked into ${archive.name}"
+            }
+            val forbiddenIdeClassPrefixes =
+                listOf(
+                    "com/intellij/",
+                    "dev/architectury/",
+                    "org/jetbrains/kotlin/analysis/",
+                    "org/jetbrains/kotlin/fir/",
+                    "org/jetbrains/kotlin/idea/",
+                    "org/jetbrains/kotlin/psi/",
+                    "ru/lazyhat/compukters/ide/analysis/k2/",
+                )
+            fun forbiddenIdeClass(name: String): Boolean =
+                forbiddenIdeClassPrefixes.any(name::startsWith) || name.contains("kotlin/compiler")
+
+            check(entries.none(::forbiddenIdeClass)) {
+                "forbidden IDE/compiler implementation classes leaked into ${archive.name}"
+            }
+            ZipFile(archive).use { outer ->
+                entries
+                    .filter { it.startsWith("META-INF/jars/") && it.endsWith(".jar") }
+                    .forEach { nestedName ->
+                        val nestedEntry = checkNotNull(outer.getEntry(nestedName))
+                        ZipInputStream(outer.getInputStream(nestedEntry)).use { nested ->
+                            while (true) {
+                                val entry = nested.nextEntry ?: break
+                                check(!forbiddenIdeClass(entry.name)) {
+                                    "forbidden IDE/compiler class ${entry.name} leaked through $nestedName"
+                                }
+                                nested.closeEntry()
+                            }
+                        }
+                    }
             }
             val metadata = ZipFile(archive).use { it.getInputStream(it.getEntry("META-INF/neoforge.mods.toml")).reader().readText() }
             check("${'$'}{" !in metadata) { "unexpanded metadata placeholder in ${archive.name}" }
