@@ -178,7 +178,7 @@ internal class TerminalScreen(
         mouseY: Int,
         partialTick: Float,
     ) {
-        graphics.fill(0, 0, width, height, DIM_COLOR)
+        graphics.fill(0, 0, width, height, TerminalScreenStyle.DIM_COLOR)
     }
 
     override fun extractRenderState(
@@ -190,7 +190,7 @@ internal class TerminalScreen(
         val viewport = viewport()
         viewport.withTransform(graphics.pose()) {
             if (!viewport.supported) {
-                graphics.text(font, UNSUPPORTED_MESSAGE, 4, 4, TITLE_COLOR, false)
+                graphics.text(font, TerminalScreenStyle.UNSUPPORTED_MESSAGE, 4, 4, TerminalScreenStyle.TITLE_COLOR, false)
                 return@withTransform
             }
             val geometry = TerminalRenderGeometry(viewport.width, viewport.height, fontProfile)
@@ -199,30 +199,23 @@ internal class TerminalScreen(
                 geometry.panel.top - 1,
                 geometry.panel.right + 1,
                 geometry.panel.bottom + 1,
-                PANEL_BORDER_COLOR,
+                TerminalScreenStyle.PANEL_BORDER_COLOR,
             )
             graphics.fill(
                 geometry.panel.left,
                 geometry.panel.top,
                 geometry.panel.right,
                 geometry.panel.bottom,
-                PANEL_COLOR,
+                TerminalScreenStyle.PANEL_COLOR,
             )
-            graphics.text(font, title, geometry.titleX, geometry.titleY, TITLE_COLOR, false)
-            graphics.fill(
-                geometry.grid.left,
-                geometry.grid.top - 1,
-                geometry.grid.right,
-                geometry.grid.bottom,
-                GRID_COLOR,
-            )
+            graphics.text(font, title, geometry.titleX, geometry.titleY, TerminalScreenStyle.TITLE_COLOR, false)
             TerminalGridRenderer.draw(
                 graphics,
                 font,
                 replica.state,
                 fontProfile,
                 geometry.gridGeometry,
-                System.nanoTime() / 1_000_000L,
+                TerminalScreenStyle.animationMillis(),
             )
             val resourceText =
                 Component
@@ -233,7 +226,7 @@ internal class TerminalScreen(
                 resourceText,
                 geometry.footer.left,
                 geometry.footer.top + fontProfile.glyphDrawOffsetY,
-                RESOURCE_COLOR,
+                TerminalScreenStyle.RESOURCE_COLOR,
                 false,
             )
             super.extractRenderState(
@@ -278,16 +271,6 @@ internal class TerminalScreen(
     private fun viewport(): CompuktersUiViewport {
         val window = minecraft.window
         return CompuktersUiViewport.admit(window.width, window.height, window.guiScale)
-    }
-
-    private companion object {
-        val DIM_COLOR = 0x99000000.toInt()
-        val PANEL_COLOR = 0xFF101418.toInt()
-        val PANEL_BORDER_COLOR = 0xFF27323A.toInt()
-        val TITLE_COLOR = 0xFFF2F4F8.toInt()
-        val RESOURCE_COLOR = 0xFFA9BAC7.toInt()
-        val GRID_COLOR = TerminalRenderGeometry.paletteColor(0)
-        val UNSUPPORTED_MESSAGE = Component.literal("Compukters UI requires at least 640x360 pixels")
     }
 }
 
