@@ -44,7 +44,7 @@ data class IdeToolbarIconSprite(
     val sourceX: Int,
 )
 
-internal object IdeToolbarIconAtlas {
+object IdeToolbarIconAtlas {
     const val DRAW_SIZE = 16
     const val CELL_SIZE = 32
     const val WIDTH = CELL_SIZE * 11

@@ -16,17 +16,11 @@
  * limitations under the License.
  */
 
-plugins {
-    id("kotlin-convention")
-}
+@file:Suppress("ktlint:standard:filename")
 
-val libs = libsCatalog()
+package ru.lazyhat.compukters.impl.terminal
 
-dependencies {
-    implementation(project(":core"))
-    implementation(project(":ide-client"))
-    implementation(project(":native-runtime-api"))
+import net.minecraft.resources.ResourceLocation
 
-    implementation(libs.findLibrary("kotlin-stdlib").get())
-    implementation(libs.findLibrary("kotlin-logging").get())
-}
+internal val TerminalFontProfile.fontDescription: ResourceLocation
+    get() = ResourceLocation.fromNamespaceAndPath("compukters", "terminal/$id")

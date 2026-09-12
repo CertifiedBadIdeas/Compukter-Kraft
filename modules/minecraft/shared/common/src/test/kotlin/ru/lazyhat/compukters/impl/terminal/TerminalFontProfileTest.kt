@@ -18,7 +18,6 @@
 
 package ru.lazyhat.compukters.impl.terminal
 
-import net.minecraft.resources.Identifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -26,14 +25,10 @@ import kotlin.test.assertTrue
 
 class TerminalFontProfileTest {
     @Test
-    fun `default profile exposes fixed Cozette metrics and resource`() {
+    fun `default profile exposes fixed Cozette metrics`() {
         val profile = TerminalFontProfile.DEFAULT
 
         assertEquals("cozette", profile.id)
-        assertEquals(
-            Identifier.fromNamespaceAndPath("compukters", "terminal/cozette"),
-            profile.fontDescription.id(),
-        )
         assertEquals(6, profile.cellWidth)
         assertEquals(13, profile.cellHeight)
         assertEquals(10, profile.ascent)

@@ -1188,12 +1188,13 @@ internal object IdeRenderer {
             val top = geometry.panel.top + (geometry.panel.height - height) / 2
             val bounds = IdeRect(left, top, left + width, top + height)
             panel(IdePanelKind.Dialog, bounds, IdeColors.PANEL_ALT, Z_DIALOG)
+            val promptKind = prompt.kind
             val title =
-                when (prompt.kind) {
+                when (promptKind) {
                     IdePromptKind.CreateProject -> "Create project"
                     IdePromptKind.CreateText -> "Create text file"
                     IdePromptKind.CreateDirectory -> "Create directory"
-                    is IdePromptKind.Rename -> "Rename ${prompt.kind.source.value}"
+                    is IdePromptKind.Rename -> "Rename ${promptKind.source.value}"
                 }
             ui(IdeTextKind.Dialog, title, bounds.left + 10, bounds.top + 10, clip = bounds, z = Z_DIALOG_TEXT)
             ui(IdeTextKind.Dialog, prompt.value + "_", bounds.left + 10, bounds.top + 34, clip = bounds, z = Z_DIALOG_TEXT)

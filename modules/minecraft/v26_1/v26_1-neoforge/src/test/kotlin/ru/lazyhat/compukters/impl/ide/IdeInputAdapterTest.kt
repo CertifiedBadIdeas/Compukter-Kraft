@@ -353,6 +353,7 @@ class IdeInputAdapterTest {
                 IdeAnalysisState.Idle,
             )
         val codeLeft = geometry.editor.left + 4 * geometry.font.cellWidth
+        val tree = checkNotNull(geometry.tree)
 
         fixture.adapter.pointerClicked(
             codeLeft + 2.0 * geometry.font.cellWidth,
@@ -361,8 +362,8 @@ class IdeInputAdapterTest {
             IdePointerContext(geometry, editor = editor),
         )
         fixture.adapter.pointerClicked(
-            geometry.tree!!.left + 2.0,
-            geometry.tree.top + 5.0,
+            tree.left + 2.0,
+            tree.top + 5.0,
             0,
             IdePointerContext(
                 geometry,
@@ -444,11 +445,12 @@ class IdeInputAdapterTest {
             (0 until 80).map { index ->
                 ProjectTreeEntry(ProjectPath.file("src/file$index.kt"), ProjectFileKind.Text(1), null)
             }
+        val tree = checkNotNull(geometry.tree)
 
         assertTrue(
             fixture.adapter.scroll(
-                geometry.tree!!.left + 1.0,
-                geometry.tree.top + 1.0,
+                tree.left + 1.0,
+                tree.top + 1.0,
                 0.0,
                 -2.0,
                 IdePointerContext(geometry, tree = entries),
@@ -468,10 +470,11 @@ class IdeInputAdapterTest {
             (0 until 80).map { index ->
                 IdeExplorerRow.ComputerEntry(IdeComputerNode.File(IdeTargetVirtualPath.of("/file$index"), metadata), 1)
             }
+        val tree = checkNotNull(geometry.tree)
 
         fixture.adapter.scroll(
-            geometry.tree!!.left + 1.0,
-            geometry.tree.top + 1.0,
+            tree.left + 1.0,
+            tree.top + 1.0,
             0.0,
             -2.0,
             IdePointerContext(geometry, explorer = rows),

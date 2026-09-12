@@ -18,7 +18,7 @@
 
 package ru.lazyhat.compukters.impl.ide
 
-internal object IdeColors {
+object IdeColors {
     // JetBrains Islands Dark UI and editor-scheme roles.
     val DIM = 0x45000000
     val PANEL = 0xFF191A1C.toInt()

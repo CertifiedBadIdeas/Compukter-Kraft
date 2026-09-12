@@ -192,12 +192,14 @@ fun registerTerminalFont(spec: TerminalFontBuildSpec) {
     val bdf = rootProject.layout.projectDirectory.file(spec.bdfPath)
     val sharedNeoForgeDirectory =
         rootProject.layout.projectDirectory.dir("modules/minecraft/shared/neoforge/src/main")
+    val sharedCommonDirectory =
+        rootProject.layout.projectDirectory.dir("modules/minecraft/shared/common/src/main")
     val fontJson = sharedNeoForgeDirectory.file("resources/assets/compukters/font/terminal/${spec.id}.json")
     val atlas = sharedNeoForgeDirectory.file("resources/assets/compukters/textures/font/terminal/${spec.id}.png")
     val manifest =
         sharedNeoForgeDirectory.file("resources/assets/compukters/font/terminal/${spec.id}-codepoints.txt")
     val coverage =
-        sharedNeoForgeDirectory.file(
+        sharedCommonDirectory.file(
             "kotlin/ru/lazyhat/compukters/impl/terminal/${spec.taskStem}FontCoverage.kt",
         )
     val coverageName = "${spec.id.uppercase()}_SUPPORTED_CODE_POINTS"

@@ -43,6 +43,7 @@ import ru.lazyhat.compukters.impl.ide.target.IdeTargetReference
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalState
 import ru.lazyhat.compukters.impl.terminal.TerminalGridGeometry
 import ru.lazyhat.compukters.impl.terminal.TerminalGridRenderer
+import ru.lazyhat.compukters.impl.terminal.fontDescription
 import ru.lazyhat.compukters.impl.ui.CompuktersUiViewport
 
 internal class IdeRenderOperation(

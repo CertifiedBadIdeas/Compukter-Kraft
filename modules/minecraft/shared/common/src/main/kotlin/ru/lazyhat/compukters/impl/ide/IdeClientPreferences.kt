@@ -70,13 +70,13 @@ data class IdeLayoutSettings(
     }
 }
 
-internal interface IdeLayoutStore {
+interface IdeLayoutStore {
     fun load(): IdeLayoutSettings
 
     fun save(settings: IdeLayoutSettings)
 }
 
-internal class IdeClientPreferences(
+class IdeClientPreferences(
     private val file: Path,
     private val layout: IdeLayoutStore,
 ) : IdePreferencesStore {

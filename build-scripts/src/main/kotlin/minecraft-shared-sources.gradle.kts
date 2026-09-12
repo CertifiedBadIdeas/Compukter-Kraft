@@ -76,9 +76,7 @@ fun attachSharedSourceSet(sourceSetName: String) {
 }
 
 attachSharedSourceSet("main")
-if (sharedLayer == "common") {
-    attachSharedSourceSet("test")
-}
+attachSharedSourceSet("test")
 
 val verifyMinecraftSourceOwnership =
     tasks.register("verifyMinecraftSourceOwnership") {

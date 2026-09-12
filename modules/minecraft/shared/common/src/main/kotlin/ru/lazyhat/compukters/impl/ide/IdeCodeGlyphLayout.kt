@@ -14,12 +14,12 @@ package ru.lazyhat.compukters.impl.ide
 
 import ru.lazyhat.compukters.impl.terminal.TerminalFontProfile
 
-internal data class IdeCodeGlyph(
+data class IdeCodeGlyph(
     val value: String,
     val x: Int,
 )
 
-internal object IdeCodeGlyphLayout {
+object IdeCodeGlyphLayout {
     fun layout(
         value: String,
         startX: Int,

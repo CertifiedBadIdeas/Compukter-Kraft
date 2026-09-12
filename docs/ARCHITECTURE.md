@@ -317,8 +317,8 @@ existing Gradle project paths and artifact names remain flat and stable.
 | `ide-client` | Minecraft-independent IDE workspace, controller, analysis coordination, target, and file-transfer logic |
 | `playground` | Standalone compile-and-run entry point with stdin and stdout |
 | `core` | Loader-independent server behavior and `ProgramRuntimeHost` |
-| `minecraft/shared/common` | Canonical loader-independent Minecraft sources and tests compiled against every supported game target |
-| `minecraft/shared/neoforge` | Canonical NeoForge sources and resources compiled against every supported loader target |
+| `minecraft/shared/common` | Canonical loader-independent Minecraft sources, resources, and tests compiled against every supported game target |
+| `minecraft/shared/neoforge` | Canonical NeoForge integration sources, resources, and tests compiled against every supported loader target |
 | `v1_21_1-common` | Minecraft 1.21.1 compatibility adapters over the shared computer carrier |
 | `v1_21_1-neoforge` | NeoForge 1.21.1 compatibility adapters, Java 21 JNI packaging, and production archive |
 | `v26_1-common` | Minecraft 26.1 compatibility adapters over the shared computer carrier |

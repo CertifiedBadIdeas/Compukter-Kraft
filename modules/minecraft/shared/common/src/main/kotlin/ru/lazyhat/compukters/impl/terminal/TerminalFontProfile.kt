@@ -16,16 +16,11 @@
  * limitations under the License.
  */
 
-@file:Suppress("ktlint:standard:filename")
-
 package ru.lazyhat.compukters.impl.terminal
-
-import net.minecraft.resources.ResourceLocation
 
 class TerminalFontProfile private constructor(
     val id: String,
     val displayName: String,
-    val fontDescription: ResourceLocation,
     val cellWidth: Int,
     val cellHeight: Int,
     val ascent: Int,
@@ -42,7 +37,11 @@ class TerminalFontProfile private constructor(
         require(this.supportedCodePoints.contentEquals(this.supportedCodePoints.sortedArray())) {
             "terminal font coverage must be sorted"
         }
-        require((1 until this.supportedCodePoints.size).none { this.supportedCodePoints[it - 1] == this.supportedCodePoints[it] }) {
+        require(
+            (1 until this.supportedCodePoints.size).none { index ->
+                this.supportedCodePoints[index - 1] == this.supportedCodePoints[index]
+            },
+        ) {
             "terminal font coverage must not contain duplicates"
         }
         require(this.supportedCodePoints.binarySearch(replacementCodePoint) >= 0) {
@@ -63,9 +62,36 @@ class TerminalFontProfile private constructor(
     companion object {
         private const val MINECRAFT_TEXT_BASELINE = 7
 
-        val COZETTE = terminalProfile("cozette", "Cozette", 6, 13, 10, COZETTE_SUPPORTED_CODE_POINTS, 0xFFFD)
-        val DINA = terminalProfile("dina", "Dina", 6, 10, 8, DINA_SUPPORTED_CODE_POINTS, '?'.code)
-        val PROGGY_TINY = terminalProfile("proggy_tiny", "ProggyTiny", 6, 10, 8, PROGGY_TINY_SUPPORTED_CODE_POINTS, '?'.code)
+        val COZETTE =
+            terminalProfile(
+                id = "cozette",
+                displayName = "Cozette",
+                cellWidth = 6,
+                cellHeight = 13,
+                ascent = 10,
+                supportedCodePoints = COZETTE_SUPPORTED_CODE_POINTS,
+                replacementCodePoint = 0xFFFD,
+            )
+        val DINA =
+            terminalProfile(
+                id = "dina",
+                displayName = "Dina",
+                cellWidth = 6,
+                cellHeight = 10,
+                ascent = 8,
+                supportedCodePoints = DINA_SUPPORTED_CODE_POINTS,
+                replacementCodePoint = '?'.code,
+            )
+        val PROGGY_TINY =
+            terminalProfile(
+                id = "proggy_tiny",
+                displayName = "ProggyTiny",
+                cellWidth = 6,
+                cellHeight = 10,
+                ascent = 8,
+                supportedCodePoints = PROGGY_TINY_SUPPORTED_CODE_POINTS,
+                replacementCodePoint = '?'.code,
+            )
         val ALL = listOf(COZETTE, DINA, PROGGY_TINY)
         val DEFAULT = COZETTE
 
@@ -80,14 +106,13 @@ class TerminalFontProfile private constructor(
             supportedCodePoints: IntArray,
             replacementCodePoint: Int,
         ) = TerminalFontProfile(
-            id,
-            displayName,
-            ResourceLocation.fromNamespaceAndPath("compukters", "terminal/$id"),
-            cellWidth,
-            cellHeight,
-            ascent,
-            supportedCodePoints,
-            replacementCodePoint,
+            id = id,
+            displayName = displayName,
+            cellWidth = cellWidth,
+            cellHeight = cellHeight,
+            ascent = ascent,
+            supportedCodePoints = supportedCodePoints,
+            replacementCodePoint = replacementCodePoint,
         )
     }
 }

@@ -43,7 +43,7 @@ sealed interface IdeExplorerRow {
     ) : IdeExplorerRow
 }
 
-internal fun IdeWorkspaceView.explorerRows(): List<IdeExplorerRow> =
+fun IdeWorkspaceView.explorerRows(): List<IdeExplorerRow> =
     buildList {
         add(IdeExplorerRow.ProjectRoot(project.displayName))
         tree.flatten().forEach { add(IdeExplorerRow.ProjectEntry(it)) }

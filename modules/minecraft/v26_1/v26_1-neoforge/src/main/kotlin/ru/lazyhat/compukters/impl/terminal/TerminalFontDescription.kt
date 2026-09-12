@@ -16,17 +16,13 @@
  * limitations under the License.
  */
 
-plugins {
-    id("kotlin-convention")
-}
+package ru.lazyhat.compukters.impl.terminal
 
-val libs = libsCatalog()
+import net.minecraft.network.chat.FontDescription
+import net.minecraft.resources.Identifier
 
-dependencies {
-    implementation(project(":core"))
-    implementation(project(":ide-client"))
-    implementation(project(":native-runtime-api"))
-
-    implementation(libs.findLibrary("kotlin-stdlib").get())
-    implementation(libs.findLibrary("kotlin-logging").get())
-}
+internal val TerminalFontProfile.fontDescription: FontDescription.Resource
+    get() =
+        FontDescription.Resource(
+            Identifier.fromNamespaceAndPath("compukters", "terminal/$id"),
+        )
