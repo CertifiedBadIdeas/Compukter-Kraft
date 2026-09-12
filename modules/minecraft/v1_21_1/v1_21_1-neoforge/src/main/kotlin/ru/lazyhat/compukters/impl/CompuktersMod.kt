@@ -20,11 +20,13 @@
 
 package ru.lazyhat.compukters.impl
 
+import net.neoforged.api.distmarker.Dist
 import net.neoforged.bus.api.EventPriority
 import net.neoforged.bus.api.IEventBus
 import net.neoforged.fml.ModContainer
 import net.neoforged.fml.common.Mod
 import net.neoforged.fml.config.ModConfig
+import net.neoforged.fml.loading.FMLEnvironment
 import net.neoforged.neoforge.common.NeoForge
 import net.neoforged.neoforge.event.tick.ServerTickEvent
 import ru.lazyhat.compukters.core.LOGGER
@@ -34,6 +36,7 @@ import ru.lazyhat.compukters.impl.computer.NeoForgeVmActorServices
 import ru.lazyhat.compukters.impl.config.CompuktersClientConfig
 import ru.lazyhat.compukters.impl.config.CompuktersServerConfig
 import ru.lazyhat.compukters.impl.fs.NeoForgeWorldFileSystemStores
+import ru.lazyhat.compukters.impl.ide.IdeClientBootstrap
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetNetwork
 import ru.lazyhat.compukters.impl.registry.CompuktersRegistry
 import ru.lazyhat.compukters.impl.terminal.TerminalNetwork
@@ -50,6 +53,7 @@ class CompuktersMod(
         CompuktersRegistry.register(eventBus)
         eventBus.addListener(TerminalNetwork::register)
         eventBus.addListener(IdeTargetNetwork::register)
+        if (FMLEnvironment.dist == Dist.CLIENT) IdeClientBootstrap.register(eventBus)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onLevelSave)
         NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::onServerStarting)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onServerStarting)

@@ -21,25 +21,75 @@
 package ru.lazyhat.compukters.impl.terminal
 
 import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import net.neoforged.neoforge.network.PacketDistributor
 import org.lwjgl.glfw.GLFW
 import ru.lazyhat.compukters.impl.config.CompuktersClientConfig
+import ru.lazyhat.compukters.impl.ide.ChildScreenParent
+import ru.lazyhat.compukters.impl.ide.IdeClientBootstrap
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
 
 internal class TerminalScreen(
     initial: TerminalFullPayload,
-) : Screen(Component.literal("Compukters terminal")) {
+    private val transport: TerminalScreenTransport = ProductionTerminalScreenTransport,
+) : Screen(Component.literal("Compukters terminal")),
+    ChildScreenParent {
     val position = initial.position
     internal var machineId: Long = initial.machineId
         private set
 
     private val replica = TerminalReplica(initial.state)
     private val resourceReplica = TerminalResourceReplica(initial.machineId)
+    internal val resourceGauges: TerminalResourceGauges
+        get() = resourceReplica.gauges
     private val pressedKeys = mutableSetOf<Int>()
     private var fontProfile = CompuktersClientConfig.selectedFont()
+    private lateinit var ideButton: Button
+    private lateinit var fontButton: Button
+    private val childLifecycle =
+        TerminalChildLifecycle(
+            transport::connectionIdentity,
+            transport::connected,
+            { transport.send(TerminalClosePayload(position, machineId)) },
+            ::requestResync,
+        )
+
+    override fun init() {
+        super.init()
+        val geometry = TerminalRenderGeometry(width, height, fontProfile)
+        val ideBounds = geometry.ideButton
+        ideButton =
+            addRenderableWidget(
+                Button
+                    .builder(Component.literal("IDE  Ctrl+I")) { openIde() }
+                    .bounds(ideBounds.left, ideBounds.top, ideBounds.width, ideBounds.height)
+                    .build(),
+            )
+        val fontBounds = geometry.fontButton
+        fontButton =
+            addRenderableWidget(
+                Button
+                    .builder(fontButtonLabel()) { cycleFont() }
+                    .bounds(fontBounds.left, fontBounds.top, fontBounds.width, fontBounds.height)
+                    .build(),
+            )
+    }
+
+    override fun setInitialFocus() = Unit
+
+    override fun mouseClicked(
+        mouseX: Double,
+        mouseY: Double,
+        button: Int,
+    ): Boolean {
+        val handled = super.mouseClicked(mouseX, mouseY, button)
+        if (handled) clearFocus()
+        return handled
+    }
 
     fun update(payload: TerminalFullPayload): Boolean {
         if (payload.position != position || payload.machineId <= 0 || !replica.replace(payload.state)) return false
@@ -55,11 +105,24 @@ internal class TerminalScreen(
         payload.position == position && resourceReplica.update(payload.machineId, payload.gauges)
 
     fun requestResync() {
-        PacketDistributor.sendToServer(TerminalResyncPayload(position, machineId, replica.state.revision))
+        transport.send(TerminalResyncPayload(position, machineId, replica.state.revision))
+    }
+
+    override fun suspendForChild(): Screen {
+        childLifecycle.suspend()
+        pressedKeys.clear()
+        return this
+    }
+
+    override fun resumeFromChild(): Boolean = childLifecycle.resume()
+
+    override fun abandonChild() {
+        childLifecycle.abandon()
+        pressedKeys.clear()
     }
 
     override fun removed() {
-        PacketDistributor.sendToServer(TerminalClosePayload(position, machineId))
+        if (!childLifecycle.suspended) transport.send(TerminalClosePayload(position, machineId))
         pressedKeys.clear()
         super.removed()
     }
@@ -69,14 +132,15 @@ internal class TerminalScreen(
         scanCode: Int,
         modifiers: Int,
     ): Boolean {
+        if (childLifecycle.suspended) return true
         if (Screen.isPaste(keyCode)) {
             val pasted = TerminalInput.boundedText(minecraft?.keyboardHandler?.clipboard.orEmpty())
-            if (pasted.isNotEmpty()) PacketDistributor.sendToServer(TerminalTextPayload(position, machineId, pasted))
+            if (pasted.isNotEmpty()) sendText(pasted)
             return true
         }
         val key = TerminalInput.key(keyCode, modifiers) ?: return super.keyPressed(keyCode, scanCode, modifiers)
         val action = if (pressedKeys.add(keyCode)) TerminalKeyAction.PRESS else TerminalKeyAction.REPEAT
-        PacketDistributor.sendToServer(TerminalKeyPayload(position, machineId, key, action, TerminalInput.modifiers(modifiers)))
+        transport.send(TerminalKeyPayload(position, machineId, key, action, TerminalInput.modifiers(modifiers)))
         return if (key == TerminalKey.ESCAPE) super.keyPressed(keyCode, scanCode, modifiers) else true
     }
 
@@ -85,6 +149,7 @@ internal class TerminalScreen(
         scanCode: Int,
         modifiers: Int,
     ): Boolean {
+        if (childLifecycle.suspended) return true
         val mapped = TerminalInput.isMappedKeyCode(keyCode)
         pressedKeys.remove(keyCode)
         return mapped || super.keyReleased(keyCode, scanCode, modifiers)
@@ -94,8 +159,9 @@ internal class TerminalScreen(
         codePoint: Char,
         modifiers: Int,
     ): Boolean {
+        if (childLifecycle.suspended) return true
         if (codePoint.code >= GLFW.GLFW_KEY_SPACE) {
-            PacketDistributor.sendToServer(TerminalTextPayload(position, machineId, codePoint.toString()))
+            sendText(codePoint.toString())
         }
         return true
     }
@@ -106,7 +172,6 @@ internal class TerminalScreen(
         mouseY: Int,
         partialTick: Float,
     ) {
-        super.render(graphics, mouseX, mouseY, partialTick)
         graphics.fill(0, 0, width, height, 0xE0101010.toInt())
         val geometry = TerminalRenderGeometry(width, height, fontProfile)
         graphics.fill(
@@ -131,7 +196,67 @@ internal class TerminalScreen(
             0xFFB8B8B8.toInt(),
             false,
         )
+        super.render(graphics, mouseX, mouseY, partialTick)
     }
 
+    override fun renderBackground(
+        graphics: GuiGraphics,
+        mouseX: Int,
+        mouseY: Int,
+        partialTick: Float,
+    ) = Unit
+
     override fun isPauseScreen(): Boolean = false
+
+    private fun cycleFont() {
+        fontProfile = fontProfile.next()
+        CompuktersClientConfig.selectFont(fontProfile)
+        fontButton.message = fontButtonLabel()
+        positionToolbarButtons()
+    }
+
+    private fun positionToolbarButtons() {
+        if (!::ideButton.isInitialized || !::fontButton.isInitialized) return
+        val geometry = TerminalRenderGeometry(width, height, fontProfile)
+        ideButton.x = geometry.ideButton.left
+        ideButton.y = geometry.ideButton.top
+        fontButton.x = geometry.fontButton.left
+        fontButton.y = geometry.fontButton.top
+    }
+
+    private fun fontButtonLabel(): Component = Component.literal("Font: ${fontProfile.displayName}")
+
+    private fun openIde() {
+        IdeClientBootstrap.open(requireNotNull(minecraft) { "terminal screen is not attached to a Minecraft client" })
+    }
+
+    private fun sendText(text: String) {
+        transport.send(TerminalTextPayload(position, machineId, text))
+    }
+}
+
+internal interface TerminalScreenTransport {
+    fun send(payload: CustomPacketPayload)
+
+    fun connectionIdentity(): Any?
+
+    fun connected(): Boolean
+}
+
+private object ProductionTerminalScreenTransport : TerminalScreenTransport {
+    override fun send(payload: CustomPacketPayload) {
+        PacketDistributor.sendToServer(payload)
+    }
+
+    override fun connectionIdentity(): Any? =
+        net.minecraft.client.Minecraft
+            .getInstance()
+            .connection
+
+    override fun connected(): Boolean =
+        net.minecraft.client.Minecraft
+            .getInstance()
+            .connection != null && net.minecraft.client.Minecraft
+            .getInstance()
+            .level != null
 }

@@ -297,44 +297,6 @@ internal interface TerminalScreenTransport {
     fun connected(): Boolean
 }
 
-internal class TerminalChildLifecycle(
-    private val connectionIdentity: () -> Any?,
-    private val connected: () -> Boolean,
-    private val closeObservation: () -> Unit,
-    private val requestFreshObservation: () -> Unit,
-) {
-    var suspended: Boolean = false
-        private set
-    private var capturedConnection: Any? = null
-
-    fun suspend() {
-        if (suspended) return
-        suspended = true
-        capturedConnection = connectionIdentity()
-        closeObservation()
-    }
-
-    fun resume(): Boolean {
-        if (!suspended) return false
-        if (capturedConnection == null || capturedConnection !== connectionIdentity() || !connected()) {
-            abandon()
-            return false
-        }
-        requestFreshObservation()
-        suspended = false
-        capturedConnection = null
-        return true
-    }
-
-    fun abandon() {
-        if (!suspended) return
-        suspended = false
-        capturedConnection = null
-    }
-
-    fun sameConnection(): Boolean = suspended && capturedConnection != null && capturedConnection === connectionIdentity()
-}
-
 private object ProductionTerminalScreenTransport : TerminalScreenTransport {
     override fun send(payload: CustomPacketPayload) {
         ClientPacketDistributor.sendToServer(payload)

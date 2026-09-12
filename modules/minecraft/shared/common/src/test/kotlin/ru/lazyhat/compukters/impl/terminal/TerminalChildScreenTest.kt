@@ -17,7 +17,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class TerminalChildScreenTest {
+internal class TerminalChildScreenTest {
     @Test
     fun `suspended terminal closes observation and requests a fresh one before resuming`() {
         var connection: Any? = Any()
@@ -79,13 +79,6 @@ class TerminalChildScreenTest {
 
         assertFalse(lifecycle.suspended)
         assertEquals(0, freshObservations)
-    }
-
-    @Test
-    fun `delayed standalone open cannot replace an active child screen`() {
-        assertTrue(shouldOpenStandaloneTerminal(hasOpenScreen = false, requestedOpen = true))
-        assertFalse(shouldOpenStandaloneTerminal(hasOpenScreen = true, requestedOpen = true))
-        assertFalse(shouldOpenStandaloneTerminal(hasOpenScreen = false, requestedOpen = false))
     }
 
     private companion object {

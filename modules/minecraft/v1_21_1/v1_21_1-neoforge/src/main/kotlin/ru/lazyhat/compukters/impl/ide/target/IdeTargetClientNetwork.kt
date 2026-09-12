@@ -18,11 +18,17 @@
 
 package ru.lazyhat.compukters.impl.ide.target
 
+import net.neoforged.api.distmarker.Dist
+import net.neoforged.bus.api.SubscribeEvent
+import net.neoforged.fml.common.EventBusSubscriber
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent
 import net.neoforged.neoforge.network.PacketDistributor
 import net.neoforged.neoforge.network.handling.IPayloadContext
+import ru.lazyhat.compukters.core.MOD_ID
 import ru.lazyhat.compukters.impl.ide.IdeClientTargetTransport
 import java.util.concurrent.CompletableFuture
 
+@EventBusSubscriber(modid = MOD_ID, value = [Dist.CLIENT])
 internal object IdeTargetClientNetwork : IdeClientTargetTransport {
     private var current: IdeTargetRequestBroker? = null
     private var currentTerminal: IdeTargetTerminalClient? = null
@@ -77,7 +83,15 @@ internal object IdeTargetClientNetwork : IdeClientTargetTransport {
         currentTerminal?.accept(IdeTerminalFailed(payload.generation, payload.token, payload.kind, payload.detail, payload.retryable))
     }
 
-    fun disconnect() {
+    @JvmStatic
+    @SubscribeEvent
+    fun onLoggingOut(
+        @Suppress("UNUSED_PARAMETER") event: ClientPlayerNetworkEvent.LoggingOut,
+    ) {
+        disconnect()
+    }
+
+    private fun disconnect() {
         current?.disconnect()
         current = null
         currentTerminal?.connectionLost()
