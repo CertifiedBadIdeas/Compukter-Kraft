@@ -71,6 +71,12 @@ Recent history uses concise Conventional Commit-style messages such as `chore(vm
 verification commands, link related issues or roadmap items, and include screenshots or short recordings for visible
 Minecraft/UI changes.
 
+Keep user-visible changes in the continuous `docs/CHANGELOG.md`, under the heading for the version currently declared
+in `gradle.properties`. Use release versions as section headings rather than creating one changelog file per release.
+Internal refactors, tests, build chores, and documentation-only edits need no entry unless they materially affect users,
+contributors, packaging, or the release process. When releasing a version, replace its `In development` marker with the
+release date and add the next development-version heading at the top.
+
 After each verified implementation stage, create a focused commit unless the user explicitly asks not to commit.
 Commit frequently enough that a clean, build, or tooling failure cannot destroy a large body of uncommitted work.
 Stage only files that belong to the current task, and never include unrelated user changes in an agent commit.

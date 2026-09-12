@@ -37,6 +37,8 @@ See [Verification](docs/VERIFICATION.md) for focused checks, complete local
 verification, and the separate tagged universal release gate.
 See the [in-world VM benchmark guide](docs/VM-BENCHMARK.md) for profiling the
 server-tick cost of multiple simultaneously runnable computers.
+User-visible changes are recorded in the continuous [Changelog](docs/CHANGELOG.md),
+also published at [the documentation site](https://certifiedbadideas.github.io/Compukters/CHANGELOG/).
 
 ## Minecraft development
 
