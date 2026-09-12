@@ -12,9 +12,6 @@
 
 package ru.lazyhat.compukters.impl.ide
 
-import net.minecraft.client.input.CharacterEvent
-import net.minecraft.client.input.KeyEvent
-import org.lwjgl.glfw.GLFW
 import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.compiler.worker.protocol.VirtualSourcePath
 import ru.lazyhat.compukters.ide.analysis.AnalysisProfileIdentity
@@ -56,26 +53,26 @@ class IdeInputAdapterTest {
     fun `character input preserves supplementary code points only for editor focus`() {
         val fixture = fixture()
 
-        assertTrue(fixture.adapter.charTyped(CharacterEvent(0x1f600), IdeFocusState.Editor))
+        assertTrue(fixture.adapter.charTyped(IdeCharacterInput("😀"), IdeFocusState.Editor))
         assertEquals(listOf<IdeCommand>(IdeCommand.Edit(IdeEditorInput.Type("😀"))), fixture.commands)
-        assertFalse(fixture.adapter.charTyped(CharacterEvent('x'.code), IdeFocusState.Tree))
+        assertFalse(fixture.adapter.charTyped(IdeCharacterInput("x"), IdeFocusState.Tree))
     }
 
     @Test
     fun `editor shortcuts and modified navigation translate once`() {
         val fixture = fixture()
 
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_S, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_L, GLFW.GLFW_MOD_CONTROL or GLFW.GLFW_MOD_ALT), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_B, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_P, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_F9, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_SPACE, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_Z, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_Y, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_LEFT, GLFW.GLFW_MOD_SHIFT), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_LEFT, GLFW.GLFW_MOD_ALT), IdeFocusState.Editor)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_MOD_ALT), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.S, IdeModifier.CONTROL), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.L, IdeModifier.CONTROL or IdeModifier.ALT), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.B, IdeModifier.CONTROL), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.P, IdeModifier.CONTROL), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.F9, IdeModifier.CONTROL), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.SPACE, IdeModifier.CONTROL), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.Z, IdeModifier.CONTROL), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.Y, IdeModifier.CONTROL), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.LEFT, IdeModifier.SHIFT), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.LEFT, IdeModifier.ALT), IdeFocusState.Editor)
+        fixture.adapter.keyPressed(key(IdeKeyCode.RIGHT, IdeModifier.ALT), IdeFocusState.Editor)
 
         assertEquals(
             listOf<IdeCommand>(
@@ -100,14 +97,14 @@ class IdeInputAdapterTest {
         val fixture = fixture()
         val focus = IdeFocusState(IdeFocusArea.Editor, editorPageRows = 17)
 
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_LEFT, GLFW.GLFW_MOD_CONTROL or GLFW.GLFW_MOD_SHIFT), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_MOD_CONTROL), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_BACKSPACE, GLFW.GLFW_MOD_CONTROL), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_DELETE, GLFW.GLFW_MOD_CONTROL), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_TAB), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_PAGE_UP, GLFW.GLFW_MOD_SHIFT), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_PAGE_DOWN), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.LEFT, IdeModifier.CONTROL or IdeModifier.SHIFT), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.RIGHT, IdeModifier.CONTROL), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.BACKSPACE, IdeModifier.CONTROL), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.DELETE, IdeModifier.CONTROL), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.TAB), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.TAB, IdeModifier.SHIFT), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.PAGE_UP, IdeModifier.SHIFT), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.PAGE_DOWN), focus)
 
         assertEquals(
             listOf<IdeCommand>(
@@ -137,8 +134,8 @@ class IdeInputAdapterTest {
                 selectionSource = IdeSelectionSource { "выбор😀" },
             )
 
-        assertTrue(adapter.keyPressed(key(GLFW.GLFW_KEY_C, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor))
-        assertTrue(adapter.keyPressed(key(GLFW.GLFW_KEY_X, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor))
+        assertTrue(adapter.keyPressed(key(IdeKeyCode.C, IdeModifier.CONTROL), IdeFocusState.Editor))
+        assertTrue(adapter.keyPressed(key(IdeKeyCode.X, IdeModifier.CONTROL), IdeFocusState.Editor))
 
         assertEquals(listOf("выбор😀", "выбор😀"), writes)
         assertEquals(listOf<IdeCommand>(IdeCommand.Edit(IdeEditorInput.Cut)), commands)
@@ -154,7 +151,7 @@ class IdeInputAdapterTest {
         fixture.adapter.pointerClicked(
             codeLeft + geometry.font.cellWidth.toDouble(),
             geometry.editor.top + 1.0,
-            GLFW.GLFW_MOD_CONTROL,
+            IdeModifier.CONTROL,
             IdePointerContext(geometry, editor),
         )
 
@@ -191,7 +188,7 @@ class IdeInputAdapterTest {
         fixture.adapter.pointerMoved(
             codeLeft + 4.0 * geometry.font.cellWidth,
             geometry.editor.top + 1.0,
-            GLFW.GLFW_MOD_CONTROL,
+            IdeModifier.CONTROL,
             context,
         )
         fixture.adapter.pointerMoved(
@@ -217,10 +214,10 @@ class IdeInputAdapterTest {
         val fixture = fixture()
         val focus = IdeFocusState(IdeFocusArea.Editor, completionVisible = true, declarationChooserVisible = true)
 
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_DOWN), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_UP), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_ENTER), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_ESCAPE), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.DOWN), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.UP), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.ENTER), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.ESCAPE), focus)
 
         assertEquals(
             listOf(
@@ -267,8 +264,8 @@ class IdeInputAdapterTest {
         val fixture = fixture()
         val focus = IdeFocusState(IdeFocusArea.Editor, completionVisible = true)
 
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_DOWN), focus)
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_ESCAPE), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.DOWN), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.ESCAPE), focus)
 
         assertEquals(
             listOf<IdeCommand>(
@@ -284,7 +281,7 @@ class IdeInputAdapterTest {
         val fixture = fixture()
         val focus = IdeFocusState(IdeFocusArea.Editor, completionVisible = true, parameterInfoVisible = true)
 
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_ESCAPE), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.ESCAPE), focus)
 
         assertEquals(listOf<IdeCommand>(IdeCommand.DismissParameterInfo), fixture.commands)
     }
@@ -295,7 +292,7 @@ class IdeInputAdapterTest {
         val dialog = IdeDialogState.Confirmation("Delete", "Permanent", 7)
         val focus = IdeFocusState(IdeFocusArea.Editor, declarationChooserVisible = true, dialog = dialog)
 
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_ESCAPE), focus)
+        fixture.adapter.keyPressed(key(IdeKeyCode.ESCAPE), focus)
 
         assertEquals(listOf<IdeCommand>(IdeCommand.CancelDialog), fixture.commands)
     }
@@ -304,8 +301,8 @@ class IdeInputAdapterTest {
     fun `releasing either control key clears semantic link state`() {
         val fixture = fixture()
 
-        assertTrue(fixture.adapter.keyReleased(key(GLFW.GLFW_KEY_LEFT_CONTROL)))
-        assertTrue(fixture.adapter.keyReleased(key(GLFW.GLFW_KEY_RIGHT_CONTROL)))
+        assertTrue(fixture.adapter.keyReleased(key(IdeKeyCode.LEFT_CONTROL)))
+        assertTrue(fixture.adapter.keyReleased(key(IdeKeyCode.RIGHT_CONTROL)))
 
         assertEquals(listOf<IdeCommand>(IdeCommand.ControlReleased, IdeCommand.ControlReleased), fixture.commands)
     }
@@ -314,7 +311,7 @@ class IdeInputAdapterTest {
     fun `paste is bounded on UTF-16 and UTF-8 boundaries`() {
         val fixture = fixture(clipboard = "😀абвextra", limits = IdeClientLimits(clipboardCodeUnits = 5, clipboardUtf8Bytes = 8))
 
-        assertTrue(fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_V, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor))
+        assertTrue(fixture.adapter.keyPressed(key(IdeKeyCode.V, IdeModifier.CONTROL), IdeFocusState.Editor))
 
         assertEquals(listOf<IdeCommand>(IdeCommand.Edit(IdeEditorInput.Type("😀аб"))), fixture.commands)
     }
@@ -323,7 +320,7 @@ class IdeInputAdapterTest {
     fun `unhandled keys fall through and pointer activity requests eager autosave`() {
         val fixture = fixture()
 
-        assertFalse(fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_F8), IdeFocusState.Editor))
+        assertFalse(fixture.adapter.keyPressed(key(IdeKeyCode.F8), IdeFocusState.Editor))
         fixture.adapter.pointerActivity()
 
         assertEquals(listOf<IdeCommand>(IdeCommand.PointerActivity), fixture.commands)
@@ -358,7 +355,7 @@ class IdeInputAdapterTest {
         fixture.adapter.pointerClicked(
             codeLeft + 2.0 * geometry.font.cellWidth,
             geometry.editor.top + 1.0,
-            GLFW.GLFW_MOD_SHIFT,
+            IdeModifier.SHIFT,
             IdePointerContext(geometry, editor = editor),
         )
         fixture.adapter.pointerClicked(
@@ -509,8 +506,8 @@ class IdeInputAdapterTest {
         val fixture = fixture()
         val dialog = IdeDialogState.TargetOverwrite(IdeDeploymentPath.fromProgramName("demo"), IdeExecutableRevision.Present(2))
 
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_ENTER), IdeFocusState(IdeFocusArea.Panel, dialog = dialog))
-        fixture.adapter.keyPressed(key(GLFW.GLFW_KEY_ESCAPE), IdeFocusState(IdeFocusArea.Panel, dialog = dialog))
+        fixture.adapter.keyPressed(key(IdeKeyCode.ENTER), IdeFocusState(IdeFocusArea.Panel, dialog = dialog))
+        fixture.adapter.keyPressed(key(IdeKeyCode.ESCAPE), IdeFocusState(IdeFocusArea.Panel, dialog = dialog))
 
         assertEquals(listOf(IdeCommand.ConfirmTargetDeployment, IdeCommand.CancelTargetDeployment), fixture.commands)
     }
@@ -569,7 +566,7 @@ class IdeInputAdapterTest {
     private fun key(
         key: Int,
         modifiers: Int = 0,
-    ) = KeyEvent(key, 0, modifiers)
+    ) = IdeKeyInput(key, modifiers, paste = key == IdeKeyCode.V && modifiers and IdeModifier.CONTROL != 0)
 
     private fun textEditor(text: String) =
         IdeEditorView.Text(

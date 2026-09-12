@@ -12,8 +12,6 @@
 
 package ru.lazyhat.compukters.impl.ide
 
-import net.minecraft.client.input.KeyEvent
-import org.lwjgl.glfw.GLFW
 import ru.lazyhat.compukters.ide.client.IdeClientLimits
 import ru.lazyhat.compukters.ide.client.state.IdeCommand
 import ru.lazyhat.compukters.ide.client.state.IdeDialogState
@@ -30,10 +28,10 @@ class IdeCompletionInteractionTest {
         val adapter = IdeInputAdapter(commands::add, IdeClipboard { "" }, IdeClientLimits())
         val focus = IdeFocusState.Editor.copy(completionVisible = true)
 
-        adapter.keyPressed(KeyEvent(GLFW.GLFW_KEY_DOWN, 0, 0), focus)
-        adapter.keyPressed(KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0), focus)
-        adapter.keyPressed(KeyEvent(GLFW.GLFW_KEY_TAB, 0, 0), focus)
-        adapter.keyPressed(KeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, 0), focus)
+        adapter.keyPressed(IdeKeyInput(IdeKeyCode.DOWN, 0), focus)
+        adapter.keyPressed(IdeKeyInput(IdeKeyCode.ENTER, 0), focus)
+        adapter.keyPressed(IdeKeyInput(IdeKeyCode.TAB, 0), focus)
+        adapter.keyPressed(IdeKeyInput(IdeKeyCode.ESCAPE, 0), focus)
 
         assertEquals(
             listOf<IdeCommand>(
@@ -56,8 +54,8 @@ class IdeCompletionInteractionTest {
                 dialog = IdeDialogState.Confirmation("Delete", "Permanent", 17),
             )
 
-        adapter.keyPressed(KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0), focus)
-        adapter.keyPressed(KeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, 0), focus)
+        adapter.keyPressed(IdeKeyInput(IdeKeyCode.ENTER, 0), focus)
+        adapter.keyPressed(IdeKeyInput(IdeKeyCode.ESCAPE, 0), focus)
 
         assertEquals(listOf(IdeCommand.ConfirmDialog(17), IdeCommand.CancelDialog), commands)
     }
@@ -67,7 +65,7 @@ class IdeCompletionInteractionTest {
         val commands = mutableListOf<IdeCommand>()
         val adapter = IdeInputAdapter(commands::add, IdeClipboard { "" }, IdeClientLimits())
 
-        adapter.keyPressed(KeyEvent(GLFW.GLFW_KEY_TAB, 0, 0), IdeFocusState.Editor)
+        adapter.keyPressed(IdeKeyInput(IdeKeyCode.TAB, 0), IdeFocusState.Editor)
 
         assertEquals(listOf<IdeCommand>(IdeCommand.Edit(IdeEditorInput.Tab)), commands)
     }
@@ -79,11 +77,11 @@ class IdeCompletionInteractionTest {
         val path = ProjectPath.file("src/main.kt")
 
         adapter.keyPressed(
-            KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0),
+            IdeKeyInput(IdeKeyCode.ENTER, 0),
             IdeFocusState.Editor.copy(dialog = IdeDialogState.FileConflict(path, closing = false)),
         )
         adapter.keyPressed(
-            KeyEvent(GLFW.GLFW_KEY_ENTER, 0, 0),
+            IdeKeyInput(IdeKeyCode.ENTER, 0),
             IdeFocusState.Editor.copy(dialog = IdeDialogState.FileConflict(path, closing = true)),
         )
 

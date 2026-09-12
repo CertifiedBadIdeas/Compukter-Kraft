@@ -22,7 +22,7 @@ import ru.lazyhat.compukters.ide.client.state.IdeEditorView
 import ru.lazyhat.compukters.ide.client.state.IdePageState
 import ru.lazyhat.compukters.ide.client.state.IdeViewState
 
-internal data class IdeVisibleFrameEvidence(
+data class IdeVisibleFrameEvidence(
     val documentRevision: Long,
     val presentationVisible: Boolean,
     val completionVisible: Boolean,

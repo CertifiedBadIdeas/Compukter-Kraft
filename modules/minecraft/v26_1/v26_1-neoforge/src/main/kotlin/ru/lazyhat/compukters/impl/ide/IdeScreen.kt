@@ -290,7 +290,7 @@ internal class IdeScreen(
                 else -> true
             }
         }
-        if (application.controller.viewState().dialog != null) return input.keyPressed(event, focusState())
+        if (application.controller.viewState().dialog != null) return input.keyPressed(event.toIdeInput(), focusState())
         if (event.key() == GLFW.GLFW_KEY_ESCAPE && projectSwitcherOpen) {
             projectSwitcherOpen = false
             return true
@@ -306,13 +306,13 @@ internal class IdeScreen(
             val y = pointerY
             if (x != null && y != null) input.pointerMoved(x, y, GLFW.GLFW_MOD_CONTROL, pointerContext(geometry()))
         }
-        return input.keyPressed(event, focusState()) || super.keyPressed(event)
+        return input.keyPressed(event.toIdeInput(), focusState()) || super.keyPressed(event)
     }
 
     override fun keyReleased(event: KeyEvent): Boolean {
         if (event.key() == GLFW.GLFW_KEY_LEFT_CONTROL || event.key() == GLFW.GLFW_KEY_RIGHT_CONTROL) controlDown = false
         if (!viewport().supported) return true
-        val semanticHandled = input.keyReleased(event)
+        val semanticHandled = input.keyReleased(event.toIdeInput())
         if (focusArea == IdeFocusArea.Terminal && terminalOverlay.keyReleased(event.key())) return true
         return semanticHandled || super.keyReleased(event)
     }
@@ -321,7 +321,7 @@ internal class IdeScreen(
         if (!viewport().supported) return true
         if (prompt.state != null) return prompt.type(event.codepointAsString())
         if (focusArea == IdeFocusArea.Terminal && terminalOverlay.charTyped(event)) return true
-        return input.charTyped(event, focusState()) || super.charTyped(event)
+        return input.charTyped(IdeCharacterInput(event.codepointAsString()), focusState()) || super.charTyped(event)
     }
 
     override fun removed() {
@@ -762,3 +762,10 @@ internal class IdeScreen(
 }
 
 private val CLOCKWISE_QUARTER_TURN = (Math.PI / 2.0).toFloat()
+
+private fun KeyEvent.toIdeInput(): IdeKeyInput =
+    IdeKeyInput(
+        key = key(),
+        modifiers = modifiers(),
+        paste = isPaste,
+    )

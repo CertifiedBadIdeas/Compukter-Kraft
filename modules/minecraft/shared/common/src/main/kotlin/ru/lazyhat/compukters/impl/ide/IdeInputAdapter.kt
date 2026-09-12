@@ -12,9 +12,6 @@
 
 package ru.lazyhat.compukters.impl.ide
 
-import net.minecraft.client.input.CharacterEvent
-import net.minecraft.client.input.KeyEvent
-import org.lwjgl.glfw.GLFW
 import ru.lazyhat.compukters.ide.client.IdeClientLimits
 import ru.lazyhat.compukters.ide.client.analysis.IDE_COMPLETION_VISIBLE_ROWS
 import ru.lazyhat.compukters.ide.client.analysis.IdeAnalysisState
@@ -118,62 +115,62 @@ class IdeInputAdapter(
     }
 
     fun keyPressed(
-        event: KeyEvent,
+        event: IdeKeyInput,
         focus: IdeFocusState,
     ): Boolean {
         focus.dialog?.let { return dialogKey(event, it) }
         if (focus.declarationChooserVisible) chooserKey(event)?.let { return dispatch(it) }
-        if (focus.parameterInfoVisible && event.key() == GLFW.GLFW_KEY_ESCAPE) {
+        if (focus.parameterInfoVisible && event.key == IdeKeyCode.ESCAPE) {
             return dispatch(IdeCommand.DismissParameterInfo)
         }
         if (focus.completionVisible) completionKey(event)?.let { return dispatch(it) }
         if (focus.area != IdeFocusArea.Editor) return false
-        if (event.isPaste) return dispatchType(boundedClipboard(clipboard.text()))
-        val control = event.modifiers() and GLFW.GLFW_MOD_CONTROL != 0
-        val alt = event.modifiers() and GLFW.GLFW_MOD_ALT != 0
-        val shift = event.modifiers() and GLFW.GLFW_MOD_SHIFT != 0
-        if (control && event.key() == GLFW.GLFW_KEY_C) return copySelection()
-        if (control && event.key() == GLFW.GLFW_KEY_X) return cutSelection()
+        if (event.paste) return dispatchType(boundedClipboard(clipboard.text()))
+        val control = event.modifiers and IdeModifier.CONTROL != 0
+        val alt = event.modifiers and IdeModifier.ALT != 0
+        val shift = event.modifiers and IdeModifier.SHIFT != 0
+        if (control && event.key == IdeKeyCode.C) return copySelection()
+        if (control && event.key == IdeKeyCode.X) return cutSelection()
         val command =
             if (control) {
-                when (event.key()) {
-                    GLFW.GLFW_KEY_S -> IdeCommand.Save
-                    GLFW.GLFW_KEY_L -> if (alt && !shift) IdeCommand.Format else null
-                    GLFW.GLFW_KEY_B -> IdeCommand.GoToDeclaration()
-                    GLFW.GLFW_KEY_P -> IdeCommand.ShowParameterInfo
-                    GLFW.GLFW_KEY_F9 -> IdeCommand.Build
-                    GLFW.GLFW_KEY_SPACE -> IdeCommand.ManualCompletion
-                    GLFW.GLFW_KEY_Z -> IdeCommand.Edit(IdeEditorInput.Undo)
-                    GLFW.GLFW_KEY_Y -> IdeCommand.Edit(IdeEditorInput.Redo)
-                    GLFW.GLFW_KEY_A -> IdeCommand.Edit(IdeEditorInput.SelectAll)
-                    GLFW.GLFW_KEY_LEFT -> wordMove(IdeHorizontalDirection.Left, shift)
-                    GLFW.GLFW_KEY_RIGHT -> wordMove(IdeHorizontalDirection.Right, shift)
-                    GLFW.GLFW_KEY_BACKSPACE -> IdeCommand.Edit(IdeEditorInput.DeleteWordBackward)
-                    GLFW.GLFW_KEY_DELETE -> IdeCommand.Edit(IdeEditorInput.DeleteWordForward)
+                when (event.key) {
+                    IdeKeyCode.S -> IdeCommand.Save
+                    IdeKeyCode.L -> if (alt && !shift) IdeCommand.Format else null
+                    IdeKeyCode.B -> IdeCommand.GoToDeclaration()
+                    IdeKeyCode.P -> IdeCommand.ShowParameterInfo
+                    IdeKeyCode.F9 -> IdeCommand.Build
+                    IdeKeyCode.SPACE -> IdeCommand.ManualCompletion
+                    IdeKeyCode.Z -> IdeCommand.Edit(IdeEditorInput.Undo)
+                    IdeKeyCode.Y -> IdeCommand.Edit(IdeEditorInput.Redo)
+                    IdeKeyCode.A -> IdeCommand.Edit(IdeEditorInput.SelectAll)
+                    IdeKeyCode.LEFT -> wordMove(IdeHorizontalDirection.Left, shift)
+                    IdeKeyCode.RIGHT -> wordMove(IdeHorizontalDirection.Right, shift)
+                    IdeKeyCode.BACKSPACE -> IdeCommand.Edit(IdeEditorInput.DeleteWordBackward)
+                    IdeKeyCode.DELETE -> IdeCommand.Edit(IdeEditorInput.DeleteWordForward)
                     else -> null
                 }
             } else if (alt) {
-                when (event.key()) {
-                    GLFW.GLFW_KEY_LEFT -> IdeCommand.NavigateBack
-                    GLFW.GLFW_KEY_RIGHT -> IdeCommand.NavigateForward
+                when (event.key) {
+                    IdeKeyCode.LEFT -> IdeCommand.NavigateBack
+                    IdeKeyCode.RIGHT -> IdeCommand.NavigateForward
                     else -> null
                 }
             } else {
-                editorKey(event.key(), shift, focus.editorPageRows)
+                editorKey(event.key, shift, focus.editorPageRows)
             }
         return command?.let(::dispatch) ?: false
     }
 
     fun charTyped(
-        event: CharacterEvent,
+        event: IdeCharacterInput,
         focus: IdeFocusState,
     ): Boolean {
         if (focus.dialog != null || focus.area != IdeFocusArea.Editor) return false
-        return dispatchType(event.codepointAsString())
+        return dispatchType(event.text)
     }
 
-    fun keyReleased(event: KeyEvent): Boolean =
-        if (event.key() == GLFW.GLFW_KEY_LEFT_CONTROL || event.key() == GLFW.GLFW_KEY_RIGHT_CONTROL) {
+    fun keyReleased(event: IdeKeyInput): Boolean =
+        if (event.key == IdeKeyCode.LEFT_CONTROL || event.key == IdeKeyCode.RIGHT_CONTROL) {
             dispatch(IdeCommand.ControlReleased)
         } else {
             false
@@ -295,8 +292,8 @@ class IdeInputAdapter(
             val editor = context.editor
             if (editor != null) {
                 val offset = editorOffset(x, y, editor, geometry) ?: return true
-                val control = modifiers and GLFW.GLFW_MOD_CONTROL != 0
-                val shift = modifiers and GLFW.GLFW_MOD_SHIFT != 0
+                val control = modifiers and IdeModifier.CONTROL != 0
+                val shift = modifiers and IdeModifier.SHIFT != 0
                 if (control && !shift) {
                     sink.dispatch(IdeCommand.GoToDeclaration(offset))
                 } else if (doubleClick && !shift) {
@@ -355,7 +352,7 @@ class IdeInputAdapter(
             context.editor
                 ?.takeIf { geometry.editor.contains(x, y) }
                 ?.let { editorOffset(x, y, it, geometry, sourceGlyphOnly = true) }
-        sink.dispatch(IdeCommand.SourcePointer(offset, modifiers and GLFW.GLFW_MOD_CONTROL != 0))
+        sink.dispatch(IdeCommand.SourcePointer(offset, modifiers and IdeModifier.CONTROL != 0))
     }
 
     private fun activate(
@@ -473,10 +470,10 @@ class IdeInputAdapter(
     }
 
     private fun dialogKey(
-        event: KeyEvent,
+        event: IdeKeyInput,
         dialog: IdeDialogState,
     ): Boolean {
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+        if (event.key == IdeKeyCode.ESCAPE) {
             val command =
                 when (dialog) {
                     is IdeDialogState.FileConflict -> IdeCommand.ResolveConflict(IdeConflictAction.Cancel)
@@ -486,7 +483,7 @@ class IdeInputAdapter(
                 }
             return dispatch(command)
         }
-        if (event.key() != GLFW.GLFW_KEY_ENTER) return true
+        if (event.key != IdeKeyCode.ENTER) return true
         return when (dialog) {
             is IdeDialogState.Confirmation -> dispatch(IdeCommand.ConfirmDialog(dialog.actionId))
             is IdeDialogState.LockUpdate -> dispatch(IdeCommand.ConfirmLockUpdate)
@@ -499,24 +496,24 @@ class IdeInputAdapter(
     private fun IdeDialogState.FileConflict.confirmAction(): IdeConflictAction =
         if (closing) IdeConflictAction.DiscardAndClose else IdeConflictAction.ReloadFromDisk
 
-    private fun completionKey(event: KeyEvent): IdeCommand? =
-        when (event.key()) {
-            GLFW.GLFW_KEY_ESCAPE -> IdeCommand.DismissCompletion
-            GLFW.GLFW_KEY_ENTER -> IdeCommand.Edit(IdeEditorInput.Enter)
-            GLFW.GLFW_KEY_TAB -> IdeCommand.Edit(IdeEditorInput.Tab)
-            GLFW.GLFW_KEY_UP -> IdeCommand.Edit(IdeEditorInput.Move(IdeMoveDirection.Up, false))
-            GLFW.GLFW_KEY_DOWN -> IdeCommand.Edit(IdeEditorInput.Move(IdeMoveDirection.Down, false))
-            GLFW.GLFW_KEY_PAGE_UP -> repeatMove(IdeMoveDirection.Up, IDE_COMPLETION_VISIBLE_ROWS)
-            GLFW.GLFW_KEY_PAGE_DOWN -> repeatMove(IdeMoveDirection.Down, IDE_COMPLETION_VISIBLE_ROWS)
+    private fun completionKey(event: IdeKeyInput): IdeCommand? =
+        when (event.key) {
+            IdeKeyCode.ESCAPE -> IdeCommand.DismissCompletion
+            IdeKeyCode.ENTER -> IdeCommand.Edit(IdeEditorInput.Enter)
+            IdeKeyCode.TAB -> IdeCommand.Edit(IdeEditorInput.Tab)
+            IdeKeyCode.UP -> IdeCommand.Edit(IdeEditorInput.Move(IdeMoveDirection.Up, false))
+            IdeKeyCode.DOWN -> IdeCommand.Edit(IdeEditorInput.Move(IdeMoveDirection.Down, false))
+            IdeKeyCode.PAGE_UP -> repeatMove(IdeMoveDirection.Up, IDE_COMPLETION_VISIBLE_ROWS)
+            IdeKeyCode.PAGE_DOWN -> repeatMove(IdeMoveDirection.Down, IDE_COMPLETION_VISIBLE_ROWS)
             else -> null
         }
 
-    private fun chooserKey(event: KeyEvent): IdeCommand? =
-        when (event.key()) {
-            GLFW.GLFW_KEY_ESCAPE -> IdeCommand.DismissSemanticInteraction
-            GLFW.GLFW_KEY_ENTER -> IdeCommand.AcceptDeclarationChoice
-            GLFW.GLFW_KEY_UP -> IdeCommand.MoveDeclarationChoice(-1)
-            GLFW.GLFW_KEY_DOWN -> IdeCommand.MoveDeclarationChoice(1)
+    private fun chooserKey(event: IdeKeyInput): IdeCommand? =
+        when (event.key) {
+            IdeKeyCode.ESCAPE -> IdeCommand.DismissSemanticInteraction
+            IdeKeyCode.ENTER -> IdeCommand.AcceptDeclarationChoice
+            IdeKeyCode.UP -> IdeCommand.MoveDeclarationChoice(-1)
+            IdeKeyCode.DOWN -> IdeCommand.MoveDeclarationChoice(1)
             else -> null
         }
 
@@ -526,55 +523,55 @@ class IdeInputAdapter(
         pageRows: Int,
     ): IdeCommand? =
         when (key) {
-            GLFW.GLFW_KEY_LEFT -> {
+            IdeKeyCode.LEFT -> {
                 move(IdeMoveDirection.Left, shift)
             }
 
-            GLFW.GLFW_KEY_RIGHT -> {
+            IdeKeyCode.RIGHT -> {
                 move(IdeMoveDirection.Right, shift)
             }
 
-            GLFW.GLFW_KEY_UP -> {
+            IdeKeyCode.UP -> {
                 move(IdeMoveDirection.Up, shift)
             }
 
-            GLFW.GLFW_KEY_DOWN -> {
+            IdeKeyCode.DOWN -> {
                 move(IdeMoveDirection.Down, shift)
             }
 
-            GLFW.GLFW_KEY_HOME -> {
+            IdeKeyCode.HOME -> {
                 move(IdeMoveDirection.Home, shift)
             }
 
-            GLFW.GLFW_KEY_END -> {
+            IdeKeyCode.END -> {
                 move(IdeMoveDirection.End, shift)
             }
 
-            GLFW.GLFW_KEY_BACKSPACE -> {
+            IdeKeyCode.BACKSPACE -> {
                 IdeCommand.Edit(IdeEditorInput.Backspace)
             }
 
-            GLFW.GLFW_KEY_DELETE -> {
+            IdeKeyCode.DELETE -> {
                 IdeCommand.Edit(IdeEditorInput.Delete)
             }
 
-            GLFW.GLFW_KEY_ENTER -> {
+            IdeKeyCode.ENTER -> {
                 IdeCommand.Edit(IdeEditorInput.Enter)
             }
 
-            GLFW.GLFW_KEY_TAB -> {
+            IdeKeyCode.TAB -> {
                 IdeCommand.Edit(if (shift) IdeEditorInput.Outdent else IdeEditorInput.Tab)
             }
 
-            GLFW.GLFW_KEY_PAGE_UP -> {
+            IdeKeyCode.PAGE_UP -> {
                 IdeCommand.Edit(IdeEditorInput.Page(IdeVerticalDirection.Up, pageRows.coerceAtLeast(1), shift))
             }
 
-            GLFW.GLFW_KEY_PAGE_DOWN -> {
+            IdeKeyCode.PAGE_DOWN -> {
                 IdeCommand.Edit(IdeEditorInput.Page(IdeVerticalDirection.Down, pageRows.coerceAtLeast(1), shift))
             }
 
-            GLFW.GLFW_KEY_ESCAPE -> {
+            IdeKeyCode.ESCAPE -> {
                 IdeCommand.CloseRequested
             }
 

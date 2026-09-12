@@ -69,7 +69,7 @@ class IdeScreenFocusTest {
         assertTrue(commands.isEmpty())
 
         overlay.focusLost()
-        assertTrue(input.keyPressed(KeyEvent(GLFW.GLFW_KEY_S, 0, GLFW.GLFW_MOD_CONTROL), IdeFocusState.Editor))
+        assertTrue(input.keyPressed(IdeKeyInput(IdeKeyCode.S, IdeModifier.CONTROL), IdeFocusState.Editor))
         assertEquals(listOf<IdeCommand>(IdeCommand.Save), commands)
     }
 
@@ -96,7 +96,7 @@ class IdeScreenFocusTest {
         val commands = mutableListOf<IdeCommand>()
         val input = IdeInputAdapter(commands::add, IdeClipboard { "" }, IdeClientLimits())
 
-        assertTrue(input.charTyped(CharacterEvent('x'.code), IdeFocusState.Initial))
+        assertTrue(input.charTyped(IdeCharacterInput("x"), IdeFocusState.Initial))
         assertEquals(listOf<IdeCommand>(IdeCommand.Edit(IdeEditorInput.Type("x"))), commands)
     }
 
