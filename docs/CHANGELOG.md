@@ -46,6 +46,8 @@ headings so this page has one stable URL that can be shared outside the reposito
 
 ### In-game IDE and tooling
 
+- Ported the integrated IDE and its icon toolbar to Minecraft 1.21.1 while retaining version-specific screen and
+  rendering adapters.
 - Added remembered project workspaces and a project switcher.
 - Added parameter information and replaced IDE toolbar labels with icons.
 - Fixed analysis failures involving synthetic Kotlin declarations.
@@ -63,8 +65,7 @@ headings so this page has one stable URL that can be shared outside the reposito
 ### Compatibility notes
 
 - Minecraft 1.21.1 with NeoForge 21.1.250 or newer is supported on Java 21. Its initial compatibility build includes
-  computers, persistence, redstone, sound, compilation, and the terminal; the integrated IDE remains available in the
-  Minecraft 26.1.2 build while its client UI is ported separately.
+  computers, persistence, redstone, sound, compilation, the terminal, the integrated IDE, and VM benchmark commands.
 - Channel-enabled executables use artifact/runtime contract 1.2 and require the matching 0.4 runtime. Older artifacts
   whose channel limits are zero remain valid under the extended contract.
 - Minecraft 26.1.2 with NeoForge 26.1.2.97 or newer remains the primary Java 25 baseline.

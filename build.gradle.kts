@@ -676,5 +676,6 @@ tasks.register("verifyLocalFull") {
     dependsOn(clippyCompukterJniRust)
     dependsOn(cargoBuildCompukterJni)
     dependsOn("checkCompukterVmRelease")
+    dependsOn(":v1_21_1-neoforge:runGameTestServer")
     dependsOn(":v26_1-neoforge:runGameTestServer")
 }
