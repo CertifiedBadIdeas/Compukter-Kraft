@@ -1,6 +1,7 @@
 path	category	origin	copyright	license	provenance	packaged
 modules/minecraft/shared/neoforge/src/main/resources/assets/compukters/textures/block/compukter/back.png	original	Compukters	Copyright 2026 Vsevolod Petrov (lazyhat)	CC-BY-4.0	licenses/media/Compukters-textures-PROVENANCE.md	true
 modules/minecraft/shared/neoforge/src/main/resources/assets/compukters/textures/block/compukter/front.png	original	Compukters	Copyright 2026 Vsevolod Petrov (lazyhat)	CC-BY-4.0	licenses/media/Compukters-textures-PROVENANCE.md	true
+docs/assets/images/compukters-icon.svg	generated-derivative	Compukters front texture	Copyright 2026 Vsevolod Petrov (lazyhat)	CC-BY-4.0	licenses/media/Compukters-textures-PROVENANCE.md	false
 modules/minecraft/shared/neoforge/src/main/resources/assets/compukters/textures/block/compukter/side.png	original	Compukters	Copyright 2026 Vsevolod Petrov (lazyhat)	CC-BY-4.0	licenses/media/Compukters-textures-PROVENANCE.md	true
 modules/minecraft/shared/neoforge/src/main/resources/assets/compukters/textures/font/terminal/cozette.png	generated-derivative	Cozette v.1.30.0	Copyright Ines	MIT	tools/fonts/cozette/v.1.30.0/PROVENANCE.md	true
 modules/minecraft/shared/neoforge/src/main/resources/assets/compukters/textures/font/terminal/dina.png	generated-derivative	Dina v2.92 Regular 6pt	Copyright Jørgen Ibsen	MIT	tools/fonts/dina/v2.92/PROVENANCE.md	true

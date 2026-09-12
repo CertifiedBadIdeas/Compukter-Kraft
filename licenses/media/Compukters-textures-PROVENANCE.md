@@ -2,6 +2,8 @@
 
 - Assets: `back.png`, `front.png`, and `side.png` under
   `modules/minecraft/shared/neoforge/src/main/resources/assets/compukters/textures/block/compukter/`
+- Site icon: `docs/assets/images/compukters-icon.svg`, an SVG wrapper embedding the exact `front.png` bytes for
+  browser favicon and header use
 - Creator and copyright holder: Vsevolod Petrov (lazyhat)
 - Copyright: 2026 Vsevolod Petrov (lazyhat)
 - Origin: original work created for Compukters; no upstream asset

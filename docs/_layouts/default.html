@@ -6,12 +6,15 @@
     <meta name="theme-color" content="#11151d">
     <meta name="description" content="{{ page.description | default: site.description | escape }}">
     <title>{% if page.title %}{{ page.title | escape }} · {% endif %}{{ site.title | escape }}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ '/assets/images/compukters-icon.svg' | relative_url }}">
     <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
   </head>
   <body>
     <header class="site-header">
       <a class="brand" href="{{ '/' | relative_url }}" aria-label="Compukters documentation home">
-        <span class="brand-mark" aria-hidden="true">&gt;_</span>
+        <span class="brand-mark" aria-hidden="true">
+          <img class="brand-icon" src="{{ '/assets/images/compukters-icon.svg' | relative_url }}" alt="">
+        </span>
         <span>Compukters</span>
       </a>
       <nav class="site-nav" aria-label="Primary navigation">

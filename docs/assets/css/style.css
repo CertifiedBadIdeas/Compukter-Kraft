@@ -81,6 +81,12 @@ a:hover {
   font-size: 0.82rem;
 }
 
+.brand-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  image-rendering: pixelated;
+}
+
 .site-nav {
   display: flex;
   flex-wrap: wrap;
