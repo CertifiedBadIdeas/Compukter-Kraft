@@ -30,6 +30,10 @@ import ru.lazyhat.compukters.core.MOD_ID
 object CompuktersGameTests {
     @JvmStatic
     @GameTest(template = EMPTY_TEMPLATE, templateNamespace = "minecraft", timeoutTicks = TIMEOUT_TICKS)
+    fun computerLifecycle(helper: GameTestHelper) = ComputerLifecycleGameTestScenario.run(helper)
+
+    @JvmStatic
+    @GameTest(template = EMPTY_TEMPLATE, templateNamespace = "minecraft", timeoutTicks = TIMEOUT_TICKS)
     fun computerRedstone(helper: GameTestHelper) = ComputerRedstoneGameTestScenario.run(helper)
 
     @JvmStatic

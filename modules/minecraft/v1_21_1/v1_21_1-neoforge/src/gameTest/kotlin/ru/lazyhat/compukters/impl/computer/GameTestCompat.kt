@@ -21,5 +21,4 @@ package ru.lazyhat.compukters.impl.computer
 import net.minecraft.core.BlockPos
 import net.minecraft.gametest.framework.GameTestHelper
 
-internal fun GameTestHelper.compuktersComputerBlockEntity(position: BlockPos): NeoForgeComputerBlockEntity =
-    getBlockEntity(position)
+internal fun GameTestHelper.compuktersComputerBlockEntity(position: BlockPos): NeoForgeComputerBlockEntity = getBlockEntity(position)

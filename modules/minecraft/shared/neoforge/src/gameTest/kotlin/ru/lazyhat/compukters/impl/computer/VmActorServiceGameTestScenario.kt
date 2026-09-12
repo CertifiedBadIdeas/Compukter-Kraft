@@ -93,5 +93,4 @@ internal object VmActorServiceGameTestScenario {
                 closed!!.getNow(null)
             }.thenSucceed()
     }
-
 }
