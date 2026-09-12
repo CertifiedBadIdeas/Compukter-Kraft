@@ -72,6 +72,76 @@ import kotlin.test.assertTrue
 
 class MinimalScriptLoweringTest {
     @Test
+    fun `top level IntChannel lowers to VM owned bounded handoff`() =
+        withAdapter { adapter ->
+            val source =
+                """
+                import compukter.concurrent.IntChannel
+                import compukter.concurrent.Tasks
+
+                val changes = IntChannel(1)
+                val level = 13
+
+                suspend fun producer() {
+                    changes.send(level)
+                }
+
+                suspend fun main() {
+                    val task = Tasks.launch(::producer)
+                    println(changes.receive())
+                    task.join()
+                }
+                """.trimIndent()
+            val first = adapter.compile(request(source))
+            val second = adapter.compile(request(source))
+            val bytes = assertNotNull(first.artifact, first.diagnostics.joinToString()).toByteArray()
+            val artifact = ArtifactReader.read(bytes)
+            val opcodes = applicationCodeOpcodes(bytes)
+
+            assertContentEquals(bytes, assertNotNull(second.artifact).toByteArray())
+            assertTrue(first.diagnostics.none { it.severity.name == "ERROR" }, first.diagnostics.toString())
+            assertTrue(0x52 in opcodes, "top-level initializer must create a VM channel: $opcodes")
+            assertTrue(0xea in opcodes, "send must stay inside the VM: $opcodes")
+            assertTrue(0xeb in opcodes, "receive must stay inside the VM: $opcodes")
+            assertTrue(0x37 in opcodes && 0x38 in opcodes, "top-level state must use static storage: $opcodes")
+            assertEquals(AbiVersion(1u, 2u), artifact.minimumRuntimeAbi)
+            assertEquals(1u, artifact.manifest.maximumChannels)
+            assertEquals(1u, artifact.manifest.maximumChannelValues)
+            assertTrue(SemanticFeature.CHANNELS in artifact.semanticFeatures)
+        }
+
+    @Test
+    fun `IntChannel construction rejects unsupported ownership and capacity`() =
+        withAdapter { adapter ->
+            val sources =
+                listOf(
+                    """
+                    import compukter.concurrent.IntChannel
+                    suspend fun main() { val channel = IntChannel(1); channel.receive() }
+                    """.trimIndent() to "IntChannel must be initialized directly in a top-level val",
+                    """
+                    import compukter.concurrent.IntChannel
+                    var channel = IntChannel(1)
+                    suspend fun main() { channel.receive() }
+                    """.trimIndent() to "top-level state must be an immutable property with a default getter",
+                    """
+                    import compukter.concurrent.IntChannel
+                    val channel = IntChannel(0)
+                    suspend fun main() { channel.receive() }
+                    """.trimIndent() to "IntChannel capacity must be a positive Int constant",
+                )
+            sources.forEach { (source, message) ->
+                val result = adapter.compile(request(source))
+
+                assertNull(result.artifact, source)
+                assertTrue(
+                    result.diagnostics.any { it.severity.name == "ERROR" && message in it.message },
+                    result.diagnostics.toString(),
+                )
+            }
+        }
+
+    @Test
     fun `direct top level suspend task lowers to spawn and join`() =
         withAdapter { adapter ->
             val result =

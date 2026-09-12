@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrErrorExpression
@@ -85,7 +86,14 @@ internal object MinimalScriptLowering {
                 return mainArtifact(entry.isSuspend)
             }
             try {
-                return KotlinProjectLowering.lower(functions, declarations.classes, entry, pluginContext, session)
+                return KotlinProjectLowering.lower(
+                    functions,
+                    declarations.properties,
+                    declarations.classes,
+                    entry,
+                    pluginContext,
+                    session,
+                )
             } catch (unsupported: UnsupportedKotlinIr) {
                 session.diagnosticSink(unsupported(session, unsupported.element, unsupported.message, entry))
                 return null
@@ -171,6 +179,7 @@ internal object MinimalScriptLowering {
 
 private class SourceDeclarationCollector : IrVisitorVoid() {
     val functions = mutableListOf<IrSimpleFunction>()
+    val properties = mutableListOf<IrProperty>()
     val classes = mutableListOf<IrClass>()
 
     override fun visitElement(element: IrElement) {
@@ -185,5 +194,10 @@ private class SourceDeclarationCollector : IrVisitorVoid() {
     override fun visitClass(declaration: IrClass) {
         if (declaration.startOffset >= 0) classes += declaration
         super.visitClass(declaration)
+    }
+
+    override fun visitProperty(declaration: IrProperty) {
+        if (declaration.startOffset >= 0 && declaration.parent is IrFile) properties += declaration
+        super.visitProperty(declaration)
     }
 }

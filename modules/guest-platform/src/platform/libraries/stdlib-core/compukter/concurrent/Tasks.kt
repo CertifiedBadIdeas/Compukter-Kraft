@@ -21,3 +21,17 @@ public object Tasks {
      */
     public external fun launch(block: suspend () -> Unit): Task
 }
+
+/**
+ * A bounded FIFO channel carrying [Int] values between cooperative Guest tasks.
+ *
+ * Declare channels as top-level immutable properties. [send] suspends while the channel is full,
+ * and [receive] suspends while it is empty. A positive [capacity] is reserved when the program is admitted.
+ */
+public value class IntChannel public constructor(internal val capacity: Int) {
+    /** Sends [value], suspending until bounded channel storage is available. */
+    public external suspend fun send(value: Int)
+
+    /** Receives the oldest queued value, suspending until one is available. */
+    public external suspend fun receive(): Int
+}

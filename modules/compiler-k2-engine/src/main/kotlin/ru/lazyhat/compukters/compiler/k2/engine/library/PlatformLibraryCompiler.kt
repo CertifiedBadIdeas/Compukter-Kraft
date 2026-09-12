@@ -103,6 +103,7 @@ class PlatformLibraryCompiler {
             try {
                 KotlinProjectLowering.lower(
                     ordinaryFunctions,
+                    emptyList(),
                     collected.classes,
                     entry,
                     pluginContext,

@@ -115,6 +115,8 @@ object CanonicalTrustedIntrinsics {
             )
             primitive("stdlib", "core", "kotlin", "emptyArray", "fun():Array<T>")
             primitive("stdlib", "core", "compukter.concurrent", "Task.join", "fun():Unit")
+            primitive("stdlib", "core", "compukter.concurrent", "IntChannel.send", "fun(Int):Unit")
+            primitive("stdlib", "core", "compukter.concurrent", "IntChannel.receive", "fun():Int")
             primitive(
                 "stdlib",
                 "core",

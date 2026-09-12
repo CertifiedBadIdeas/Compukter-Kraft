@@ -44,6 +44,7 @@ import org.jetbrains.kotlin.ir.expressions.IrContinue
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrGetEnumValue
+import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrLoop
 import org.jetbrains.kotlin.ir.expressions.IrReturn
@@ -59,6 +60,7 @@ import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrConstructorSymbol
 import org.jetbrains.kotlin.ir.symbols.IrEnumEntrySymbol
+import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
@@ -142,6 +144,27 @@ private data class GuestEnumEntryLayout(
     val declaration: IrEnumEntry,
     val fieldId: FieldId,
     val ownerType: TypeRef.Local,
+)
+
+private sealed interface TopLevelInitializer {
+    data class Scalar(
+        val value: Any,
+    ) : TopLevelInitializer
+
+    data class Channel(
+        val capacity: Int,
+    ) : TopLevelInitializer
+}
+
+private data class TopLevelProperty(
+    val declaration: IrProperty,
+    val initializer: TopLevelInitializer,
+)
+
+private data class TopLevelFieldLayout(
+    val property: TopLevelProperty,
+    val fieldId: FieldId,
+    val type: ValueType,
 )
 
 private data class GuestClassLayout(
@@ -456,6 +479,8 @@ private class InlineValueClassRegistry private constructor(
 @OptIn(UnsafeDuringIrConstructionAPI::class)
 internal object KotlinProjectLowering {
     private const val MAXIMUM_TASKS = 64u
+    private const val INT_CHANNEL = "compukter.concurrent.IntChannel"
+    private const val APPLICATION_STATE = "app.<state>"
     private const val CHAR_ARRAY_RUNTIME_TYPE = 0u
     private const val STRING_RUNTIME_TYPE = 1u
     private const val INT_ARRAY_RUNTIME_TYPE = 4u
@@ -470,6 +495,7 @@ internal object KotlinProjectLowering {
 
     fun lower(
         functions: List<IrSimpleFunction>,
+        properties: List<IrProperty>,
         classes: List<IrClass>,
         entry: IrSimpleFunction,
         pluginContext: IrPluginContext,
@@ -485,6 +511,18 @@ internal object KotlinProjectLowering {
                     !includeTrustedPlatformBodies &&
                         session.trustedPlatformModule(it.file.fileEntry.name) != null
                 }.sortedBy { it.fqNameWhenAvailable?.asString().orEmpty() }
+        val topLevelProperties =
+            properties
+                .filterNot {
+                    !includeTrustedPlatformBodies &&
+                        session.trustedPlatformModule(it.file.fileEntry.name) != null
+                }.sortedWith(
+                    compareBy(
+                        { session.virtualSourcePath(it.file.fileEntry.name)?.value.orEmpty() },
+                        IrProperty::startOffset,
+                        { it.name.asString() },
+                    ),
+                ).map(::topLevelProperty)
         val inlineValueClasses = InlineValueClassRegistry.build(classes, pluginContext)
         val playerFunctions =
             functions
@@ -594,14 +632,26 @@ internal object KotlinProjectLowering {
                             } else {
                                 emptyList()
                             }
-                    } + constructorClasses.map(::constructorName) + listOfNotNull("<clinit>".takeIf { initializerClasses.isNotEmpty() })
+                    } +
+                    topLevelProperties.map { it.declaration.name.asString() } +
+                    listOfNotNull(APPLICATION_STATE.takeIf { topLevelProperties.isNotEmpty() }) +
+                    constructorClasses.map(::constructorName) +
+                    listOfNotNull("<clinit>".takeIf { initializerClasses.isNotEmpty() || topLevelProperties.isNotEmpty() })
             ).distinct()
                 .map(MetadataText::of)
                 .sorted()
         val metadataIds = metadataValues.withIndex().associate { (index, value) -> value.toString() to StringId.of(index.toUInt()) }
         val literalCollector =
             LiteralCollector(pluginContext.irBuiltIns.unitType)
-                .also { userFunctions.forEach { function -> function.accept(it, null) } }
+                .also { collector ->
+                    userFunctions.forEach { function -> function.accept(collector, null) }
+                    topLevelProperties.forEach { property ->
+                        property.declaration.backingField
+                            ?.initializer
+                            ?.expression
+                            ?.accept(collector, null)
+                    }
+                }
         var needsAllBitsI32 = false
         userFunctions.forEach { function ->
             function.accept(
@@ -633,6 +683,12 @@ internal object KotlinProjectLowering {
         (
             (
                 literalCollector.values +
+                    topLevelProperties.map { property ->
+                        when (val initializer = property.initializer) {
+                            is TopLevelInitializer.Scalar -> initializer.value
+                            is TopLevelInitializer.Channel -> initializer.capacity
+                        }
+                    } +
                     inlineValueClasses.constantValues() +
                     platformScalars.constantValues() +
                     linkedSymbols.defaultIntValues
@@ -668,12 +724,29 @@ internal object KotlinProjectLowering {
             userClasses.withIndex().associate { (index, declaration) ->
                 declaration.symbol to TypeId.of((userFunctions.size + constructorClasses.size + index).toUInt())
             }
+        val topLevelStateTypeId =
+            TypeId
+                .of((userFunctions.size + constructorClasses.size + userClasses.size).toUInt())
+                .takeIf { topLevelProperties.isNotEmpty() }
+        val stateTypeCount = if (topLevelStateTypeId == null) 0 else 1
         val initializerTypeBase =
-            userFunctions.size + constructorClasses.size + userClasses.size + if (usesStringArray) 1 else 0
+            userFunctions.size +
+                constructorClasses.size +
+                userClasses.size +
+                stateTypeCount +
+                if (usesStringArray) 1 else 0
         val initializerTypeIds =
             initializerClasses.withIndex().associate { (index, declaration) ->
                 declaration.symbol to TypeId.of((initializerTypeBase + index).toUInt())
             }
+        val topLevelInitializerFunctionId =
+            FunctionId
+                .of((userFunctions.size + constructorClasses.size + initializerClasses.size).toUInt())
+                .takeIf { topLevelProperties.isNotEmpty() }
+        val topLevelInitializerTypeId =
+            TypeId
+                .of((initializerTypeBase + initializerClasses.size).toUInt())
+                .takeIf { topLevelProperties.isNotEmpty() }
         val externalTypeImports =
             linkedSymbols.types.entries
                 .sortedBy { (_, target) -> target.sortKey }
@@ -696,7 +769,7 @@ internal object KotlinProjectLowering {
         val externalDefaultEnumFieldImports =
             linkedSymbols.defaultEnumEntries.mapValues { (_, target) -> requireNotNull(externalFieldsBySortKey[target.sortKey]) }
         val externalFieldImportCount = externalFieldImports.size
-        val externalFunctionTypeBase = initializerTypeBase + initializerClasses.size
+        val externalFunctionTypeBase = initializerTypeBase + initializerClasses.size + stateTypeCount
         val externalFunctionImports =
             externalFunctions.entries
                 .sortedBy { (_, target) -> target.sortKey }
@@ -712,7 +785,12 @@ internal object KotlinProjectLowering {
         val stringArrayType =
             ValueType.Ref(
                 nullable = false,
-                type = TypeRef.Local(TypeId.of((userFunctions.size + constructorClasses.size + userClasses.size).toUInt())),
+                type =
+                    TypeRef.Local(
+                        TypeId.of(
+                            (userFunctions.size + constructorClasses.size + userClasses.size + stateTypeCount).toUInt(),
+                        ),
+                    ),
             )
         userFunctions.forEach {
             validateFunction(it, pluginContext, guestTypes, classTypeIds, externalClassTypes, inlineValueClasses, platformScalars, session)
@@ -731,6 +809,33 @@ internal object KotlinProjectLowering {
                 externalClassTypes,
             )
         val classLayoutsBySymbol = classLayouts.associateBy { it.declaration.symbol }
+        val firstTopLevelField = classLayouts.sumOf { layout -> layout.fields.size + layout.enumEntries.size }
+        val topLevelFields =
+            topLevelProperties.mapIndexed { index, property ->
+                val backingField = requireNotNull(property.declaration.backingField)
+                TopLevelFieldLayout(
+                    property = property,
+                    fieldId = FieldId.of((firstTopLevelField + index).toUInt()),
+                    type =
+                        valueType(
+                            backingField.type,
+                            pluginContext,
+                            guestTypes,
+                            stringType,
+                            charArrayType,
+                            stringArrayType,
+                            classTypeIds,
+                            externalClassTypes,
+                            inlineValueClasses,
+                            platformScalars,
+                            property.declaration,
+                        ),
+                )
+            }
+        val topLevelFieldsByBacking =
+            topLevelFields.associateBy { requireNotNull(it.property.declaration.backingField).symbol }
+        val topLevelFieldsByGetter =
+            topLevelFields.associateBy { requireNotNull(it.property.declaration.getter).symbol }
         val blocks = mutableListOf<Block>()
         val loweredFunctions = mutableListOf<Function>()
 
@@ -775,6 +880,8 @@ internal object KotlinProjectLowering {
                             .flatMap { layout ->
                                 layout.fields.map { field -> requireNotNull(field.property.getter).symbol to field }
                             }.toMap(),
+                    topLevelFieldsByBacking = topLevelFieldsByBacking,
+                    topLevelFieldsByGetter = topLevelFieldsByGetter,
                     enumEntries =
                         classLayouts.flatMap { layout -> layout.enumEntries }.associateBy { it.declaration.symbol },
                     externalFieldsByGetter = externalGetterFieldImports,
@@ -905,6 +1012,71 @@ internal object KotlinProjectLowering {
                 )
         }
 
+        if (topLevelFields.isNotEmpty()) {
+            val stateType = TypeRef.Local(requireNotNull(topLevelStateTypeId))
+            val functionId = requireNotNull(topLevelInitializerFunctionId)
+            val functionValues = mutableListOf<FunctionValue>()
+            val firstBlock = blocks.size
+            topLevelFields.forEachIndexed { index, field ->
+                val instructions = mutableListOf<Instruction>()
+                val valueRegister =
+                    when (val initializer = field.property.initializer) {
+                        is TopLevelInitializer.Scalar -> {
+                            val register = RegisterId.of(functionValues.size.toUInt())
+                            functionValues += FunctionValue.scalar(field.type)
+                            val constant = initializer.value.toArtifactConstant(literalIds)
+                            val constantId =
+                                constantIds[constant]
+                                    ?: throw UnsupportedKotlinIr(
+                                        field.property.declaration,
+                                        "top-level scalar initializer is absent from the canonical constant pool",
+                                    )
+                            instructions += Instruction.Const(register, constantId)
+                            register
+                        }
+
+                        is TopLevelInitializer.Channel -> {
+                            if (field.type != ValueType.I32) {
+                                throw UnsupportedKotlinIr(
+                                    field.property.declaration,
+                                    "IntChannel must use its canonical scalar representation",
+                                )
+                            }
+                            val capacity = RegisterId.of(functionValues.size.toUInt())
+                            functionValues += FunctionValue.scalar(ValueType.I32)
+                            val handle = RegisterId.of(functionValues.size.toUInt())
+                            functionValues += FunctionValue.scalar(ValueType.I32)
+                            val constantId =
+                                constantIds[Constant.I32(initializer.capacity)]
+                                    ?: throw UnsupportedKotlinIr(
+                                        field.property.declaration,
+                                        "IntChannel capacity is absent from the canonical constant pool",
+                                    )
+                            instructions += Instruction.Const(capacity, constantId)
+                            instructions += Instruction.ChannelCreate(handle, capacity)
+                            handle
+                        }
+                    }
+                instructions += Instruction.StaticSet(FieldRef.Local(field.fieldId), valueRegister)
+                instructions += Instruction.Jump(BlockId.of((firstBlock + index + 1).toUInt()))
+                blocks += Block(functionId, false, instructions)
+            }
+            blocks += Block(functionId, false, listOf(Instruction.Return(Destination.Unit)))
+            loweredFunctions +=
+                Function(
+                    owner = stateType,
+                    name = requireNotNull(metadataIds["<clinit>"]),
+                    signature = TypeRef.Local(requireNotNull(topLevelInitializerTypeId)),
+                    flags = setOf(FunctionFlag.STATIC),
+                    values = functionValues,
+                    parameterCount = 0u,
+                    firstBlock = BlockId.of(firstBlock.toUInt()),
+                    blockCount = (topLevelFields.size + 1).toUInt(),
+                    firstException = 0u,
+                    exceptionCount = 0u,
+                )
+        }
+
         val functionTypes =
             userFunctions.map { function ->
                 NominalType.Function(
@@ -961,6 +1133,17 @@ internal object KotlinProjectLowering {
                     parameters = emptyList(),
                 )
             }
+        val topLevelInitializerTypes =
+            listOfNotNull(
+                topLevelInitializerTypeId?.let {
+                    NominalType.Function(
+                        name = requireNotNull(metadataIds["<clinit>"]),
+                        suspending = false,
+                        result = ValueType.Unit,
+                        parameters = emptyList(),
+                    )
+                },
+            )
         val classTypes =
             classLayouts.map { layout ->
                 val declaration = layout.declaration
@@ -992,6 +1175,18 @@ internal object KotlinProjectLowering {
                     )
                 }
             }
+        val topLevelStateTypes =
+            listOfNotNull(
+                topLevelStateTypeId?.let { stateType ->
+                    NominalType.Class(
+                        name = requireNotNull(metadataIds[APPLICATION_STATE]),
+                        final = true,
+                        fieldStart = firstTopLevelField.toUInt(),
+                        fieldCount = topLevelFields.size.toUInt(),
+                        initializer = topLevelInitializerFunctionId,
+                    )
+                },
+            )
         val artifactFields =
             classLayouts.flatMap { layout ->
                 val owner = TypeRef.Local(layout.typeId)
@@ -1013,7 +1208,22 @@ internal object KotlinProjectLowering {
                             static = true,
                         )
                     }
-            }
+            } +
+                topLevelFields.map { field ->
+                    Field(
+                        owner = TypeRef.Local(requireNotNull(topLevelStateTypeId)),
+                        name =
+                            requireNotNull(
+                                metadataIds[
+                                    field.property.declaration.name
+                                        .asString(),
+                                ],
+                            ),
+                        type = field.type,
+                        mutable = true,
+                        static = true,
+                    )
+                }
         val externalFunctionTypes =
             externalFunctionImports.entries
                 .sortedBy { (_, target) -> target.sortKey }
@@ -1064,6 +1274,7 @@ internal object KotlinProjectLowering {
                     functionTypes +
                         constructorTypes +
                         classTypes +
+                        topLevelStateTypes +
                         if (usesStringArray) {
                             listOf(
                                 NominalType.Array(
@@ -1073,7 +1284,7 @@ internal object KotlinProjectLowering {
                             )
                         } else {
                             emptyList()
-                        } + initializerTypes + externalFunctionTypes,
+                        } + initializerTypes + topLevelInitializerTypes + externalFunctionTypes,
                 constants = constants,
                 fields = artifactFields,
                 imports =
@@ -1117,6 +1328,19 @@ internal object KotlinProjectLowering {
         val modules = listOf(app, library)
         val maximumCallDepth = 16u
         val usesTasks = blocks.any { block -> block.instructions.any { it is Instruction.TaskSpawn || it is Instruction.TaskJoin } }
+        val usesChannels =
+            blocks.any { block ->
+                block.instructions.any {
+                    it is Instruction.ChannelCreate || it is Instruction.ChannelSend || it is Instruction.ChannelReceive
+                }
+            }
+        val maximumChannels = topLevelProperties.count { it.initializer is TopLevelInitializer.Channel }.toUInt()
+        val channelValueCount =
+            topLevelProperties.fold(0uL) { total, property ->
+                total + ((property.initializer as? TopLevelInitializer.Channel)?.capacity?.toULong() ?: 0uL)
+            }
+        require(channelValueCount <= UInt.MAX_VALUE.toULong()) { "total IntChannel capacity exceeds u32" }
+        val maximumChannelValues = channelValueCount.toUInt()
         val maximumCoroutines = if (usesTasks) MAXIMUM_TASKS else 1u
         val singleTaskStackBytes = ExecutionStorage.requiredStackBytes(modules, maximumCallDepth)
         require(singleTaskStackBytes <= UInt.MAX_VALUE / maximumCoroutines) {
@@ -1124,11 +1348,17 @@ internal object KotlinProjectLowering {
         }
         val requiredStackBytes = singleTaskStackBytes * maximumCoroutines
         return Artifact(
-            minimumRuntimeAbi = if (usesTasks) AbiVersion(1u, 1u) else AbiVersion(1u, 0u),
+            minimumRuntimeAbi =
+                when {
+                    usesChannels -> AbiVersion(1u, 2u)
+                    usesTasks -> AbiVersion(1u, 1u)
+                    else -> AbiVersion(1u, 0u)
+                },
             semanticFeatures =
                 setOfNotNull(
                     SemanticFeature.COROUTINES.takeIf { userFunctions.any { it.isSuspend } },
                     SemanticFeature.CAPABILITIES.takeIf { capabilityIdentities.isNotEmpty() },
+                    SemanticFeature.CHANNELS.takeIf { usesChannels },
                     SemanticFeature.MODULE_IMPORTS,
                 ),
             manifest =
@@ -1143,6 +1373,8 @@ internal object KotlinProjectLowering {
                     minimumSliceCost = 64u,
                     compilerAbi = ByteArray(32),
                     platformAbi = ByteArray(32),
+                    maximumChannels = maximumChannels,
+                    maximumChannelValues = maximumChannelValues,
                 ),
             entry =
                 EntryPoint(
@@ -1162,6 +1394,46 @@ internal object KotlinProjectLowering {
                     )
                 },
         )
+    }
+
+    private fun topLevelProperty(property: IrProperty): TopLevelProperty {
+        if (property.isVar ||
+            property.getter == null ||
+            property.getter?.origin != IrDeclarationOrigin.DEFAULT_PROPERTY_ACCESSOR ||
+            property.backingField == null
+        ) {
+            throw UnsupportedKotlinIr(property, "top-level state must be an immutable property with a default getter")
+        }
+        val expression =
+            requireNotNull(property.backingField).initializer?.expression
+                ?: throw UnsupportedKotlinIr(property, "top-level val requires a direct initializer")
+        val initializer =
+            if (expression is IrConstructorCall &&
+                expression.symbol.owner.parentAsClass.fqNameWhenAvailable
+                    ?.asString() == INT_CHANNEL
+            ) {
+                val argument =
+                    expression.symbol.owner.parameters
+                        .mapIndexedNotNull { index, parameter ->
+                            expression.arguments.getOrNull(index)?.takeIf { parameter.kind == IrParameterKind.Regular }
+                        }.singleOrNull() as? IrConst
+                        ?: throw UnsupportedKotlinIr(expression, "IntChannel capacity must be a positive Int constant")
+                val capacity = argument.value as? Int
+                if (capacity == null || capacity <= 0) {
+                    throw UnsupportedKotlinIr(expression, "IntChannel capacity must be a positive Int constant")
+                }
+                TopLevelInitializer.Channel(capacity)
+            } else {
+                val value = (expression as? IrConst)?.value
+                if (value !is Int && value !is Boolean && value !is Char && value !is String) {
+                    throw UnsupportedKotlinIr(
+                        expression,
+                        "top-level val initializer must be a scalar literal or direct IntChannel construction",
+                    )
+                }
+                TopLevelInitializer.Scalar(requireNotNull(value))
+            }
+        return TopLevelProperty(property, initializer)
     }
 
     @OptIn(UnsafeDuringIrConstructionAPI::class)
@@ -1773,6 +2045,8 @@ private class FunctionCompiler(
     private val platformScalars: PlatformScalarRegistry,
     private val constructorLayouts: Map<IrConstructorSymbol, GuestConstructorTarget>,
     private val fieldsByGetter: Map<IrSimpleFunctionSymbol, GuestFieldLayout>,
+    private val topLevelFieldsByBacking: Map<IrFieldSymbol, TopLevelFieldLayout>,
+    private val topLevelFieldsByGetter: Map<IrSimpleFunctionSymbol, TopLevelFieldLayout>,
     private val enumEntries: Map<IrEnumEntrySymbol, GuestEnumEntryLayout>,
     private val externalFieldsByGetter: Map<IrSimpleFunctionSymbol, ExternalFieldTarget>,
     private val externalEnumEntries: Map<IrEnumEntrySymbol, ExternalFieldTarget>,
@@ -1904,6 +2178,15 @@ private class FunctionCompiler(
                 values[expression.symbol] ?: throw UnsupportedKotlinIr(expression, "unknown local value")
             }
 
+            is IrGetField -> {
+                val field =
+                    topLevelFieldsByBacking[expression.symbol]
+                        ?: throw UnsupportedKotlinIr(expression, "unknown or non-top-level field")
+                allocate(field.type).also { destination ->
+                    emit(Instruction.StaticGet(destination, FieldRef.Local(field.fieldId)))
+                }
+            }
+
             is IrStringConcatenation -> {
                 compileConcat(expression)
             }
@@ -1952,6 +2235,9 @@ private class FunctionCompiler(
     private fun compileConstructor(call: IrConstructorCall): RegisterId {
         val target = call.symbol.owner
         val arguments = call.arguments.filterNotNull()
+        if (target.parentAsClass.fqNameWhenAvailable?.asString() == "compukter.concurrent.IntChannel") {
+            throw UnsupportedKotlinIr(call, "IntChannel must be initialized directly in a top-level val")
+        }
         platformScalars.constructor(call.symbol)?.let { scalarType ->
             val argument =
                 target.parameters
@@ -2129,6 +2415,13 @@ private class FunctionCompiler(
         when (target.fqNameWhenAvailable?.asString().takeIf { target.isExternal }) {
             "compukter.concurrent.Tasks.launch" -> return compileTaskLaunch(call, target)
             "compukter.concurrent.Task.join" -> return compileTaskJoin(call, target)
+            "compukter.concurrent.IntChannel.send" -> return compileChannelSend(call, target)
+            "compukter.concurrent.IntChannel.receive" -> return compileChannelReceive(call, target)
+        }
+        topLevelFieldsByGetter[target.symbol]?.let { field ->
+            return allocate(field.type).also { destination ->
+                emit(Instruction.StaticGet(destination, FieldRef.Local(field.fieldId)))
+            }
         }
         platformScalars.constant(target)?.let { value ->
             val artifactConstant = value.scalarValue().toArtifactConstant(literalIds)
@@ -2319,6 +2612,48 @@ private class FunctionCompiler(
         currentBlock = resume
         return null
     }
+
+    private fun compileChannelSend(
+        call: IrCall,
+        target: IrSimpleFunction,
+    ): RegisterId? {
+        val receiver = dispatchReceiver(call, target, "IntChannel.send")
+        val valueExpression =
+            target.parameters
+                .mapIndexedNotNull { index, parameter ->
+                    call.arguments.getOrNull(index)?.takeIf { parameter.kind == IrParameterKind.Regular }
+                }.singleOrNull()
+                ?: throw UnsupportedKotlinIr(call, "IntChannel.send value is missing")
+        val channel = compileExpression(receiver)
+        val value = compileExpression(valueExpression)
+        val resume = createBlock()
+        emit(Instruction.ChannelSend(channel, value, blockId(resume)))
+        currentBlock = resume
+        return null
+    }
+
+    private fun compileChannelReceive(
+        call: IrCall,
+        target: IrSimpleFunction,
+    ): RegisterId {
+        val channel = compileExpression(dispatchReceiver(call, target, "IntChannel.receive"))
+        val destination = allocate(ValueType.I32)
+        val resume = createBlock()
+        emit(Instruction.ChannelReceive(destination, channel, blockId(resume)))
+        currentBlock = resume
+        return destination
+    }
+
+    private fun dispatchReceiver(
+        call: IrCall,
+        target: IrSimpleFunction,
+        operation: String,
+    ): IrExpression =
+        target.parameters
+            .mapIndexedNotNull { index, parameter ->
+                call.arguments.getOrNull(index)?.takeIf { parameter.kind == IrParameterKind.DispatchReceiver }
+            }.singleOrNull()
+            ?: throw UnsupportedKotlinIr(call, "$operation receiver is missing")
 
     private fun resolveProjectCallArguments(
         call: IrCall,
