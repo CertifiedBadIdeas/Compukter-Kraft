@@ -176,7 +176,7 @@ tasks.register("release") {
             },
         )
         println("Release commit tagged; gradle.properties was not changed.")
-        println("Run ':v26_1-neoforge:buildReleaseUniversalJar' before publishing the tag.")
+        println("Run 'buildReleaseArtifacts' before publishing the tag.")
     }
 }
 

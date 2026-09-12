@@ -104,24 +104,7 @@ val preparePackagedCompukterFfi =
         }
     }
 
-val downloadCompukterRuntimeBundles =
-    tasks.register("downloadCompukterRuntimeBundles") {
-        description = "Downloads the pinned Linux and Windows Runtime release assets into the Gradle cache."
-        group = "build"
-        inputs.property("runtimeVersion", runtimeBundleContract.map(RuntimeBundleContract::runtimeVersion))
-        inputs.property("runtimeReleaseTag", runtimeBundleContract.map(RuntimeBundleContract::releaseTag))
-        outputs.dir(downloadedRuntimeBundleDirectory)
-        onlyIf { !runtimeBundleDirectory.isPresent }
-        doLast {
-            val contract = runtimeBundleContract.get()
-            val result =
-                RuntimeBundleDownloadSupport.download(
-                    downloadedRuntimeBundleDirectory.get().toPath(),
-                    contract,
-                )
-            println("Runtime ${contract.runtimeVersion}: ${result.name.lowercase()} in ${downloadedRuntimeBundleDirectory.get()}")
-        }
-    }
+val downloadCompukterRuntimeBundles = rootProject.tasks.named("downloadCompukterRuntimeBundles")
 
 val preparePackagedReleaseRuntime =
     tasks.register("preparePackagedReleaseRuntime") {
@@ -138,6 +121,7 @@ val preparePackagedReleaseRuntime =
                 selectedReleaseRuntimeBundleDirectory.get().toPath(),
                 output,
                 runtimeBundleContract.get(),
+                RuntimeTransport.FFI,
             )
         }
     }
@@ -203,15 +187,7 @@ val verifyNativeRuntimeJarResource =
         group = "verification"
         dependsOn(runtimeJar)
         inputs.file(runtimeJar.flatMap { it.archiveFile })
-        val expectedNativeResources =
-            if (releaseRuntimeMode) {
-                listOf(
-                    "META-INF/natives/linux/x86_64/libcompukter_ffi.so",
-                    "META-INF/natives/windows/x86_64/compukter_ffi.dll",
-                )
-            } else {
-                listOf(nativeResourcePath)
-            }
+        val expectedNativeResources = expectedNativeResources(releaseRuntimeMode, nativeResourcePath, RuntimeTransport.FFI)
         inputs.property("expectedNativeResources", expectedNativeResources)
         doLast {
             val archive = runtimeJar.get().archiveFile.get().asFile

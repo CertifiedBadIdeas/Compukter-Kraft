@@ -12,6 +12,9 @@ headings so this page has one stable URL that can be shared outside the reposito
 
 ## 0.4.0 — In development
 
+This release makes the integrated multi-file Kotlin IDE available on both supported Minecraft versions, adds a Java
+21 / NeoForge 1.21.1 build, and moves computer execution onto the bounded asynchronous Runtime 0.12 architecture.
+
 ### Guest Kotlin
 
 - Added bounded cooperative tasks through `Tasks.launch`, task handles, and `join`.
@@ -60,6 +63,7 @@ headings so this page has one stable URL that can be shared outside the reposito
 - Moved bounded filesystem persistence work off the server thread and strengthened store shutdown, failure isolation,
   stale-lock recovery, and crash-point coverage.
 - Added complete native FFI symbol/descriptor parity checks and expanded Kotlin-to-VM conformance coverage.
+- Added pinned dual-transport Runtime bundles and release gates for both the Java 25 FFM and Java 21 JNI artifacts.
 - Non-interactive agent Gradle runs now keep their complete logs in `build/agent-logs/` and print a concise summary.
 - Added this continuous repository-owned changelog as a permanent page on the documentation site.
 

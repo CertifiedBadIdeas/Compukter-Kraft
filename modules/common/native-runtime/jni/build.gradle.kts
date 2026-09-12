@@ -51,7 +51,23 @@ val nativeFilename =
     }
 val nativeResourcePath = "META-INF/natives/$nativeOs/$nativeArch/$nativeFilename"
 val compukterJniLibrary = rootProject.file(".toolchain/build/cargo/compukter-jni/release/$nativeFilename")
-val generatedNativeResources = layout.buildDirectory.dir("generated/native-resources")
+val generatedDevelopmentNativeResources = layout.buildDirectory.dir("generated/native-resources")
+val generatedReleaseNativeResources = layout.buildDirectory.dir("generated/release-native-resources")
+val runtimeBundleDirectory = providers.gradleProperty("compukterRuntimeBundleDir").map(rootProject::file)
+val releaseRuntimeRequested = requestsUniversalReleaseBuild(gradle.startParameter.taskNames)
+val compukterVmRoot = rootProject.file("host/compukter-vm")
+val compukterVmCommit =
+    providers.exec {
+        workingDir(compukterVmRoot)
+        commandLine("git", "rev-parse", "HEAD")
+    }.standardOutput.asText.map(String::trim)
+val runtimeBundleContract = compukterVmCommit.map(::currentRuntimeBundleContract)
+val downloadedRuntimeBundleDirectory =
+    providers.provider {
+        rootProject.gradle.gradleUserHomeDir
+            .resolve("caches/compukters/runtime/${runtimeBundleContract.get().runtimeVersion}")
+    }
+val selectedReleaseRuntimeBundleDirectory = runtimeBundleDirectory.orElse(downloadedRuntimeBundleDirectory)
 val shellArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/system/shell.cpkt")
 
 val preparePackagedCompukterJni =
@@ -61,18 +77,44 @@ val preparePackagedCompukterJni =
         inputs.property("nativeOs", nativeOs)
         inputs.property("nativeArch", nativeArch)
         inputs.file(compukterJniLibrary)
-        into(generatedNativeResources)
+        into(generatedDevelopmentNativeResources)
         from(compukterJniLibrary) {
             into("META-INF/natives/$nativeOs/$nativeArch")
         }
     }
 
+val preparePackagedReleaseRuntime =
+    tasks.register("preparePackagedReleaseRuntime") {
+        description = "Validates the dual-transport Runtime bundles and stages their Linux and Windows JNI libraries."
+        group = "build"
+        dependsOn(rootProject.tasks.named("downloadCompukterRuntimeBundles"))
+        inputs.dir(selectedReleaseRuntimeBundleDirectory)
+        inputs.property("compukterVmCommit", compukterVmCommit)
+        outputs.dir(generatedReleaseNativeResources)
+        doLast {
+            val output = generatedReleaseNativeResources.get().asFile.toPath()
+            delete(output)
+            RuntimeBundleSupport.validateAndStage(
+                selectedReleaseRuntimeBundleDirectory.get().toPath(),
+                output,
+                runtimeBundleContract.get(),
+                RuntimeTransport.JNI,
+            )
+        }
+    }
+
+val releaseRuntimeMode = runtimeBundleDirectory.isPresent || releaseRuntimeRequested
+val selectedNativeResources =
+    if (releaseRuntimeMode) generatedReleaseNativeResources else generatedDevelopmentNativeResources
+val selectedNativePreparation =
+    if (releaseRuntimeMode) preparePackagedReleaseRuntime else preparePackagedCompukterJni
+
 sourceSets.main {
-    resources.srcDir(generatedNativeResources)
+    resources.srcDir(selectedNativeResources)
 }
 
 tasks.processResources {
-    dependsOn(preparePackagedCompukterJni)
+    dependsOn(selectedNativePreparation)
 }
 
 tasks.test {
@@ -102,7 +144,7 @@ val packagedNativeIntegrationTest =
     tasks.register<Test>("packagedNativeIntegrationTest") {
         description = "Extracts the packaged current-host JNI library and executes a VM fixture in a fresh JVM."
         group = "verification"
-        dependsOn(preparePackagedCompukterJni, ":compiler-k2:generateShellArtifact")
+        dependsOn(selectedNativePreparation, ":compiler-k2:generateShellArtifact")
         useJUnitPlatform()
         testClassesDirs = sourceSets.test.get().output.classesDirs
         classpath = sourceSets.test.get().runtimeClasspath
@@ -116,10 +158,12 @@ val packagedNativeIntegrationTest =
 val runtimeJar = tasks.named<Jar>("jar")
 val verifyNativeRuntimeJarResource =
     tasks.register("verifyNativeRuntimeJarResource") {
-        description = "Checks that the JNI runtime jar contains its current-host native resource."
+        description = "Checks that the JNI runtime jar contains exactly the selected native resources."
         group = "verification"
         dependsOn(runtimeJar)
         inputs.file(runtimeJar.flatMap { it.archiveFile })
+        val expectedNativeResources = expectedNativeResources(releaseRuntimeMode, nativeResourcePath, RuntimeTransport.JNI)
+        inputs.property("expectedNativeResources", expectedNativeResources)
         doLast {
             val archive = runtimeJar.get().archiveFile.get().asFile
             val nativeEntries =
@@ -132,8 +176,8 @@ val verifyNativeRuntimeJarResource =
                         .filter { it.startsWith("META-INF/natives/") }
                         .toList()
                 }
-            check(nativeEntries == listOf(nativeResourcePath)) {
-                "expected $nativeResourcePath in ${archive.name}, found $nativeEntries"
+            check(nativeEntries.sorted() == expectedNativeResources) {
+                "expected $expectedNativeResources in ${archive.name}, found $nativeEntries"
             }
         }
     }

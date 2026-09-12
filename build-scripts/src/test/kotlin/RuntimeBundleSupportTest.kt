@@ -132,20 +132,43 @@ class RuntimeBundleSupportTest {
     }
 
     @Test
-    fun validatesAndStagesTheExactLinuxAndWindowsRuntimePair() {
+    fun validatesCompleteBundlesAndStagesOnlyTheSelectedTransport() {
         val fixture = Fixture(temporary)
 
-        val staged = RuntimeBundleSupport.validateAndStage(fixture.bundles, fixture.staging, fixture.contract)
+        val stagedFfi =
+            RuntimeBundleSupport.validateAndStage(
+                fixture.bundles,
+                fixture.staging.resolve("ffi"),
+                fixture.contract,
+                RuntimeTransport.FFI,
+            )
 
         assertEquals(
             listOf(
                 "META-INF/natives/linux/x86_64/libcompukter_ffi.so",
                 "META-INF/natives/windows/x86_64/compukter_ffi.dll",
             ),
-            staged.map { it.resourcePath },
+            stagedFfi.map { it.resourcePath },
         )
-        assertArrayEquals(Fixture.LINUX_NATIVE, fixture.staging.resolve(staged[0].resourcePath).readBytes())
-        assertArrayEquals(Fixture.WINDOWS_NATIVE, fixture.staging.resolve(staged[1].resourcePath).readBytes())
+        assertArrayEquals(Fixture.LINUX_FFI, fixture.staging.resolve("ffi/${stagedFfi[0].resourcePath}").readBytes())
+        assertArrayEquals(Fixture.WINDOWS_FFI, fixture.staging.resolve("ffi/${stagedFfi[1].resourcePath}").readBytes())
+
+        val stagedJni =
+            RuntimeBundleSupport.validateAndStage(
+                fixture.bundles,
+                fixture.staging.resolve("jni"),
+                fixture.contract,
+                RuntimeTransport.JNI,
+            )
+        assertEquals(
+            listOf(
+                "META-INF/natives/linux/x86_64/libcompukter_jni.so",
+                "META-INF/natives/windows/x86_64/compukter_jni.dll",
+            ),
+            stagedJni.map { it.resourcePath },
+        )
+        assertArrayEquals(Fixture.LINUX_JNI, fixture.staging.resolve("jni/${stagedJni[0].resourcePath}").readBytes())
+        assertArrayEquals(Fixture.WINDOWS_JNI, fixture.staging.resolve("jni/${stagedJni[1].resourcePath}").readBytes())
     }
 
     @Test
@@ -154,7 +177,7 @@ class RuntimeBundleSupportTest {
         fixture.checksums.writeText(fixture.checksums.toFile().readText().replaceFirst(Regex("[0-9a-f]{64}"), "0".repeat(64)))
 
         assertThrows(IllegalArgumentException::class.java) {
-            RuntimeBundleSupport.validateAndStage(fixture.bundles, fixture.staging, fixture.contract)
+            RuntimeBundleSupport.validateAndStage(fixture.bundles, fixture.staging, fixture.contract, RuntimeTransport.FFI)
         }
         assertEquals(false, Files.exists(fixture.staging))
     }
@@ -165,24 +188,34 @@ class RuntimeBundleSupportTest {
         val extraEntry = Fixture(temporary.resolve("extra-entry"), extraWindowsEntry = "../escape.dll")
 
         assertThrows(IllegalArgumentException::class.java) {
-            RuntimeBundleSupport.validateAndStage(wrongCommit.bundles, wrongCommit.staging, Fixture.CONTRACT)
+            RuntimeBundleSupport.validateAndStage(
+                wrongCommit.bundles,
+                wrongCommit.staging,
+                Fixture.CONTRACT,
+                RuntimeTransport.FFI,
+            )
         }
         assertThrows(IllegalArgumentException::class.java) {
-            RuntimeBundleSupport.validateAndStage(extraEntry.bundles, extraEntry.staging, extraEntry.contract)
+            RuntimeBundleSupport.validateAndStage(
+                extraEntry.bundles,
+                extraEntry.staging,
+                extraEntry.contract,
+                RuntimeTransport.FFI,
+            )
         }
     }
 
     @Test
     fun rejectsMissingInputsAndEmptyNativePayloads() {
         val missing = Fixture(temporary.resolve("missing"))
-        val empty = Fixture(temporary.resolve("empty"), linuxNative = byteArrayOf())
+        val empty = Fixture(temporary.resolve("empty"), linuxJni = byteArrayOf())
         Files.delete(missing.checksums)
 
         assertThrows(Exception::class.java) {
-            RuntimeBundleSupport.validateAndStage(missing.bundles, missing.staging, missing.contract)
+            RuntimeBundleSupport.validateAndStage(missing.bundles, missing.staging, missing.contract, RuntimeTransport.JNI)
         }
         assertThrows(IllegalArgumentException::class.java) {
-            RuntimeBundleSupport.validateAndStage(empty.bundles, empty.staging, empty.contract)
+            RuntimeBundleSupport.validateAndStage(empty.bundles, empty.staging, empty.contract, RuntimeTransport.FFI)
         }
     }
 
@@ -190,7 +223,7 @@ class RuntimeBundleSupportTest {
         root: Path,
         vmCommit: String = COMMIT,
         extraWindowsEntry: String? = null,
-        linuxNative: ByteArray = LINUX_NATIVE,
+        linuxJni: ByteArray = LINUX_JNI,
     ) {
         val bundles: Path = root.resolve("bundles")
         val staging: Path = root.resolve("staging")
@@ -201,10 +234,27 @@ class RuntimeBundleSupportTest {
             Files.createDirectories(bundles)
             val linux = bundles.resolve("compukter-runtime-0.10.0-linux-x86_64.tar.gz")
             val windows = bundles.resolve("compukter-runtime-0.10.0-windows-x86_64.zip")
-            writeTar(linux, entries("x86_64-unknown-linux-gnu", "libcompukter_ffi.so", linuxNative, vmCommit))
+            writeTar(
+                linux,
+                entries(
+                    "x86_64-unknown-linux-gnu",
+                    "libcompukter_ffi.so",
+                    "libcompukter_jni.so",
+                    LINUX_FFI,
+                    linuxJni,
+                    vmCommit,
+                ),
+            )
             writeZip(
                 windows,
-                entries("x86_64-pc-windows-msvc", "compukter_ffi.dll", WINDOWS_NATIVE, vmCommit) +
+                entries(
+                    "x86_64-pc-windows-msvc",
+                    "compukter_ffi.dll",
+                    "compukter_jni.dll",
+                    WINDOWS_FFI,
+                    WINDOWS_JNI,
+                    vmCommit,
+                ) +
                     listOfNotNull(extraWindowsEntry?.let { it to byteArrayOf(1) }),
             )
             checksums.writeText(
@@ -213,18 +263,34 @@ class RuntimeBundleSupportTest {
             )
         }
 
-        private fun entries(target: String, filename: String, native: ByteArray, vmCommit: String): List<Pair<String, ByteArray>> =
+        private fun entries(
+            target: String,
+            ffiFilename: String,
+            jniFilename: String,
+            ffiNative: ByteArray,
+            jniNative: ByteArray,
+            vmCommit: String,
+        ): List<Pair<String, ByteArray>> =
             listOf(
-                "native/$filename" to native,
-                "manifest.json" to manifest(target, filename, native, vmCommit).encodeToByteArray(),
+                "native/$ffiFilename" to ffiNative,
+                "native/$jniFilename" to jniNative,
+                "manifest.json" to
+                    manifest(target, ffiFilename, jniFilename, ffiNative, jniNative, vmCommit).encodeToByteArray(),
                 "LICENSE.txt" to "Apache-2.0\n".encodeToByteArray(),
                 "NOTICE.txt" to "Compukter Runtime\n".encodeToByteArray(),
             )
 
-        private fun manifest(target: String, filename: String, native: ByteArray, vmCommit: String): String =
+        private fun manifest(
+            target: String,
+            ffiFilename: String,
+            jniFilename: String,
+            ffiNative: ByteArray,
+            jniNative: ByteArray,
+            vmCommit: String,
+        ): String =
             """
             {
-              "schema": 1,
+              "schema": 2,
               "runtime_version": "0.10.0",
               "release_tag": "v0.10.0",
               "vm_commit": "$vmCommit",
@@ -237,9 +303,18 @@ class RuntimeBundleSupportTest {
               },
               "rustc": "rustc 1.98.0",
               "target": "$target",
-              "filename": "$filename",
-              "size": ${native.size},
-              "sha256": "${sha256(native)}",
+              "libraries": {
+                "ffi": {
+                  "filename": "$ffiFilename",
+                  "size": ${ffiNative.size},
+                  "sha256": "${sha256(ffiNative)}"
+                },
+                "jni": {
+                  "filename": "$jniFilename",
+                  "size": ${jniNative.size},
+                  "sha256": "${sha256(jniNative)}"
+                }
+              },
               "profile": "release"
             }
             """.trimIndent() + "\n"
@@ -274,8 +349,10 @@ class RuntimeBundleSupportTest {
 
         companion object {
             const val COMMIT = "0123456789abcdef0123456789abcdef01234567"
-            val LINUX_NATIVE = "linux-native".encodeToByteArray()
-            val WINDOWS_NATIVE = "windows-native".encodeToByteArray()
+            val LINUX_FFI = "linux-ffi".encodeToByteArray()
+            val LINUX_JNI = "linux-jni".encodeToByteArray()
+            val WINDOWS_FFI = "windows-ffi".encodeToByteArray()
+            val WINDOWS_JNI = "windows-jni".encodeToByteArray()
             val CONTRACT =
                 RuntimeBundleContract(
                     runtimeVersion = "0.10.0",

@@ -214,7 +214,7 @@ val nativeResourcePath = "META-INF/natives/$nativeOs/$nativeArch/$nativeFilename
 val releaseRuntimeMode =
     providers.gradleProperty("compukterRuntimeBundleDir").isPresent ||
         requestsUniversalReleaseBuild(gradle.startParameter.taskNames)
-val expectedPackagedNativeResources = expectedNativeResources(releaseRuntimeMode, nativeResourcePath)
+val expectedPackagedNativeResources = expectedNativeResources(releaseRuntimeMode, nativeResourcePath, RuntimeTransport.FFI)
 val productionJar = tasks.named<ShadowJar>("shadowJar")
 val verifyPackagedCompukterFfi =
     tasks.register("verifyPackagedCompukterFfi") {

@@ -17,6 +17,7 @@
  */
 
 import net.fabricmc.loom.task.RemapJarTask
+import java.util.Locale
 import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
@@ -48,6 +49,31 @@ dependencies {
 
 val productionJar = tasks.named<RemapJarTask>("remapJar")
 val expectedMetadata = readVersionedModProperties()
+val nativeOs =
+    when {
+        System.getProperty("os.name").trim().lowercase(Locale.ROOT).startsWith("linux") -> "linux"
+        System.getProperty("os.name").trim().lowercase(Locale.ROOT).startsWith("windows") -> "windows"
+        System.getProperty("os.name").trim().lowercase(Locale.ROOT).startsWith("mac") -> "macos"
+        else -> error("unsupported native build operating system: ${System.getProperty("os.name")}")
+    }
+val nativeArch =
+    when (System.getProperty("os.arch").trim().lowercase(Locale.ROOT)) {
+        "amd64", "x86_64" -> "x86_64"
+        "arm64", "aarch64" -> "aarch64"
+        else -> error("unsupported native build architecture: ${System.getProperty("os.arch")}")
+    }
+val nativeFilename =
+    when (nativeOs) {
+        "linux" -> "libcompukter_jni.so"
+        "windows" -> "compukter_jni.dll"
+        "macos" -> "libcompukter_jni.dylib"
+        else -> error("unreachable native build operating system: $nativeOs")
+    }
+val nativeResourcePath = "META-INF/natives/$nativeOs/$nativeArch/$nativeFilename"
+val releaseRuntimeMode =
+    providers.gradleProperty("compukterRuntimeBundleDir").isPresent ||
+        requestsUniversalReleaseBuild(gradle.startParameter.taskNames)
+val expectedPackagedNativeResources = expectedNativeResources(releaseRuntimeMode, nativeResourcePath, RuntimeTransport.JNI)
 val verifyProductionJar =
     tasks.register("verifyProductionJar") {
         group = "verification"
@@ -86,9 +112,8 @@ val verifyProductionJar =
                 }
             }
             check(entries.size == entries.toSet().size) { "duplicate archive entries found in ${archive.name}" }
-            check(entries.any { it.matches(Regex("META-INF/natives/[^/]+/[^/]+/(lib)?compukter_jni\\.(so|dll|dylib)")) }) {
-                "the Java 21 JNI runtime is missing from ${archive.name}"
-            }
+            val nativeEntries = entries.filter { it.startsWith("META-INF/natives/") }
+            validateNativeResources(nativeEntries, expectedPackagedNativeResources)
             check(entries.none { "compukter_ffi" in it || it.endsWith("/FfmRuntimeBackend.class") }) {
                 "Java 25 FFM runtime content leaked into ${archive.name}"
             }
@@ -147,4 +172,46 @@ tasks.named("check") {
 
 tasks.named("buildProductionUniversalJar") {
     dependsOn(verifyProductionJar)
+}
+
+fun captureReleaseGit(vararg arguments: String): String {
+    val process =
+        ProcessBuilder("git", *arguments)
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .start()
+    val output = process.inputStream.bufferedReader().readText().trimEnd()
+    check(process.waitFor() == 0) { "git ${arguments.toList()} failed: $output" }
+    return output
+}
+
+val verifyUniversalReleaseState =
+    tasks.register("verifyUniversalReleaseState") {
+        description = "Requires the exact clean tagged state used to assemble a universal 1.21.1 release."
+        group = "verification"
+        doLast {
+            validateUniversalReleaseState(
+                UniversalReleaseState(
+                    version = rootProject.version.toString(),
+                    runtimeBundlesConfigured = releaseRuntimeMode,
+                    headTags =
+                        captureReleaseGit("tag", "--points-at", "HEAD")
+                            .lineSequence()
+                            .filter(String::isNotBlank)
+                            .toSet(),
+                    worktreeStatus = captureReleaseGit("status", "--porcelain"),
+                    submoduleStatus = captureReleaseGit("submodule", "status", "--recursive"),
+                ),
+            )
+        }
+    }
+
+tasks.register("buildReleaseUniversalJar") {
+    description = "Builds and verifies the clean tagged NeoForge 1.21.1 release with Linux and Windows JNI natives."
+    group = "build"
+    dependsOn(
+        verifyUniversalReleaseState,
+        verifyProductionJar,
+        ":native-runtime-jni:packagedNativeIntegrationTest",
+    )
 }

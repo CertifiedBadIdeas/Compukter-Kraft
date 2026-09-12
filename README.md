@@ -36,7 +36,7 @@ published as the [Compukters documentation site](https://certifiedbadideas.githu
 See [Redstone GPIO](docs/REDSTONE.md) for local-side input waits, persistent
 weak/direct outputs, and tick-boundary behavior.
 See [Verification](docs/VERIFICATION.md) for focused checks, complete local
-verification, and the separate tagged universal release gate.
+verification, and the separate tagged dual-artifact release gate.
 See the [in-world VM benchmark guide](docs/VM-BENCHMARK.md) for profiling the
 server-tick cost of multiple simultaneously runnable computers.
 User-visible changes are recorded in the continuous [Changelog](docs/CHANGELOG.md),
@@ -70,12 +70,13 @@ build-script, and a curated JVM test slice. Before treating the current checkout
 as fully verified, run `./gradlew-sandbox-dev-parallel verifyLocalFull`; it covers
 every Gradle subproject check, all registered Kotlin-to-VM conformance scenarios,
 Rust and FFM checks, runtime integrations, the real GameTest server, and the
-production artifact for the locally configured native platform.
+production artifacts for the locally configured native platform.
 
 A distributable multi-platform release has a stricter, separate gate:
-`:v26_1-neoforge:buildReleaseUniversalJar` requires a clean exact-tag checkout
-and configured Linux and Windows native runtime bundles. A successful local full
-verification does not by itself establish release readiness.
+`buildReleaseArtifacts` requires a clean exact-tag checkout and the pinned Linux
+and Windows Runtime bundles, then assembles and verifies both the 26.1.2 FFM and
+1.21.1 JNI artifacts. A successful local full verification does not by itself
+establish release readiness.
 
 ## Runtime boundary
 

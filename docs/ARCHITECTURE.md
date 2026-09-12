@@ -150,6 +150,12 @@ host counts Guest and maintenance budgets only when it actually invokes native a
 counters saturate explicitly instead of overflowing. These values describe VM work and granted capacity, not host CPU
 percentage. No sampling loop, history buffer, heap-content scan, or unsolicited FFM call runs for unobserved computers.
 
+Published Runtime 0.12 platform bundles use manifest schema 2 and contain the FFI and JNI native libraries for one
+operating-system target under a single Runtime, VM commit, and C ABI identity. Bundle validation covers both transport
+entries before staging; the Java 25 runtime module packages only FFI, while the Java 21 runtime module packages only
+JNI. The two Minecraft release artifacts therefore share one pinned native release without carrying an unusable
+transport.
+
 The Minecraft carrier owns exactly one actor endpoint and submits at most one ordinary advance or host continuation
 for each server tick. Rust starts
 `/rom/boot`, compiled from `system/programs/boot.kt`; boot delegates to `/rom/shell`, compiled from

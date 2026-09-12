@@ -63,6 +63,11 @@ data class StagedRuntimeNative(
     val sha256: String,
 )
 
+enum class RuntimeTransport(val id: String) {
+    FFI("ffi"),
+    JNI("jni"),
+}
+
 enum class RuntimeBundleDownloadResult {
     CACHED,
     DOWNLOADED,
@@ -182,7 +187,7 @@ object RuntimeBundleDownloadSupport {
 object RuntimeBundleSupport {
     private const val MAXIMUM_NATIVE_BYTES = 128L * 1024 * 1024
     private const val MAXIMUM_METADATA_BYTES = 1024L * 1024
-    private const val MAXIMUM_ARCHIVE_BYTES = MAXIMUM_NATIVE_BYTES + 4 * MAXIMUM_METADATA_BYTES
+    private const val MAXIMUM_ARCHIVE_BYTES = 2 * MAXIMUM_NATIVE_BYTES + 3 * MAXIMUM_METADATA_BYTES
     private val json = Json { ignoreUnknownKeys = false }
     private val manifestKeys =
         setOf(
@@ -194,16 +199,16 @@ object RuntimeBundleSupport {
             "formats",
             "rustc",
             "target",
-            "filename",
-            "size",
-            "sha256",
+            "libraries",
             "profile",
         )
+    private val libraryKeys = setOf("filename", "size", "sha256")
 
     fun validateAndStage(
         bundleDirectory: Path,
         stagingDirectory: Path,
         contract: RuntimeBundleContract,
+        transport: RuntimeTransport,
     ): List<StagedRuntimeNative> {
         validateContract(contract)
         require(!Files.exists(stagingDirectory, LinkOption.NOFOLLOW_LINKS)) {
@@ -222,35 +227,34 @@ object RuntimeBundleSupport {
                 validateArchive(archive, platform, contract)
             }
 
-        validated.forEach { native ->
+        val selected = validated.map { platform -> platform.getValue(transport) }
+        selected.forEach { native ->
             val output = stagingDirectory.resolve(native.result.resourcePath)
             Files.createDirectories(output.parent)
             Files.write(output, native.bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
         }
-        return validated.map(ValidatedNative::result)
+        return selected.map(ValidatedNative::result)
     }
 
     private fun validateArchive(
         archive: Path,
         platform: Platform,
         contract: RuntimeBundleContract,
-    ): ValidatedNative {
+    ): Map<RuntimeTransport, ValidatedNative> {
         val contents =
             when (platform.archiveKind) {
                 ArchiveKind.TAR_GZ -> readTarGz(archive)
                 ArchiveKind.ZIP -> readZip(archive)
             }
-        val nativeEntry = "native/${platform.filename}"
-        require(contents.keys == setOf(nativeEntry, "manifest.json", "LICENSE.txt", "NOTICE.txt")) {
+        val nativeEntries = platform.libraries.values.map { library -> "native/${library.filename}" }.toSet()
+        require(contents.keys == nativeEntries + setOf("manifest.json", "LICENSE.txt", "NOTICE.txt")) {
             "runtime bundle entries do not match the fixed layout"
         }
         require(contents.getValue("LICENSE.txt").isNotEmpty()) { "runtime license must not be empty" }
         require(contents.getValue("NOTICE.txt").isNotEmpty()) { "runtime notice must not be empty" }
-        val native = contents.getValue(nativeEntry)
-        require(native.isNotEmpty()) { "runtime native payload must not be empty" }
         val manifest = parseManifest(contents.getValue("manifest.json"))
-        require(manifest.keys == manifestKeys) { "runtime manifest fields do not match schema 1" }
-        require(manifest.int("schema") == 1) { "runtime manifest schema must be 1" }
+        require(manifest.keys == manifestKeys) { "runtime manifest fields do not match schema 2" }
+        require(manifest.int("schema") == 2) { "runtime manifest schema must be 2" }
         require(manifest.string("runtime_version") == contract.runtimeVersion) { "runtime version mismatch" }
         require(manifest.string("release_tag") == contract.releaseTag) { "runtime release tag mismatch" }
         require(manifest.string("vm_commit") == contract.vmCommit) { "runtime VM commit mismatch" }
@@ -258,20 +262,33 @@ object RuntimeBundleSupport {
         require(manifest.string("profile") == "release") { "runtime profile must be release" }
         require(manifest.string("rustc").isNotEmpty()) { "runtime rustc identity must not be empty" }
         require(manifest.string("target") == platform.target) { "runtime target mismatch" }
-        require(manifest.string("filename") == platform.filename) { "runtime filename mismatch" }
-        require(manifest.long("size") == native.size.toLong()) { "runtime native size mismatch" }
-        val digest = sha256(native)
-        require(manifest.string("sha256") == digest) { "runtime native SHA-256 mismatch" }
+        val libraries = manifest.getValue("libraries").jsonObject
+        require(libraries.keys == RuntimeTransport.entries.map(RuntimeTransport::id).toSet()) {
+            "runtime manifest must contain exactly the FFI and JNI libraries"
+        }
+        val validated =
+            RuntimeTransport.entries.associateWith { transport ->
+                val expected = platform.libraries.getValue(transport)
+                val library = libraries.getValue(transport.id).jsonObject
+                require(library.keys == libraryKeys) { "runtime library fields do not match schema 2" }
+                require(library.string("filename") == expected.filename) { "runtime native filename mismatch" }
+                val native = contents.getValue("native/${expected.filename}")
+                require(native.isNotEmpty()) { "runtime native payload must not be empty" }
+                require(library.long("size") == native.size.toLong()) { "runtime native size mismatch" }
+                val digest = sha256(native)
+                require(library.string("sha256") == digest) { "runtime native SHA-256 mismatch" }
+                ValidatedNative(
+                    StagedRuntimeNative(platform.target, expected.resourcePath, native.size.toLong(), digest),
+                    native,
+                )
+            }
         val formats =
             manifest.getValue("formats").jsonObject.mapValues { (_, value) ->
                 require(!value.jsonPrimitive.isString) { "runtime format version must be an integer" }
                 value.jsonPrimitive.int
             }
         require(formats == contract.formats) { "runtime format versions mismatch" }
-        return ValidatedNative(
-            StagedRuntimeNative(platform.target, platform.resourcePath, native.size.toLong(), digest),
-            native,
-        )
+        return validated
     }
 
     private fun readChecksums(path: Path, expectedNames: List<String>): Map<String, String> {
@@ -321,7 +338,7 @@ object RuntimeBundleSupport {
             require(entry.size < 0 || entry.size <= maximum) { "runtime archive entry exceeds its byte limit" }
             val bytes = readBounded(archive, maximum)
             require(contents.put(entry.name, bytes) == null) { "runtime archive contains duplicate entries" }
-            require(contents.size <= 4) { "runtime archive contains too many entries" }
+            require(contents.size <= 5) { "runtime archive contains too many entries" }
         }
         return contents
     }
@@ -372,16 +389,38 @@ object RuntimeBundleSupport {
         listOf(
             Platform(
                 target = "x86_64-unknown-linux-gnu",
-                filename = "libcompukter_ffi.so",
                 archiveName = "compukter-runtime-$version-linux-x86_64.tar.gz",
-                resourcePath = "META-INF/natives/linux/x86_64/libcompukter_ffi.so",
+                libraries =
+                    mapOf(
+                        RuntimeTransport.FFI to
+                            PlatformLibrary(
+                                "libcompukter_ffi.so",
+                                "META-INF/natives/linux/x86_64/libcompukter_ffi.so",
+                            ),
+                        RuntimeTransport.JNI to
+                            PlatformLibrary(
+                                "libcompukter_jni.so",
+                                "META-INF/natives/linux/x86_64/libcompukter_jni.so",
+                            ),
+                    ),
                 archiveKind = ArchiveKind.TAR_GZ,
             ),
             Platform(
                 target = "x86_64-pc-windows-msvc",
-                filename = "compukter_ffi.dll",
                 archiveName = "compukter-runtime-$version-windows-x86_64.zip",
-                resourcePath = "META-INF/natives/windows/x86_64/compukter_ffi.dll",
+                libraries =
+                    mapOf(
+                        RuntimeTransport.FFI to
+                            PlatformLibrary(
+                                "compukter_ffi.dll",
+                                "META-INF/natives/windows/x86_64/compukter_ffi.dll",
+                            ),
+                        RuntimeTransport.JNI to
+                            PlatformLibrary(
+                                "compukter_jni.dll",
+                                "META-INF/natives/windows/x86_64/compukter_jni.dll",
+                            ),
+                    ),
                 archiveKind = ArchiveKind.ZIP,
             ),
         )
@@ -430,10 +469,14 @@ object RuntimeBundleSupport {
 
     private data class Platform(
         val target: String,
-        val filename: String,
         val archiveName: String,
-        val resourcePath: String,
+        val libraries: Map<RuntimeTransport, PlatformLibrary>,
         val archiveKind: ArchiveKind,
+    )
+
+    private data class PlatformLibrary(
+        val filename: String,
+        val resourcePath: String,
     )
 
     private data class ValidatedNative(val result: StagedRuntimeNative, val bytes: ByteArray)

@@ -151,18 +151,26 @@ class ReleaseSupportTest {
         val linux = "META-INF/natives/linux/x86_64/libcompukter_ffi.so"
         val windows = "META-INF/natives/windows/x86_64/compukter_ffi.dll"
 
-        assertEquals(listOf(linux), expectedNativeResources(false, linux))
-        assertEquals(listOf(linux, windows), expectedNativeResources(true, linux))
-        validateNativeResources(listOf(windows, linux), expectedNativeResources(true, linux))
+        assertEquals(listOf(linux), expectedNativeResources(false, linux, RuntimeTransport.FFI))
+        assertEquals(listOf(linux, windows), expectedNativeResources(true, linux, RuntimeTransport.FFI))
+        validateNativeResources(listOf(windows, linux), expectedNativeResources(true, linux, RuntimeTransport.FFI))
         assertThrows(IllegalArgumentException::class.java) {
-            validateNativeResources(listOf(linux), expectedNativeResources(true, linux))
+            validateNativeResources(listOf(linux), expectedNativeResources(true, linux, RuntimeTransport.FFI))
         }
+        assertEquals(
+            listOf(
+                "META-INF/natives/linux/x86_64/libcompukter_jni.so",
+                "META-INF/natives/windows/x86_64/compukter_jni.dll",
+            ),
+            expectedNativeResources(true, "ignored", RuntimeTransport.JNI),
+        )
     }
 
     @Test
     fun onlyTheExplicitReleaseAssemblyTaskSelectsUniversalRuntimeMode() {
         assertEquals(true, requestsUniversalReleaseBuild(listOf(":v26_1-neoforge:buildReleaseUniversalJar")))
         assertEquals(true, requestsUniversalReleaseBuild(listOf("buildReleaseUniversalJar")))
+        assertEquals(true, requestsUniversalReleaseBuild(listOf("buildReleaseArtifacts")))
         assertEquals(false, requestsUniversalReleaseBuild(listOf(":v26_1-neoforge:buildProductionUniversalJar")))
         assertEquals(false, requestsUniversalReleaseBuild(listOf("release")))
     }

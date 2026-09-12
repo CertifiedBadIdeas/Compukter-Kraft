@@ -100,18 +100,30 @@ fun validateBumpAfterReleaseState(state: BumpAfterReleaseState): String {
 fun expectedNativeResources(
     releaseMode: Boolean,
     developmentResource: String,
+    transport: RuntimeTransport,
 ): List<String> =
     if (releaseMode) {
-        listOf(
-            "META-INF/natives/linux/x86_64/libcompukter_ffi.so",
-            "META-INF/natives/windows/x86_64/compukter_ffi.dll",
-        )
+        when (transport) {
+            RuntimeTransport.FFI ->
+                listOf(
+                    "META-INF/natives/linux/x86_64/libcompukter_ffi.so",
+                    "META-INF/natives/windows/x86_64/compukter_ffi.dll",
+                )
+            RuntimeTransport.JNI ->
+                listOf(
+                    "META-INF/natives/linux/x86_64/libcompukter_jni.so",
+                    "META-INF/natives/windows/x86_64/compukter_jni.dll",
+                )
+        }
     } else {
         listOf(developmentResource)
     }
 
 fun requestsUniversalReleaseBuild(taskNames: List<String>): Boolean =
-    taskNames.any { it.substringAfterLast(':') == "buildReleaseUniversalJar" }
+    taskNames.any {
+        it.substringAfterLast(':') == "buildReleaseUniversalJar" ||
+            it.substringAfterLast(':') == "buildReleaseArtifacts"
+    }
 
 fun validateNativeResources(
     actual: List<String>,

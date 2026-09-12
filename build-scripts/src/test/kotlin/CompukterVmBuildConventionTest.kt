@@ -51,19 +51,21 @@ class CompukterVmBuildConventionTest {
 
     @Test
     fun releaseRuntimeBundlesDownloadByDefaultAndRetainAnOfflineOverride() {
-        val nativeBuildScript = repoRoot().resolve("modules/common/native-runtime/ffm/build.gradle.kts").readText()
+        val rootBuildScript = rootBuildSource().readText()
+        val ffmBuildScript = repoRoot().resolve("modules/common/native-runtime/ffm/build.gradle.kts").readText()
+        val jniBuildScript = repoRoot().resolve("modules/common/native-runtime/jni/build.gradle.kts").readText()
         val support = repoRoot().resolve("build-scripts/src/main/kotlin/RuntimeBundleSupport.kt").readText()
 
-        assertTrue(nativeBuildScript.contains("compukterRuntimeBundleDir"))
-        assertTrue(nativeBuildScript.contains("downloadCompukterRuntimeBundles"))
-        assertTrue(nativeBuildScript.contains("RuntimeBundleDownloadSupport.download"))
-        assertTrue(nativeBuildScript.contains("preparePackagedReleaseRuntime"))
-        assertTrue(nativeBuildScript.contains("RuntimeBundleSupport.validateAndStage"))
-        assertTrue(
-            nativeBuildScript.contains(
-                "if (releaseRuntimeMode) preparePackagedReleaseRuntime else preparePackagedCompukterFfi",
-            ),
-        )
+        assertTrue(rootBuildScript.contains("tasks.register(\"downloadCompukterRuntimeBundles\")"))
+        assertTrue(rootBuildScript.contains("RuntimeBundleDownloadSupport.download"))
+        listOf(ffmBuildScript, jniBuildScript).forEach { nativeBuildScript ->
+            assertTrue(nativeBuildScript.contains("compukterRuntimeBundleDir"))
+            assertTrue(nativeBuildScript.contains("rootProject.tasks.named(\"downloadCompukterRuntimeBundles\")"))
+            assertTrue(nativeBuildScript.contains("preparePackagedReleaseRuntime"))
+            assertTrue(nativeBuildScript.contains("RuntimeBundleSupport.validateAndStage"))
+        }
+        assertTrue(ffmBuildScript.contains("RuntimeTransport.FFI"))
+        assertTrue(jniBuildScript.contains("RuntimeTransport.JNI"))
         assertTrue(support.contains("HttpClient"))
         assertTrue(support.contains("Redirect.NORMAL"))
     }

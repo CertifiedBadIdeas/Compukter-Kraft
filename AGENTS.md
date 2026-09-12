@@ -41,7 +41,7 @@ VM code lives in `host/compukter-vm`. Documentation is in
 - `./gradlew-sandbox-dev-parallel-summary verifyLocalFull` verifies the complete current checkout while keeping its
   complete output in a log: every Gradle subproject
   `check`, all registered Kotlin-to-VM conformance scenarios, host Rust, FFM, and JNI checks, runtime integrations, the real
-  NeoForge GameTest server, and the production artifact packaged for the locally configured native platform.
+  NeoForge GameTest server, and both production artifacts packaged for the locally configured native platform.
 - `./gradlew build` builds all Gradle modules and runs standard checks.
 - `./gradlew test` runs JVM unit tests across Kotlin modules.
 - `./gradlew :core:test`, `./gradlew :native-runtime-api:test`, `./gradlew :native-runtime-ffm:verifyNativeRuntime`, or
@@ -49,9 +49,9 @@ VM code lives in `host/compukter-vm`. Documentation is in
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runClient` launches the NeoForge dev client.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runGameTestServer` runs the real NeoForge GameTest server.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildProductionUniversalJar` builds the official-name production mod jar without a remap stage.
-- `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildReleaseUniversalJar` is the separate tagged release gate. It
-  requires a clean exact-tag checkout and configured Linux and Windows native runtime bundles; local full verification
-  does not claim this release state.
+- `./gradlew-sandbox-dev-parallel-summary buildReleaseArtifacts` is the separate tagged release gate. It requires a
+  clean exact-tag checkout and the pinned Linux and Windows dual-transport Runtime bundles, then verifies both the
+  26.1.2 FFM and 1.21.1 JNI artifacts; local full verification does not claim this release state.
 - `cargo test --manifest-path host/compukter-vm/Cargo.toml --locked --offline` runs the managed Compukter VM tests.
 
 ## Coding Style & Naming Conventions

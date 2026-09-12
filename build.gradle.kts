@@ -41,6 +41,36 @@ val compukterVmLock = compukterVmRoot.resolve("Cargo.lock")
 
 registerCompukterVmReleaseTasks(compukterVmRoot)
 
+val releaseRuntimeBundleDirectory = providers.gradleProperty("compukterRuntimeBundleDir").map(rootProject::file)
+val releaseRuntimeVmCommit =
+    providers.exec {
+        workingDir(compukterVmRoot)
+        commandLine("git", "rev-parse", "HEAD")
+    }.standardOutput.asText.map(String::trim)
+val releaseRuntimeContract = releaseRuntimeVmCommit.map(::currentRuntimeBundleContract)
+val downloadedReleaseRuntimeBundleDirectory =
+    providers.provider {
+        gradle.gradleUserHomeDir.resolve("caches/compukters/runtime/${releaseRuntimeContract.get().runtimeVersion}")
+    }
+
+tasks.register("downloadCompukterRuntimeBundles") {
+    description = "Downloads the pinned Linux and Windows dual-transport Runtime release assets into the Gradle cache."
+    group = "build"
+    inputs.property("runtimeVersion", releaseRuntimeContract.map(RuntimeBundleContract::runtimeVersion))
+    inputs.property("runtimeReleaseTag", releaseRuntimeContract.map(RuntimeBundleContract::releaseTag))
+    outputs.dir(downloadedReleaseRuntimeBundleDirectory)
+    onlyIf { !releaseRuntimeBundleDirectory.isPresent }
+    doLast {
+        val contract = releaseRuntimeContract.get()
+        val result =
+            RuntimeBundleDownloadSupport.download(
+                downloadedReleaseRuntimeBundleDirectory.get().toPath(),
+                contract,
+            )
+        println("Runtime ${contract.runtimeVersion}: ${result.name.lowercase()} in ${downloadedReleaseRuntimeBundleDirectory.get()}")
+    }
+}
+
 val cleanWorkspace =
     tasks.register("cleanWorkspace") {
         description = "Deletes repo-local build and target outputs while preserving .toolchain."
@@ -678,4 +708,11 @@ tasks.register("verifyLocalFull") {
     dependsOn("checkCompukterVmRelease")
     dependsOn(":v1_21_1-neoforge:runGameTestServer")
     dependsOn(":v26_1-neoforge:runGameTestServer")
+}
+
+tasks.register("buildReleaseArtifacts") {
+    description = "Builds and verifies both clean tagged NeoForge release artifacts."
+    group = "build"
+    dependsOn(":v1_21_1-neoforge:buildReleaseUniversalJar")
+    dependsOn(":v26_1-neoforge:buildReleaseUniversalJar")
 }
