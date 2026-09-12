@@ -12,18 +12,17 @@
 
 package ru.lazyhat.compukters.impl.ide.target
 
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import ru.lazyhat.compukters.impl.terminal.TerminalReplica
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalModifier
 import java.util.UUID
 
-internal fun interface IdeTargetTerminalTransport {
-    fun send(payload: CustomPacketPayload)
+fun interface IdeTargetTerminalTransport {
+    fun send(command: IdeTerminalCommand)
 }
 
-internal sealed interface IdeTargetTerminalState {
+sealed interface IdeTargetTerminalState {
     data object Closed : IdeTargetTerminalState
 
     data class Opening(
@@ -48,7 +47,7 @@ internal sealed interface IdeTargetTerminalState {
     ) : IdeTargetTerminalState
 }
 
-internal class IdeTargetTerminalClient(
+class IdeTargetTerminalClient(
     private val transport: IdeTargetTerminalTransport,
 ) : AutoCloseable {
     private var target: IdeTargetReference? = null
@@ -76,28 +75,28 @@ internal class IdeTargetTerminalClient(
         }
     }
 
-    fun accept(payload: IdeTerminalOpenedPayload) {
+    fun accept(payload: IdeTerminalOpened) {
         val opening = current as? IdeTargetTerminalState.Opening ?: return
         if (payload.generation != opening.generation) return
         current = IdeTargetTerminalState.Active(payload.token, payload.machineId, TerminalReplica(payload.state))
     }
 
-    fun accept(payload: IdeTerminalFullPayload) {
+    fun accept(payload: IdeTerminalFull) {
         val session = session() ?: return
         if (payload.token != session.token || payload.machineId != session.machineId) return
         if (!session.replica.replace(payload.state)) return
         current = IdeTargetTerminalState.Active(session.token, session.machineId, session.replica)
     }
 
-    fun accept(payload: IdeTerminalDeltaPayload) {
+    fun accept(payload: IdeTerminalDelta) {
         val active = current as? IdeTargetTerminalState.Active ?: return
         if (payload.token != active.token || payload.machineId != active.machineId) return
         if (active.replica.apply(payload.delta)) return
         current = IdeTargetTerminalState.Resyncing(active.token, active.machineId, active.replica)
-        transport.send(IdeTerminalResyncPayload(active.token, active.machineId, active.replica.state.revision))
+        transport.send(IdeTerminalResync(active.token, active.machineId, active.replica.state.revision))
     }
 
-    fun accept(payload: IdeTerminalFailedPayload) {
+    fun accept(payload: IdeTerminalFailed) {
         when (val state = current) {
             is IdeTargetTerminalState.Opening -> {
                 if (payload.generation != state.generation || payload.token != null) return
@@ -126,13 +125,13 @@ internal class IdeTargetTerminalClient(
         modifiers: Set<TerminalModifier>,
     ): Boolean {
         val session = session() ?: return false
-        transport.send(IdeTerminalKeyPayload(session.token, session.machineId, key, action, modifiers))
+        transport.send(IdeTerminalKeyInput(session.token, session.machineId, key, action, modifiers))
         return true
     }
 
     fun sendText(text: String): Boolean {
         val session = session() ?: return false
-        transport.send(IdeTerminalTextPayload(session.token, session.machineId, text))
+        transport.send(IdeTerminalTextInput(session.token, session.machineId, text))
         return true
     }
 
@@ -151,11 +150,11 @@ internal class IdeTargetTerminalClient(
     private fun beginOpen(target: IdeTargetReference) {
         generation = Math.incrementExact(generation)
         current = IdeTargetTerminalState.Opening(generation)
-        transport.send(IdeTerminalOpenPayload(generation, target))
+        transport.send(IdeTerminalOpen(generation, target))
     }
 
     private fun releaseRemote() {
-        session()?.let { transport.send(IdeTerminalClosePayload(it.token)) }
+        session()?.let { transport.send(IdeTerminalClose(it.token)) }
     }
 
     private fun session(): SessionView? =

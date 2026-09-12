@@ -22,7 +22,6 @@ import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.components.events.GuiEventListener
 import net.minecraft.client.input.CharacterEvent
 import net.minecraft.client.input.KeyEvent
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import org.lwjgl.glfw.GLFW
 import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.ide.client.IdeClientLimits
@@ -36,8 +35,9 @@ import ru.lazyhat.compukters.ide.client.target.IdeTargetProfileId
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetReference
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalClient
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalTransport
-import ru.lazyhat.compukters.impl.ide.target.IdeTerminalKeyPayload
-import ru.lazyhat.compukters.impl.ide.target.IdeTerminalOpenedPayload
+import ru.lazyhat.compukters.impl.ide.target.IdeTerminalCommand
+import ru.lazyhat.compukters.impl.ide.target.IdeTerminalKeyInput
+import ru.lazyhat.compukters.impl.ide.target.IdeTerminalOpened
 import ru.lazyhat.compukters.impl.terminal.TerminalFontProfile
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalCell
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
@@ -62,10 +62,10 @@ class IdeScreenFocusTest {
         val input = IdeInputAdapter(commands::add, IdeClipboard { "" }, IdeClientLimits())
         overlay.setTarget(IdeTargetReference(IdeTargetId("target"), IdeTargetProfileId(Hash256.zero())))
         overlay.show()
-        terminal.accept(IdeTerminalOpenedPayload(1, TOKEN, 7, terminalState()))
+        terminal.accept(IdeTerminalOpened(1, TOKEN, 7, terminalState()))
 
         assertTrue(overlay.keyPressed(KeyEvent(GLFW.GLFW_KEY_S, 0, GLFW.GLFW_MOD_CONTROL), ""))
-        assertEquals(TerminalKey.S, (transport.sent.last() as IdeTerminalKeyPayload).key)
+        assertEquals(TerminalKey.S, (transport.sent.last() as IdeTerminalKeyInput).key)
         assertTrue(commands.isEmpty())
 
         overlay.focusLost()
@@ -80,7 +80,7 @@ class IdeScreenFocusTest {
         val overlay = IdeTerminalOverlayController(terminal)
         overlay.setTarget(IdeTargetReference(IdeTargetId("target"), IdeTargetProfileId(Hash256.zero())))
         overlay.show()
-        terminal.accept(IdeTerminalOpenedPayload(1, TOKEN, 7, terminalState()))
+        terminal.accept(IdeTerminalOpened(1, TOKEN, 7, terminalState()))
 
         assertTrue(overlay.keyPressed(KeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, 0), ""))
         assertTrue(overlay.charTyped(CharacterEvent('x'.code)))
@@ -180,10 +180,10 @@ class IdeScreenFocusTest {
     }
 
     private class RecordingTerminalTransport : IdeTargetTerminalTransport {
-        val sent = mutableListOf<CustomPacketPayload>()
+        val sent = mutableListOf<IdeTerminalCommand>()
 
-        override fun send(payload: CustomPacketPayload) {
-            sent += payload
+        override fun send(command: IdeTerminalCommand) {
+            sent += command
         }
     }
 

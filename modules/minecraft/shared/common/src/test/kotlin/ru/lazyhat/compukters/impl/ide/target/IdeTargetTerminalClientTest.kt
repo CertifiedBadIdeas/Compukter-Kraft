@@ -12,7 +12,6 @@
 
 package ru.lazyhat.compukters.impl.ide.target
 
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.ide.client.target.IdeTargetFailureKind
 import ru.lazyhat.compukters.ide.client.target.IdeTargetId
@@ -37,9 +36,9 @@ class IdeTargetTerminalClientTest {
         assertIs<IdeTargetTerminalState.Closed>(client.state())
 
         client.setVisible(true)
-        assertEquals(IdeTerminalOpenPayload(1, TARGET), transport.sent.single())
+        assertEquals(IdeTerminalOpen(1, TARGET), transport.sent.single())
         assertIs<IdeTargetTerminalState.Opening>(client.state())
-        client.accept(IdeTerminalOpenedPayload(1, TOKEN, 7, state(4)))
+        client.accept(IdeTerminalOpened(1, TOKEN, 7, state(4)))
         client.setVisible(false)
 
         val active = assertIs<IdeTargetTerminalState.Active>(client.state())
@@ -51,16 +50,16 @@ class IdeTargetTerminalClientTest {
     fun `revision gap requests one resync and full state resumes deltas`() {
         val transport = RecordingTransport()
         val client = activeClient(transport)
-        val invalid = IdeTerminalDeltaPayload(TOKEN, 7, TerminalUpdate.Delta(2, 5, listOf(TerminalChange.Reset)))
+        val invalid = IdeTerminalDelta(TOKEN, 7, TerminalUpdate.Delta(2, 5, listOf(TerminalChange.Reset)))
 
         client.accept(invalid)
         client.accept(invalid)
 
         assertIs<IdeTargetTerminalState.Resyncing>(client.state())
-        assertEquals(IdeTerminalResyncPayload(TOKEN, 7, 4), transport.sent.last())
+        assertEquals(IdeTerminalResync(TOKEN, 7, 4), transport.sent.last())
         assertEquals(2, transport.sent.size)
-        client.accept(IdeTerminalFullPayload(TOKEN, 7, state(6)))
-        client.accept(IdeTerminalDeltaPayload(TOKEN, 7, TerminalUpdate.Delta(6, 7, emptyList())))
+        client.accept(IdeTerminalFull(TOKEN, 7, state(6)))
+        client.accept(IdeTerminalDelta(TOKEN, 7, TerminalUpdate.Delta(6, 7, emptyList())))
         assertEquals(7, assertIs<IdeTargetTerminalState.Active>(client.state()).replica.state.revision)
     }
 
@@ -71,11 +70,11 @@ class IdeTargetTerminalClientTest {
         client.setTarget(TARGET)
         client.setVisible(true)
 
-        client.accept(IdeTerminalOpenedPayload(2, TOKEN, 7, state(9)))
+        client.accept(IdeTerminalOpened(2, TOKEN, 7, state(9)))
         assertIs<IdeTargetTerminalState.Opening>(client.state())
-        client.accept(IdeTerminalOpenedPayload(1, TOKEN, 7, state(4)))
-        client.accept(IdeTerminalFullPayload(OTHER_TOKEN, 7, state(9)))
-        client.accept(IdeTerminalFullPayload(TOKEN, 8, state(9)))
+        client.accept(IdeTerminalOpened(1, TOKEN, 7, state(4)))
+        client.accept(IdeTerminalFull(OTHER_TOKEN, 7, state(9)))
+        client.accept(IdeTerminalFull(TOKEN, 8, state(9)))
 
         assertEquals(4, assertIs<IdeTargetTerminalState.Active>(client.state()).replica.state.revision)
     }
@@ -86,16 +85,16 @@ class IdeTargetTerminalClientTest {
         val client = IdeTargetTerminalClient(transport)
         client.setTarget(TARGET)
         client.setVisible(true)
-        client.accept(IdeTerminalFailedPayload(1, null, IdeTargetFailureKind.TargetLost, "lost", true))
+        client.accept(IdeTerminalFailed(1, null, IdeTargetFailureKind.TargetLost, "lost", true))
         assertIs<IdeTargetTerminalState.Failed>(client.state())
 
         client.setVisible(true)
-        assertEquals(IdeTerminalOpenPayload(2, TARGET), transport.sent.last())
-        client.accept(IdeTerminalOpenedPayload(2, TOKEN, 7, state(4)))
+        assertEquals(IdeTerminalOpen(2, TARGET), transport.sent.last())
+        client.accept(IdeTerminalOpened(2, TOKEN, 7, state(4)))
         client.setTarget(OTHER_TARGET)
 
-        assertEquals(IdeTerminalClosePayload(TOKEN), transport.sent[2])
-        assertEquals(IdeTerminalOpenPayload(3, OTHER_TARGET), transport.sent[3])
+        assertEquals(IdeTerminalClose(TOKEN), transport.sent[2])
+        assertEquals(IdeTerminalOpen(3, OTHER_TARGET), transport.sent[3])
     }
 
     @Test
@@ -103,7 +102,7 @@ class IdeTargetTerminalClientTest {
         val transport = RecordingTransport()
         val client = activeClient(transport)
         client.setTarget(null)
-        assertEquals(IdeTerminalClosePayload(TOKEN), transport.sent.last())
+        assertEquals(IdeTerminalClose(TOKEN), transport.sent.last())
         assertIs<IdeTargetTerminalState.Closed>(client.state())
 
         client.close()
@@ -112,7 +111,7 @@ class IdeTargetTerminalClientTest {
         val disconnected = activeClient(transport)
         disconnected.connectionLost()
         assertIs<IdeTargetTerminalState.Closed>(disconnected.state())
-        assertTrue(transport.sent.last() !is IdeTerminalClosePayload)
+        assertTrue(transport.sent.last() !is IdeTerminalClose)
     }
 
     @Test
@@ -120,14 +119,14 @@ class IdeTargetTerminalClientTest {
         val transport = RecordingTransport()
         val client = activeClient(transport)
 
-        client.accept(IdeTerminalFailedPayload(1, TOKEN, IdeTargetFailureKind.TargetLost, "rebooted", true))
+        client.accept(IdeTerminalFailed(1, TOKEN, IdeTargetFailureKind.TargetLost, "rebooted", true))
         val failed = assertIs<IdeTargetTerminalState.Failed>(client.state())
         assertEquals("rebooted", failed.detail)
         assertTrue(failed.retryable)
 
         client.close()
-        assertEquals(1, transport.sent.filterIsInstance<IdeTerminalOpenPayload>().size)
-        assertTrue(transport.sent.none { it is IdeTerminalClosePayload })
+        assertEquals(1, transport.sent.filterIsInstance<IdeTerminalOpen>().size)
+        assertTrue(transport.sent.none { it is IdeTerminalClose })
     }
 
     @Test
@@ -138,21 +137,21 @@ class IdeTargetTerminalClientTest {
         client.close()
         client.close()
 
-        assertEquals(listOf(IdeTerminalClosePayload(TOKEN)), transport.sent.filterIsInstance<IdeTerminalClosePayload>())
+        assertEquals(listOf(IdeTerminalClose(TOKEN)), transport.sent.filterIsInstance<IdeTerminalClose>())
     }
 
     private fun activeClient(transport: RecordingTransport): IdeTargetTerminalClient =
         IdeTargetTerminalClient(transport).also { client ->
             client.setTarget(TARGET)
             client.setVisible(true)
-            client.accept(IdeTerminalOpenedPayload(1, TOKEN, 7, state(4)))
+            client.accept(IdeTerminalOpened(1, TOKEN, 7, state(4)))
         }
 
     private class RecordingTransport : IdeTargetTerminalTransport {
-        val sent = mutableListOf<CustomPacketPayload>()
+        val sent = mutableListOf<IdeTerminalCommand>()
 
-        override fun send(payload: CustomPacketPayload) {
-            sent += payload
+        override fun send(command: IdeTerminalCommand) {
+            sent += command
         }
     }
 

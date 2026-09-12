@@ -38,7 +38,7 @@ internal object IdeTargetClientNetwork {
 
     fun openTerminal(): IdeTargetTerminalClient {
         currentTerminal?.close()
-        return IdeTargetTerminalClient(ClientPacketDistributor::sendToServer).also { currentTerminal = it }
+        return IdeTargetTerminalClient(::sendTerminal).also { currentTerminal = it }
     }
 
     @JvmStatic
@@ -47,10 +47,18 @@ internal object IdeTargetClientNetwork {
         event.register(IdeTargetReplyPayload.TYPE) { payload, _ ->
             current?.receive(IdeTargetReplyEnvelope(payload.requestId, payload.reply))
         }
-        event.register(IdeTerminalOpenedPayload.TYPE) { payload, _ -> currentTerminal?.accept(payload) }
-        event.register(IdeTerminalFullPayload.TYPE) { payload, _ -> currentTerminal?.accept(payload) }
-        event.register(IdeTerminalDeltaPayload.TYPE) { payload, _ -> currentTerminal?.accept(payload) }
-        event.register(IdeTerminalFailedPayload.TYPE) { payload, _ -> currentTerminal?.accept(payload) }
+        event.register(IdeTerminalOpenedPayload.TYPE) { payload, _ ->
+            currentTerminal?.accept(IdeTerminalOpened(payload.generation, payload.token, payload.machineId, payload.state))
+        }
+        event.register(IdeTerminalFullPayload.TYPE) { payload, _ ->
+            currentTerminal?.accept(IdeTerminalFull(payload.token, payload.machineId, payload.state))
+        }
+        event.register(IdeTerminalDeltaPayload.TYPE) { payload, _ ->
+            currentTerminal?.accept(IdeTerminalDelta(payload.token, payload.machineId, payload.delta))
+        }
+        event.register(IdeTerminalFailedPayload.TYPE) { payload, _ ->
+            currentTerminal?.accept(IdeTerminalFailed(payload.generation, payload.token, payload.kind, payload.detail, payload.retryable))
+        }
     }
 
     @JvmStatic
@@ -71,6 +79,32 @@ internal object IdeTargetClientNetwork {
     fun release(terminal: IdeTargetTerminalClient) {
         terminal.close()
         if (currentTerminal === terminal) currentTerminal = null
+    }
+
+    private fun sendTerminal(command: IdeTerminalCommand) {
+        val payload =
+            when (command) {
+                is IdeTerminalOpen -> {
+                    IdeTerminalOpenPayload(command.generation, command.target)
+                }
+
+                is IdeTerminalResync -> {
+                    IdeTerminalResyncPayload(command.token, command.machineId, command.revision)
+                }
+
+                is IdeTerminalKeyInput -> {
+                    IdeTerminalKeyPayload(command.token, command.machineId, command.key, command.action, command.modifiers)
+                }
+
+                is IdeTerminalTextInput -> {
+                    IdeTerminalTextPayload(command.token, command.machineId, command.text)
+                }
+
+                is IdeTerminalClose -> {
+                    IdeTerminalClosePayload(command.token)
+                }
+            }
+        ClientPacketDistributor.sendToServer(payload)
     }
 
     private class OwnedChannel(
