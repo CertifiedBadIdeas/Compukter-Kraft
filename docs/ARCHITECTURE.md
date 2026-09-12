@@ -101,8 +101,10 @@ I/O run outside the server tick thread.
 ## Runtime ownership
 
 The asynchronous actor migration (#603) has a server-scoped service registered with NeoForge. Server startup records
-its lifetime; workers are allocated on first use. Each post-tick drains at most 1024 actor results and runs reply
-callbacks on the server thread. Stopping removes the service before closing it, so late callbacks cannot reopen it.
+its lifetime; workers are allocated on first use. Each pre-tick drains at most 1024 actor results and runs reply
+callbacks on the server thread before world and block-entity ticking. Work submitted during one tick therefore has the
+full inter-tick interval before the next deterministic delivery boundary. Stopping removes the service before closing
+it, so late callbacks cannot reopen it.
 Production computers attach one actor identified by `ComputerId` and a machine epoch. A full scheduler rejects a new
 attachment without blocking or failing the server tick; the block remains powered off and retries on a later tick.
 The server config exposes `vm.workers`, `vm.maximum_actors`, `vm.mailbox_capacity`, `vm.messages_per_turn`, and

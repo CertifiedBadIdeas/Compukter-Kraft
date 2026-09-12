@@ -58,8 +58,8 @@ class CompuktersMod(
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onServerStarting)
         NeoForge.EVENT_BUS.addListener(
             EventPriority.HIGHEST,
-            ServerTickEvent.Post::class.java,
-            NeoForgeVmActorServices::afterServerTick,
+            ServerTickEvent.Pre::class.java,
+            NeoForgeVmActorServices::beforeServerTick,
         )
         NeoForge.EVENT_BUS.addListener(
             EventPriority.NORMAL,

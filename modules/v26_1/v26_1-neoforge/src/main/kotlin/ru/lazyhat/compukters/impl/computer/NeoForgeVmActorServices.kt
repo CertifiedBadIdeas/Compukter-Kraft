@@ -87,7 +87,7 @@ internal object NeoForgeVmActorServices {
 
     fun onServerStarting(event: ServerStartingEvent) = registry.start(event.server)
 
-    fun afterServerTick(event: ServerTickEvent.Post) {
+    fun beforeServerTick(event: ServerTickEvent.Pre) {
         registry.tick(event.server)
         if (event.server.tickCount % METRICS_LOG_INTERVAL_TICKS == 0) {
             registry.metrics(event.server)?.let(::logMetrics)
