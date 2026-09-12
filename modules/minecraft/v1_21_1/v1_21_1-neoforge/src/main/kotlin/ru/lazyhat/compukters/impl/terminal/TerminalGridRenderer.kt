@@ -23,8 +23,11 @@ package ru.lazyhat.compukters.impl.terminal
 import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.network.chat.Component
+import ru.lazyhat.compukters.impl.ui.CompuktersUiViewport
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalCell
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
+import kotlin.math.ceil
+import kotlin.math.floor
 
 internal object TerminalGridRenderer {
     fun draw(
@@ -33,6 +36,7 @@ internal object TerminalGridRenderer {
         state: TerminalState,
         fontProfile: TerminalFontProfile,
         geometry: TerminalGridGeometry,
+        viewport: CompuktersUiViewport,
         nowMillis: Long,
     ) {
         repeat(state.height) { y ->
@@ -50,7 +54,12 @@ internal object TerminalGridRenderer {
             }
         }
         val clip = geometry.glyphClip
-        graphics.enableScissor(clip.left, clip.top, clip.right, clip.bottom)
+        graphics.enableScissor(
+            floor(viewport.toMinecraftX(clip.left.toDouble())).toInt(),
+            floor(viewport.toMinecraftY(clip.top.toDouble())).toInt(),
+            ceil(viewport.toMinecraftX(clip.right.toDouble())).toInt(),
+            ceil(viewport.toMinecraftY(clip.bottom.toDouble())).toInt(),
+        )
         try {
             repeat(state.height) { y ->
                 repeat(state.width) cellLoop@{ x ->

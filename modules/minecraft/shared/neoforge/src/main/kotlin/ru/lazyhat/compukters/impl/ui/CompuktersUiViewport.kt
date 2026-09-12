@@ -18,9 +18,6 @@
 
 package ru.lazyhat.compukters.impl.ui
 
-import net.minecraft.client.input.MouseButtonEvent
-import org.joml.Matrix3x2fStack
-
 internal class CompuktersUiViewport private constructor(
     val physicalScale: Int,
     val minecraftGuiScale: Int,
@@ -40,26 +37,6 @@ internal class CompuktersUiViewport private constructor(
     fun toMinecraftX(x: Double): Double = x * renderScale.toDouble()
 
     fun toMinecraftY(y: Double): Double = y * renderScale.toDouble()
-
-    fun map(event: MouseButtonEvent): MouseButtonEvent =
-        MouseButtonEvent(
-            toVirtualX(event.x()),
-            toVirtualY(event.y()),
-            event.buttonInfo(),
-        )
-
-    inline fun <T> withTransform(
-        pose: Matrix3x2fStack,
-        block: () -> T,
-    ): T {
-        pose.pushMatrix()
-        return try {
-            pose.scale(renderScale)
-            block()
-        } finally {
-            pose.popMatrix()
-        }
-    }
 
     companion object {
         const val MIN_WIDTH = 640

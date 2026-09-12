@@ -41,6 +41,10 @@ import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalState
 import ru.lazyhat.compukters.impl.terminal.TerminalGridGeometry
 import ru.lazyhat.compukters.impl.terminal.TerminalGridRenderer
 import ru.lazyhat.compukters.impl.terminal.fontDescription
+import ru.lazyhat.compukters.impl.ui.CompuktersUiViewport
+import ru.lazyhat.compukters.impl.ui.withTransform
+import kotlin.math.ceil
+import kotlin.math.floor
 
 internal class IdeRenderOperation(
     val zIndex: Int,
@@ -121,13 +125,16 @@ internal class IdeScreen(
         mouseY: Double,
         button: Int,
     ): Boolean {
-        if (!supported()) return true
+        val viewport = viewport()
+        if (!viewport.supported) return true
+        val uiX = viewport.toVirtualX(mouseX)
+        val uiY = viewport.toVirtualY(mouseY)
         val modifiers = currentModifiers()
-        val doubleClick = isDoubleClick(mouseX, mouseY, button)
+        val doubleClick = isDoubleClick(uiX, uiY, button)
         val geometry = geometry()
         val state = application.controller.viewState()
         if (prompt.state != null || state.dialog != null) {
-            input.pointerClicked(mouseX, mouseY, modifiers, pointerContext(geometry), doubleClick)
+            input.pointerClicked(uiX, uiY, modifiers, pointerContext(geometry), doubleClick)
             clearFocus()
             return true
         }
@@ -136,7 +143,7 @@ internal class IdeScreen(
             val switcherAction =
                 switcherContext.hitTargets
                     .asReversed()
-                    .firstOrNull { it.enabled && it.bounds.contains(mouseX, mouseY) }
+                    .firstOrNull { it.enabled && it.bounds.contains(uiX, uiY) }
                     ?.action
             val outsideSwitcher =
                 switcherAction != IdeHitAction.ProjectSwitcher &&
@@ -147,7 +154,7 @@ internal class IdeScreen(
                 input.pointerActivity()
                 return true
             }
-            input.pointerClicked(mouseX, mouseY, modifiers, switcherContext, doubleClick)
+            input.pointerClicked(uiX, uiY, modifiers, switcherContext, doubleClick)
             if (switcherAction == IdeHitAction.ProjectChoice) projectSwitcherOpen = false
             focusArea = IdeFocusArea.Panel
             clearFocus()
@@ -155,52 +162,52 @@ internal class IdeScreen(
             return true
         }
         val overlay = terminalOverlayGeometry(geometry)
-        if (terminalOverlay.visible && overlay.panel.contains(mouseX, mouseY)) {
+        if (terminalOverlay.visible && overlay.panel.contains(uiX, uiY)) {
             focusArea = IdeFocusArea.Terminal
             terminalOverlay.focus()
-            if (overlay.title.contains(mouseX, mouseY)) terminalOverlay.retry()
+            if (overlay.title.contains(uiX, uiY)) terminalOverlay.retry()
             clearFocus()
             input.pointerActivity()
             return true
         }
-        if (splitters.press(mouseX.toInt(), mouseY.toInt(), geometry)) {
+        if (splitters.press(uiX.toInt(), uiY.toInt(), geometry)) {
             input.pointerActivity()
             return true
         }
         val pointerContext = pointerContext(geometry)
-        if (input.explorerPressed(mouseX, mouseY, modifiers, pointerContext)) {
+        if (input.explorerPressed(uiX, uiY, modifiers, pointerContext)) {
             focusArea = IdeFocusArea.Tree
             selectedTreePath = null
             clearFocus()
             terminalOverlay.focusLost()
             return true
         }
-        selectTreeRow(mouseX, mouseY, geometry)
+        selectTreeRow(uiX, uiY, geometry)
         val hitAction =
             pointerContext.hitTargets
                 .asReversed()
-                .firstOrNull { it.enabled && it.bounds.contains(mouseX, mouseY) }
+                .firstOrNull { it.enabled && it.bounds.contains(uiX, uiY) }
                 ?.action
-        if (input.pointerClicked(mouseX, mouseY, modifiers, pointerContext, doubleClick)) {
+        if (input.pointerClicked(uiX, uiY, modifiers, pointerContext, doubleClick)) {
             if (hitAction == IdeHitAction.ProjectChoice) projectSwitcherOpen = false
             focusArea =
                 when {
                     hitAction == IdeHitAction.Terminal && terminalOverlay.visible -> IdeFocusArea.Terminal
-                    geometry.editor.contains(mouseX, mouseY) -> IdeFocusArea.Editor
-                    geometry.tree?.contains(mouseX, mouseY) == true -> IdeFocusArea.Tree
+                    geometry.editor.contains(uiX, uiY) -> IdeFocusArea.Editor
+                    geometry.tree?.contains(uiX, uiY) == true -> IdeFocusArea.Tree
                     else -> IdeFocusArea.Panel
                 }
             clearFocus()
             if (focusArea == IdeFocusArea.Terminal) terminalOverlay.focus() else terminalOverlay.focusLost()
             return true
         }
-        val handled = super.mouseClicked(mouseX, mouseY, button)
+        val handled = super.mouseClicked(uiX, uiY, button)
         if (handled) clearFocus()
         focusArea =
             when {
-                geometry.editor.contains(mouseX, mouseY) -> IdeFocusArea.Editor
-                geometry.tree?.contains(mouseX, mouseY) == true -> IdeFocusArea.Tree
-                geometry.panel.contains(mouseX, mouseY) -> IdeFocusArea.Panel
+                geometry.editor.contains(uiX, uiY) -> IdeFocusArea.Editor
+                geometry.tree?.contains(uiX, uiY) == true -> IdeFocusArea.Tree
+                geometry.panel.contains(uiX, uiY) -> IdeFocusArea.Panel
                 else -> IdeFocusArea.None
             }
         terminalOverlay.focusLost()
@@ -215,20 +222,23 @@ internal class IdeScreen(
         dragX: Double,
         dragY: Double,
     ): Boolean {
-        if (!supported()) return true
+        val viewport = viewport()
+        if (!viewport.supported) return true
+        val uiX = viewport.toVirtualX(mouseX)
+        val uiY = viewport.toVirtualY(mouseY)
         val geometry = geometry()
-        if (terminalOverlay.visible && terminalOverlayGeometry(geometry).panel.contains(mouseX, mouseY)) return true
-        if (splitters.drag(mouseX.toInt(), mouseY.toInt(), geometry)) return true
-        if (input.explorerDragged(mouseX, mouseY, pointerContext(geometry))) return true
+        if (terminalOverlay.visible && terminalOverlayGeometry(geometry).panel.contains(uiX, uiY)) return true
+        if (splitters.drag(uiX.toInt(), uiY.toInt(), geometry)) return true
+        if (input.explorerDragged(uiX, uiY, pointerContext(geometry))) return true
         if (focusArea == IdeFocusArea.Editor) {
             return input.pointerClicked(
-                mouseX,
-                mouseY,
+                uiX,
+                uiY,
                 currentModifiers() or GLFW.GLFW_MOD_SHIFT,
                 pointerContext(geometry),
             )
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY)
+        return super.mouseDragged(uiX, uiY, button, viewport.toVirtualDelta(dragX), viewport.toVirtualDelta(dragY))
     }
 
     override fun mouseReleased(
@@ -236,10 +246,13 @@ internal class IdeScreen(
         mouseY: Double,
         button: Int,
     ): Boolean {
-        if (!supported()) return true
+        val viewport = viewport()
+        if (!viewport.supported) return true
+        val uiX = viewport.toVirtualX(mouseX)
+        val uiY = viewport.toVirtualY(mouseY)
         if (splitters.release()) return true
-        if (input.explorerReleased(mouseX, mouseY, currentModifiers(), pointerContext(geometry()))) return true
-        return super.mouseReleased(mouseX, mouseY, button)
+        if (input.explorerReleased(uiX, uiY, currentModifiers(), pointerContext(geometry()))) return true
+        return super.mouseReleased(uiX, uiY, button)
     }
 
     override fun mouseScrolled(
@@ -248,24 +261,30 @@ internal class IdeScreen(
         scrollX: Double,
         scrollY: Double,
     ): Boolean {
-        if (!supported()) return true
+        val viewport = viewport()
+        if (!viewport.supported) return true
+        val uiX = viewport.toVirtualX(mouseX)
+        val uiY = viewport.toVirtualY(mouseY)
         val geometry = geometry()
-        if (terminalOverlay.visible && terminalOverlayGeometry(geometry).panel.contains(mouseX, mouseY)) return true
-        return input.scroll(mouseX, mouseY, scrollX, scrollY, pointerContext(geometry)) ||
-            super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)
+        if (terminalOverlay.visible && terminalOverlayGeometry(geometry).panel.contains(uiX, uiY)) return true
+        return input.scroll(uiX, uiY, scrollX, scrollY, pointerContext(geometry)) ||
+            super.mouseScrolled(uiX, uiY, scrollX, scrollY)
     }
 
     override fun mouseMoved(
         mouseX: Double,
         mouseY: Double,
     ) {
-        if (supported()) {
-            pointerX = mouseX
-            pointerY = mouseY
+        val viewport = viewport()
+        if (viewport.supported) {
+            val uiX = viewport.toVirtualX(mouseX)
+            val uiY = viewport.toVirtualY(mouseY)
+            pointerX = uiX
+            pointerY = uiY
             val modifiers = if (controlDown) GLFW.GLFW_MOD_CONTROL else 0
             input.pointerMoved(
-                mouseX,
-                mouseY,
+                uiX,
+                uiY,
                 modifiers,
                 pointerContext(geometry()),
             )
@@ -284,7 +303,9 @@ internal class IdeScreen(
         ) {
             controlDown = true
         }
-        if (!supported()) return if (keyCode == GLFW.GLFW_KEY_ESCAPE) super.keyPressed(keyCode, scanCode, modifiers) else true
+        if (!viewport().supported) {
+            return if (keyCode == GLFW.GLFW_KEY_ESCAPE) super.keyPressed(keyCode, scanCode, modifiers) else true
+        }
         val inputEvent = IdeKeyInput(keyCode, modifiers, Screen.isPaste(keyCode))
         if (prompt.state != null) {
             return when {
@@ -322,7 +343,7 @@ internal class IdeScreen(
         modifiers: Int,
     ): Boolean {
         if (keyCode == GLFW.GLFW_KEY_LEFT_CONTROL || keyCode == GLFW.GLFW_KEY_RIGHT_CONTROL) controlDown = false
-        if (!supported()) return true
+        if (!viewport().supported) return true
         val semanticHandled = input.keyReleased(IdeKeyInput(keyCode, modifiers))
         if (focusArea == IdeFocusArea.Terminal && terminalOverlay.keyReleased(keyCode)) return true
         return semanticHandled || super.keyReleased(keyCode, scanCode, modifiers)
@@ -332,7 +353,7 @@ internal class IdeScreen(
         codePoint: Char,
         modifiers: Int,
     ): Boolean {
-        if (!supported()) return true
+        if (!viewport().supported) return true
         val inputEvent = IdeCharacterInput(codePoint.toString())
         if (prompt.state != null) return prompt.type(inputEvent.text)
         if (focusArea == IdeFocusArea.Terminal && terminalOverlay.charTyped(inputEvent)) return true
@@ -370,11 +391,14 @@ internal class IdeScreen(
         partialTick: Float,
     ) {
         graphics.fill(0, 0, width, height, IdeColors.DIM)
-        if (!supported()) {
-            graphics.drawString(font, UNSUPPORTED_MESSAGE, 4, 4, TERMINAL_TEXT, false)
-            return
+        val viewport = viewport()
+        viewport.withTransform(graphics.pose()) {
+            if (!viewport.supported) {
+                graphics.drawString(font, UNSUPPORTED_MESSAGE, 4, 4, TERMINAL_TEXT, false)
+                return@withTransform
+            }
+            renderSupported(graphics, mouseX, mouseY, partialTick, viewport)
         }
-        renderSupported(graphics, mouseX, mouseY, partialTick)
     }
 
     private fun renderSupported(
@@ -382,9 +406,10 @@ internal class IdeScreen(
         mouseX: Int,
         mouseY: Int,
         partialTick: Float,
+        viewport: CompuktersUiViewport,
     ) {
         val profile = CompuktersClientConfig.selectedFont()
-        val geometry = geometry(profile)
+        val geometry = geometry(profile, viewport)
         val treeFirstRow = admittedTreeFirstRow(geometry)
         val state = application.controller.viewState()
         val model =
@@ -398,8 +423,8 @@ internal class IdeScreen(
                 terminalVisible = terminalOverlay.visible,
                 explorerDrag = input.explorerDragVisual,
                 projectSwitcherOpen = projectSwitcherOpen && prompt.state == null && state.dialog == null,
-                pointerX = mouseX,
-                pointerY = mouseY,
+                pointerX = viewport.toVirtualX(mouseX.toDouble()).toInt(),
+                pointerY = viewport.toVirtualY(mouseY.toDouble()).toInt(),
             )
         IdeVisibleFrameEvidence.from(state, model)?.let { evidence ->
             application.visibleLatency.frameExtracted(
@@ -435,7 +460,7 @@ internal class IdeScreen(
         model.text.forEach { draw ->
             operations +=
                 IdeRenderOperation(draw.zIndex) {
-                    draw.clip?.let { graphics.enableScissor(it.left, it.top, it.right, it.bottom) }
+                    draw.clip?.let { enableScissor(graphics, viewport, it.left, it.top, it.right, it.bottom) }
                     withIdeTextTransform(graphics.pose(), draw.rotation, draw.x, draw.y) {
                         val transformed = draw.rotation != IdeTextRotation.None
                         val textX = if (transformed) 0 else draw.x
@@ -459,9 +484,14 @@ internal class IdeScreen(
         executeIdeRenderOperations(
             operations = operations,
             terminalVisible = terminalOverlay.visible,
-            renderTerminal = { renderTerminalOverlay(graphics, terminalOverlayGeometry(geometry), profile) },
+            renderTerminal = { renderTerminalOverlay(graphics, terminalOverlayGeometry(geometry), profile, viewport) },
         )
-        super.render(graphics, mouseX, mouseY, partialTick)
+        super.render(
+            graphics,
+            viewport.toVirtualX(mouseX.toDouble()).toInt(),
+            viewport.toVirtualY(mouseY.toDouble()).toInt(),
+            partialTick,
+        )
     }
 
     override fun renderBackground(
@@ -475,11 +505,12 @@ internal class IdeScreen(
 
     private fun geometry(
         profile: ru.lazyhat.compukters.impl.terminal.TerminalFontProfile = CompuktersClientConfig.selectedFont(),
+        viewport: CompuktersUiViewport = viewport(),
     ): IdeRenderGeometry {
         val layout = splitters.layout
         return IdeRenderGeometry.compute(
-            width,
-            height,
+            viewport.width,
+            viewport.height,
             layout.treeWidth,
             layout.diagnosticsHeight,
             layout.diagnosticsExpanded,
@@ -488,7 +519,10 @@ internal class IdeScreen(
         )
     }
 
-    private fun supported(): Boolean = width >= MINIMUM_WIDTH && height >= MINIMUM_HEIGHT
+    private fun viewport(): CompuktersUiViewport {
+        val window = client().window
+        return CompuktersUiViewport.admit(window.width, window.height, window.guiScale.toInt())
+    }
 
     private fun focusState(): IdeFocusState {
         val state = application.controller.viewState()
@@ -609,13 +643,16 @@ internal class IdeScreen(
         graphics: GuiGraphics,
         overlay: IdeTerminalOverlayGeometry,
         profile: ru.lazyhat.compukters.impl.terminal.TerminalFontProfile,
+        viewport: CompuktersUiViewport,
     ) {
         graphics.fill(overlay.shadow, TERMINAL_SHADOW)
         graphics.fill(overlay.panel, TERMINAL_BORDER)
         val inner = IdeRect(overlay.panel.left + 1, overlay.panel.top + 1, overlay.panel.right - 1, overlay.panel.bottom - 1)
         graphics.fill(inner, TERMINAL_PANEL)
         if (!overlay.supported) {
-            graphics.enableScissor(
+            enableScissor(
+                graphics,
+                viewport,
                 overlay.messageBounds.left,
                 overlay.messageBounds.top,
                 overlay.messageBounds.right,
@@ -632,7 +669,7 @@ internal class IdeScreen(
             graphics.disableScissor()
             return
         }
-        graphics.enableScissor(overlay.title.left, overlay.title.top, overlay.title.right, overlay.title.bottom)
+        enableScissor(graphics, viewport, overlay.title.left, overlay.title.top, overlay.title.right, overlay.title.bottom)
         graphics.drawString(
             font,
             Component.literal(terminalOverlayTitle(terminalOverlay.state())),
@@ -657,6 +694,7 @@ internal class IdeScreen(
                     replica.state,
                     profile,
                     TerminalGridGeometry(grid.left, grid.top, profile),
+                    viewport,
                     System.nanoTime() / 1_000_000L,
                 )
             }
@@ -772,11 +810,25 @@ internal class IdeScreen(
         fill(bounds.left, bounds.top, bounds.right, bounds.bottom, color)
     }
 
+    private fun enableScissor(
+        graphics: GuiGraphics,
+        viewport: CompuktersUiViewport,
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int,
+    ) {
+        graphics.enableScissor(
+            floor(viewport.toMinecraftX(left.toDouble())).toInt(),
+            floor(viewport.toMinecraftY(top.toDouble())).toInt(),
+            ceil(viewport.toMinecraftX(right.toDouble())).toInt(),
+            ceil(viewport.toMinecraftY(bottom.toDouble())).toInt(),
+        )
+    }
+
     private companion object {
         const val UI_LINE_HEIGHT = 12
         const val TREE_ROWS_TOP = 4
-        const val MINIMUM_WIDTH = 640
-        const val MINIMUM_HEIGHT = 360
         const val DOUBLE_CLICK_NANOS = 250_000_000L
         const val DOUBLE_CLICK_DISTANCE = 4.0
         val TERMINAL_SHADOW = 0x66000000

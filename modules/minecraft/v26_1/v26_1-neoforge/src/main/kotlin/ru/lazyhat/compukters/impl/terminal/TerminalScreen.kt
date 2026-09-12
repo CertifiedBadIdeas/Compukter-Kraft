@@ -32,6 +32,8 @@ import ru.lazyhat.compukters.impl.config.CompuktersClientConfig
 import ru.lazyhat.compukters.impl.ide.ChildScreenParent
 import ru.lazyhat.compukters.impl.ide.IdeClientBootstrap
 import ru.lazyhat.compukters.impl.ui.CompuktersUiViewport
+import ru.lazyhat.compukters.impl.ui.map
+import ru.lazyhat.compukters.impl.ui.withTransform
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
 

@@ -30,6 +30,8 @@ import org.lwjgl.glfw.GLFW
 import ru.lazyhat.compukters.impl.config.CompuktersClientConfig
 import ru.lazyhat.compukters.impl.ide.ChildScreenParent
 import ru.lazyhat.compukters.impl.ide.IdeClientBootstrap
+import ru.lazyhat.compukters.impl.ui.CompuktersUiViewport
+import ru.lazyhat.compukters.impl.ui.withTransform
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
 
@@ -60,7 +62,9 @@ internal class TerminalScreen(
 
     override fun init() {
         super.init()
-        val geometry = TerminalRenderGeometry(width, height, fontProfile)
+        val viewport = viewport()
+        if (!viewport.supported) return
+        val geometry = TerminalRenderGeometry(viewport.width, viewport.height, fontProfile)
         val ideBounds = geometry.ideButton
         ideButton =
             addRenderableWidget(
@@ -86,7 +90,9 @@ internal class TerminalScreen(
         mouseY: Double,
         button: Int,
     ): Boolean {
-        val handled = super.mouseClicked(mouseX, mouseY, button)
+        val viewport = viewport()
+        if (!viewport.supported) return true
+        val handled = super.mouseClicked(viewport.toVirtualX(mouseX), viewport.toVirtualY(mouseY), button)
         if (handled) clearFocus()
         return handled
     }
@@ -133,6 +139,7 @@ internal class TerminalScreen(
         modifiers: Int,
     ): Boolean {
         if (childLifecycle.suspended) return true
+        if (!viewport().supported) return if (keyCode == GLFW.GLFW_KEY_ESCAPE) super.keyPressed(keyCode, scanCode, modifiers) else true
         if (Screen.isPaste(keyCode)) {
             val pasted = TerminalInput.boundedText(minecraft?.keyboardHandler?.clipboard.orEmpty())
             if (pasted.isNotEmpty()) sendText(pasted)
@@ -150,6 +157,7 @@ internal class TerminalScreen(
         modifiers: Int,
     ): Boolean {
         if (childLifecycle.suspended) return true
+        if (!viewport().supported) return true
         val mapped = TerminalInput.isMappedKeyCode(keyCode)
         pressedKeys.remove(keyCode)
         return mapped || super.keyReleased(keyCode, scanCode, modifiers)
@@ -160,6 +168,7 @@ internal class TerminalScreen(
         modifiers: Int,
     ): Boolean {
         if (childLifecycle.suspended) return true
+        if (!viewport().supported) return true
         if (codePoint.code >= GLFW.GLFW_KEY_SPACE) {
             sendText(codePoint.toString())
         }
@@ -173,30 +182,50 @@ internal class TerminalScreen(
         partialTick: Float,
     ) {
         graphics.fill(0, 0, width, height, 0xE0101010.toInt())
-        val geometry = TerminalRenderGeometry(width, height, fontProfile)
-        graphics.fill(
-            geometry.panel.left - 1,
-            geometry.panel.top - 1,
-            geometry.panel.right + 1,
-            geometry.panel.bottom + 1,
-            0xFF5A5A5A.toInt(),
-        )
-        graphics.fill(geometry.panel.left, geometry.panel.top, geometry.panel.right, geometry.panel.bottom, 0xFF161616.toInt())
-        graphics.drawString(font, title, geometry.titleX, geometry.titleY, 0xFFE8E8E8.toInt(), false)
-        TerminalGridRenderer.draw(graphics, font, replica.state, fontProfile, geometry.gridGeometry, System.currentTimeMillis())
-        val resources =
-            Component
-                .literal(TerminalResourceText.format(resourceReplica.gauges))
-                .withStyle { it.withFont(fontProfile.fontDescription) }
-        graphics.drawString(
-            font,
-            resources,
-            geometry.footer.left,
-            geometry.footer.top + fontProfile.glyphDrawOffsetY,
-            0xFFB8B8B8.toInt(),
-            false,
-        )
-        super.render(graphics, mouseX, mouseY, partialTick)
+        val viewport = viewport()
+        viewport.withTransform(graphics.pose()) {
+            if (!viewport.supported) {
+                graphics.drawString(font, UNSUPPORTED_MESSAGE, 4, 4, 0xFFE8E8E8.toInt(), false)
+                return@withTransform
+            }
+            val geometry = TerminalRenderGeometry(viewport.width, viewport.height, fontProfile)
+            graphics.fill(
+                geometry.panel.left - 1,
+                geometry.panel.top - 1,
+                geometry.panel.right + 1,
+                geometry.panel.bottom + 1,
+                0xFF5A5A5A.toInt(),
+            )
+            graphics.fill(geometry.panel.left, geometry.panel.top, geometry.panel.right, geometry.panel.bottom, 0xFF161616.toInt())
+            graphics.drawString(font, title, geometry.titleX, geometry.titleY, 0xFFE8E8E8.toInt(), false)
+            TerminalGridRenderer.draw(
+                graphics,
+                font,
+                replica.state,
+                fontProfile,
+                geometry.gridGeometry,
+                viewport,
+                System.currentTimeMillis(),
+            )
+            val resources =
+                Component
+                    .literal(TerminalResourceText.format(resourceReplica.gauges))
+                    .withStyle { it.withFont(fontProfile.fontDescription) }
+            graphics.drawString(
+                font,
+                resources,
+                geometry.footer.left,
+                geometry.footer.top + fontProfile.glyphDrawOffsetY,
+                0xFFB8B8B8.toInt(),
+                false,
+            )
+            super.render(
+                graphics,
+                viewport.toVirtualX(mouseX.toDouble()).toInt(),
+                viewport.toVirtualY(mouseY.toDouble()).toInt(),
+                partialTick,
+            )
+        }
     }
 
     override fun renderBackground(
@@ -217,7 +246,9 @@ internal class TerminalScreen(
 
     private fun positionToolbarButtons() {
         if (!::ideButton.isInitialized || !::fontButton.isInitialized) return
-        val geometry = TerminalRenderGeometry(width, height, fontProfile)
+        val viewport = viewport()
+        if (!viewport.supported) return
+        val geometry = TerminalRenderGeometry(viewport.width, viewport.height, fontProfile)
         ideButton.x = geometry.ideButton.left
         ideButton.y = geometry.ideButton.top
         fontButton.x = geometry.fontButton.left
@@ -232,6 +263,15 @@ internal class TerminalScreen(
 
     private fun sendText(text: String) {
         transport.send(TerminalTextPayload(position, machineId, text))
+    }
+
+    private fun viewport(): CompuktersUiViewport {
+        val window = requireNotNull(minecraft).window
+        return CompuktersUiViewport.admit(window.width, window.height, window.guiScale.toInt())
+    }
+
+    private companion object {
+        val UNSUPPORTED_MESSAGE = Component.literal("Compukters UI requires at least 640x360 pixels")
     }
 }
 

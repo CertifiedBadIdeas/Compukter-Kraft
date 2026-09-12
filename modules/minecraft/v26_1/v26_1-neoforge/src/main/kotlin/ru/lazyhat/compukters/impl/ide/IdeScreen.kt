@@ -45,6 +45,8 @@ import ru.lazyhat.compukters.impl.terminal.TerminalGridGeometry
 import ru.lazyhat.compukters.impl.terminal.TerminalGridRenderer
 import ru.lazyhat.compukters.impl.terminal.fontDescription
 import ru.lazyhat.compukters.impl.ui.CompuktersUiViewport
+import ru.lazyhat.compukters.impl.ui.map
+import ru.lazyhat.compukters.impl.ui.withTransform
 
 internal class IdeRenderOperation(
     val zIndex: Int,
