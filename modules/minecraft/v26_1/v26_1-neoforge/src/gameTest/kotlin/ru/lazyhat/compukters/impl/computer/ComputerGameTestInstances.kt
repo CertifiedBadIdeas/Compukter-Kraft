@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package ru.lazyhat.compukters.impl.benchmark
+package ru.lazyhat.compukters.impl.computer
 
 import com.mojang.serialization.MapCodec
 import net.minecraft.core.Holder
@@ -27,12 +27,32 @@ import net.minecraft.gametest.framework.TestEnvironmentDefinition
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.MutableComponent
 
-internal class VmBenchmarkGameTest(
+internal class ComputerRedstoneGameTest(
     testData: TestData<Holder<TestEnvironmentDefinition<*>>>,
 ) : GameTestInstance(testData) {
-    override fun run(helper: GameTestHelper) = VmBenchmarkGameTestScenario.run(helper)
+    override fun run(helper: GameTestHelper) = ComputerRedstoneGameTestScenario.run(helper)
 
     override fun codec(): MapCodec<out GameTestInstance> = MapCodec.unit(this)
 
-    override fun typeDescription(): MutableComponent = Component.literal("Compukters headless VM benchmark")
+    override fun typeDescription(): MutableComponent = Component.literal("Compukters redstone GPIO")
+}
+
+internal class ComputerSoundGameTest(
+    testData: TestData<Holder<TestEnvironmentDefinition<*>>>,
+) : GameTestInstance(testData) {
+    override fun run(helper: GameTestHelper) = ComputerSoundGameTestScenario.run(helper)
+
+    override fun codec(): MapCodec<out GameTestInstance> = MapCodec.unit(this)
+
+    override fun typeDescription(): MutableComponent = Component.literal("Compukters one-shot sound")
+}
+
+internal class VmActorServiceGameTest(
+    testData: TestData<Holder<TestEnvironmentDefinition<*>>>,
+) : GameTestInstance(testData) {
+    override fun run(helper: GameTestHelper) = VmActorServiceGameTestScenario.run(helper)
+
+    override fun codec(): MapCodec<out GameTestInstance> = MapCodec.unit(this)
+
+    override fun typeDescription(): MutableComponent = Component.literal("Compukters server VM actor service")
 }

@@ -18,15 +18,8 @@
 
 package ru.lazyhat.compukters.impl.computer
 
-import com.mojang.serialization.MapCodec
 import net.minecraft.core.BlockPos
-import net.minecraft.core.Holder
 import net.minecraft.gametest.framework.GameTestHelper
-import net.minecraft.gametest.framework.GameTestInstance
-import net.minecraft.gametest.framework.TestData
-import net.minecraft.gametest.framework.TestEnvironmentDefinition
-import net.minecraft.network.chat.Component
-import net.minecraft.network.chat.MutableComponent
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.impl.registry.CompuktersRegistry
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
@@ -35,13 +28,11 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import java.util.concurrent.CompletableFuture
 
-internal class ComputerSoundGameTest(
-    testData: TestData<Holder<TestEnvironmentDefinition<*>>>,
-) : GameTestInstance(testData) {
-    override fun run(helper: GameTestHelper) {
+internal object ComputerSoundGameTestScenario {
+    fun run(helper: GameTestHelper) {
         val computerPosition = BlockPos(2, 2, 2)
         helper.setBlock(computerPosition, CompuktersRegistry.COMPUTER.get())
-        val entity = helper.getBlockEntity(computerPosition, NeoForgeComputerBlockEntity::class.java)
+        val entity = helper.compuktersComputerBlockEntity(computerPosition)
         entity.prepareTerminalAsync()
         var setup: CompletableFuture<Void>? = null
         var terminal: CompletableFuture<TerminalState?>? = null
@@ -93,10 +84,6 @@ internal class ComputerSoundGameTest(
                 )
             }.thenSucceed()
     }
-
-    override fun codec(): MapCodec<out GameTestInstance> = MapCodec.unit(this)
-
-    override fun typeDescription(): MutableComponent = Component.literal("Compukters one-shot sound")
 
     private fun fixture(): ByteArray =
         requireNotNull(javaClass.getResourceAsStream("/fixtures/sound.cpkt")) {

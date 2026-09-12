@@ -65,13 +65,18 @@ tasks.named("check") {
 }
 
 val loom = extensions.getByType<LoomGradleExtensionAPI>()
+val buildContext = buildContext()
 loom.runs.register("gameTestServer") {
     server()
+    environment("gametestserver")
     forgeTemplate("gameTestServer")
     runDir("run/gameTestServer")
-    property("neoforge.enabledGameTestNamespaces", "compukters")
+    property(
+        "neoforge.enabledGameTestNamespaces",
+        if (buildContext.versionKey == "v1211") "minecraft" else "compukters",
+    )
     ideConfigGenerated(true)
-    if (buildContext().versionKey == "v261") {
+    if (buildContext.versionKey == "v261") {
         vmArgs("--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny")
     }
     mods {

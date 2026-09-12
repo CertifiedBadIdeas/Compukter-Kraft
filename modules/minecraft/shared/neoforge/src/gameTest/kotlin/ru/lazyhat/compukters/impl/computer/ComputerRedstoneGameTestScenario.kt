@@ -18,16 +18,9 @@
 
 package ru.lazyhat.compukters.impl.computer
 
-import com.mojang.serialization.MapCodec
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
-import net.minecraft.core.Holder
 import net.minecraft.gametest.framework.GameTestHelper
-import net.minecraft.gametest.framework.GameTestInstance
-import net.minecraft.gametest.framework.TestData
-import net.minecraft.gametest.framework.TestEnvironmentDefinition
-import net.minecraft.network.chat.Component
-import net.minecraft.network.chat.MutableComponent
 import net.minecraft.world.level.block.Blocks
 import ru.lazyhat.compukters.core.device.computer.ProgramComputerState
 import ru.lazyhat.compukters.impl.registry.CompuktersRegistry
@@ -38,17 +31,15 @@ import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision
 import ru.lazyhat.compukters.minecraft.computer.ComputerBlock
 import java.util.concurrent.CompletableFuture
 
-internal class ComputerRedstoneGameTest(
-    testData: TestData<Holder<TestEnvironmentDefinition<*>>>,
-) : GameTestInstance(testData) {
-    override fun run(helper: GameTestHelper) {
+internal object ComputerRedstoneGameTestScenario {
+    fun run(helper: GameTestHelper) {
         val computerPosition = BlockPos(2, 2, 2)
         val block = CompuktersRegistry.COMPUTER.get()
         helper.setBlock(
             computerPosition,
             block.defaultBlockState().setValue(ComputerBlock.FACING, Direction.NORTH),
         )
-        val entity = helper.getBlockEntity(computerPosition, NeoForgeComputerBlockEntity::class.java)
+        val entity = helper.compuktersComputerBlockEntity(computerPosition)
         entity.prepareTerminalAsync()
         var setup: CompletableFuture<Void>? = null
         var terminal: CompletableFuture<TerminalState?>? = null
@@ -108,10 +99,6 @@ internal class ComputerRedstoneGameTest(
                 )
             }.thenSucceed()
     }
-
-    override fun codec(): MapCodec<out GameTestInstance> = MapCodec.unit(this)
-
-    override fun typeDescription(): MutableComponent = Component.literal("Compukters redstone GPIO")
 
     private fun fixture(): ByteArray =
         requireNotNull(javaClass.getResourceAsStream("/fixtures/redstone.cpkt")) {
