@@ -290,6 +290,58 @@ class ProgramRuntimeActorProcessorTest {
     }
 
     @Test
+    fun `redstone transitions remain ordered while an actor turn is in flight`() {
+        val session = RecordingSession()
+        val endpoint = VmActorEndpoint(ComputerId.fromLongs(15, 16), 1)
+        ProgramRuntimeActorService(schedulerConfig()).use { service ->
+            val host =
+                ProgramRuntimeHost(
+                    object : ProgramVmSessionFactory {
+                        override fun open(artifact: ByteArray): ProgramVmSession = session
+
+                        override fun boot(): ProgramVmSession = session
+                    },
+                )
+            val carrier =
+                ActorProgramComputer(
+                    service,
+                    requireNotNull(service.attach(endpoint, host)),
+                    { RedstoneCommitResult.Committed },
+                )
+            carrier.turnOn()
+            awaitQueuedResult(service)
+            service.pump(1)
+            session.redstoneInputs.clear()
+
+            val entered = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            session.terminalStateBarrier = entered to release
+            carrier.request(ProgramRuntimeActorCommand::TerminalFullState)
+            assertTrue(entered.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+
+            val high = RedstoneWire.packInput(1, intArrayOf(13, 0, 0, 0, 0, 0))
+            val low = RedstoneWire.packInput(1, intArrayOf(0, 0, 0, 0, 0, 0))
+            carrier.serverTick(1, high)
+            carrier.serverTick(2, low)
+            carrier.serverTick(3, high)
+
+            release.countDown()
+            awaitQueuedResults(service, 2)
+            service.pump(2)
+            carrier.serverTick(4)
+            awaitQueuedResult(service)
+            service.pump(1)
+            carrier.serverTick(5)
+            awaitQueuedResult(service)
+            service.pump(1)
+
+            assertEquals(listOf(high, low, high), session.redstoneInputs)
+            assertEquals(0, service.runtimeMetrics().coalescedRedstoneInputs)
+            carrier.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
     fun `mailbox rejection retains world completion for a later continuation`() {
         val session = RecordingSession()
         val port = ActorRedstoneHostPort()
@@ -663,6 +715,7 @@ class ProgramRuntimeActorProcessorTest {
     private class RecordingSession : ProgramVmSession {
         val calls = mutableListOf<String>()
         val responses = mutableListOf<HostResponse>()
+        val redstoneInputs = mutableListOf<Int>()
         var candidate = RecordingCandidate(calls)
         val terminal =
             TerminalState(
@@ -779,7 +832,7 @@ class ProgramRuntimeActorProcessorTest {
                 canonicalLine = line.concatToString()
             }
 
-        override fun submitRedstoneInput(packet: Int) = record("submitRedstoneInput") { }
+        override fun submitRedstoneInput(packet: Int) = record("submitRedstoneInput") { redstoneInputs += packet }
 
         override fun confirmRedstoneOutput(packed: Int) = record("confirmRedstoneOutput") { }
 

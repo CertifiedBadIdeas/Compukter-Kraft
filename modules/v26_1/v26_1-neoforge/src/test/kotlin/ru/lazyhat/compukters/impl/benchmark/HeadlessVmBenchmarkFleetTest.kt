@@ -271,6 +271,7 @@ class HeadlessVmBenchmarkFleetTest {
                 totalHostContinuationDelayTicks = 0,
                 maximumHostContinuationDelayTicks = 0,
                 rejectedInputRequests = 0,
+                coalescedRedstoneInputs = 0,
                 lastPumpEvents = 0,
                 lastPumpNanos = 0,
             )

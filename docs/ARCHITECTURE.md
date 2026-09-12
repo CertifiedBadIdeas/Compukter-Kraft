@@ -115,7 +115,9 @@ Scheduler snapshots read atomic counters and bounded lane sizes without scanning
 the debug log reports registered actors together with configured capacity, runnable actors, mailbox and result depths,
 worker occupancy, average/maximum command-queue latency, average/maximum execution time, completed-result latency, the
 last server pump size and duration, deferred world requests, host-completion-to-next-advance delay in server ticks,
-and rejected input/mailbox submissions. These are lifetime counters and gauges for the current server service rather
+and rejected or capacity-coalesced redstone input submissions. Pending redstone transitions retain their sampled order
+while a VM turn is in flight, up to the configured mailbox capacity; overflow coalesces only the newest retained packet
+and increments the diagnostic counter. These are lifetime counters and gauges for the current server service rather
 than an equal-CPU or delivery-latency contract.
 
 `ActorProgramComputer` is the asynchronous carrier implementation for that migration. Its server-side state is an

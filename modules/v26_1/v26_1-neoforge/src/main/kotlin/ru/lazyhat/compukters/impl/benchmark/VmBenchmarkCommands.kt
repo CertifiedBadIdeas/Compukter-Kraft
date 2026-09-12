@@ -382,6 +382,7 @@ internal object VmBenchmarkCommands {
             "resultAvgUs=${resultNanos / drained / 1_000}, drainedLast=${metrics.lastPumpEvents}, " +
             "pumpLastUs=${metrics.lastPumpNanos / 1_000}, " +
             "inputRejected=${metrics.rejectedInputRequests - baseline.rejectedInputRequests}, " +
+            "inputCoalesced=${metrics.coalescedRedstoneInputs - baseline.coalescedRedstoneInputs}, " +
             "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}, " +
             "permitRejected=${metrics.scheduler.permitPendingRejections - baseline.scheduler.permitPendingRejections}"
     }

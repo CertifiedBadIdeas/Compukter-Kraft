@@ -36,6 +36,7 @@ import java.util.concurrent.atomic.AtomicLong
 class ProgramRuntimeActorService(
     config: VmActorSchedulerConfig = VmActorSchedulerConfig(),
 ) : AutoCloseable {
+    internal val redstoneInputCapacity = config.mailboxCapacity
     private val scheduler =
         VmActorScheduler<ProgramRuntimeActorMessage, ProgramRuntimeTickPermit, ProgramRuntimeActorReply>(config)
     private val pending = ConcurrentHashMap<RequestAddress, PendingRequest>()
@@ -46,6 +47,7 @@ class ProgramRuntimeActorService(
     private val totalHostContinuationDelayTicks = AtomicLong()
     private val maximumHostContinuationDelayTicks = AtomicLong()
     private val rejectedInputRequests = AtomicLong()
+    private val coalescedRedstoneInputs = AtomicLong()
     private val lastPumpEvents = AtomicInteger()
     private val lastPumpNanos = AtomicLong()
 
@@ -206,6 +208,10 @@ class ProgramRuntimeActorService(
         maximumHostContinuationDelayTicks.accumulateAndGet(delayTicks, ::maxOf)
     }
 
+    internal fun recordCoalescedRedstoneInput() {
+        coalescedRedstoneInputs.incrementAndGet()
+    }
+
     fun runtimeMetrics(): ProgramRuntimeActorMetrics =
         ProgramRuntimeActorMetrics(
             scheduler = scheduler.metrics(),
@@ -216,6 +222,7 @@ class ProgramRuntimeActorService(
             totalHostContinuationDelayTicks = totalHostContinuationDelayTicks.get(),
             maximumHostContinuationDelayTicks = maximumHostContinuationDelayTicks.get(),
             rejectedInputRequests = rejectedInputRequests.get(),
+            coalescedRedstoneInputs = coalescedRedstoneInputs.get(),
             lastPumpEvents = lastPumpEvents.get(),
             lastPumpNanos = lastPumpNanos.get(),
         )

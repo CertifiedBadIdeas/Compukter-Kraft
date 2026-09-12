@@ -54,7 +54,7 @@ class ActorProgramComputer(
     private var advance: CompletableFuture<ProgramRuntimeActorReply>? = null
     private var pendingOutput: PendingOutput? = null
     private var pendingSound: PendingSound? = null
-    private var pendingRedstoneInput: Int? = null
+    private val pendingRedstoneInputs = ArrayDeque<Int>()
     private var closeResult: CompletableFuture<Long?>? = null
     private var bootRequest: CompletableFuture<ProgramRuntimeActorReply>? = null
     private var lastAdvanceTick = -1L
@@ -110,7 +110,7 @@ class ActorProgramComputer(
     ) {
         checkOwner()
         require(worldTick >= 0)
-        redstoneInput?.let { packet -> pendingRedstoneInput = mergeRedstoneInput(pendingRedstoneInput, packet) }
+        redstoneInput?.let(::enqueueRedstoneInput)
         lastObservedServerTick = maxOf(lastObservedServerTick, worldTick)
         if (closeResult != null) return
         if (advance != null || worldTick <= lastAdvanceTick ||
@@ -119,7 +119,7 @@ class ActorProgramComputer(
                     state != ProgramRuntimeState.WaitingForCompiler &&
                     pendingOutput == null &&
                     pendingSound == null &&
-                    pendingRedstoneInput == null
+                    pendingRedstoneInputs.isEmpty()
             )
         ) {
             return
@@ -127,7 +127,7 @@ class ActorProgramComputer(
         val output = pendingOutput
         val requestedSound = pendingSound
         check(output == null || requestedSound == null) { "computer cannot own two pending world requests" }
-        val input = pendingRedstoneInput
+        val input = pendingRedstoneInputs.firstOrNull()
         val effects =
             buildList {
                 output?.let {
@@ -151,7 +151,7 @@ class ActorProgramComputer(
         if (!future.isCompletedExceptionally) {
             pendingOutput = null
             pendingSound = null
-            pendingRedstoneInput = null
+            if (input != null) pendingRedstoneInputs.removeFirst()
             hostCompletionTick?.let { completedAt ->
                 service.recordHostContinuationDelay((worldTick - completedAt).coerceAtLeast(0))
                 hostCompletionTick = null
@@ -175,7 +175,7 @@ class ActorProgramComputer(
         lifecycle++
         pendingOutput = null
         pendingSound = null
-        pendingRedstoneInput = null
+        pendingRedstoneInputs.clear()
         hostCompletionTick = null
         val result = lease.closeAsync()
         closeResult = result
@@ -233,7 +233,7 @@ class ActorProgramComputer(
         advance = null
         pendingOutput = null
         pendingSound = null
-        pendingRedstoneInput = null
+        pendingRedstoneInputs.clear()
         hostCompletionTick = null
         return observe(submitted, lifecycle)
     }
@@ -268,13 +268,16 @@ class ActorProgramComputer(
         publish(ProgramRuntimeState.Failed(ProgramFailure.Bridge(cause.message ?: "actor request failed")))
     }
 
-    private fun mergeRedstoneInput(
-        pending: Int?,
-        latest: Int,
-    ): Int {
+    private fun enqueueRedstoneInput(latest: Int) {
         val checkedLatest = RedstoneWire.requireInputPacket(latest)
-        val changed = RedstoneWire.inputChangedMask(checkedLatest) or (pending?.let(RedstoneWire::inputChangedMask) ?: 0)
-        return (checkedLatest and RedstoneWire.ALL_SIDES_MASK.inv()) or changed
+        if (pendingRedstoneInputs.size < service.redstoneInputCapacity) {
+            pendingRedstoneInputs.addLast(checkedLatest)
+            return
+        }
+        val pending = pendingRedstoneInputs.removeLast()
+        val changed = RedstoneWire.inputChangedMask(checkedLatest) or RedstoneWire.inputChangedMask(pending)
+        pendingRedstoneInputs.addLast((checkedLatest and RedstoneWire.ALL_SIDES_MASK.inv()) or changed)
+        service.recordCoalescedRedstoneInput()
     }
 
     private fun publish(next: ProgramRuntimeState) {

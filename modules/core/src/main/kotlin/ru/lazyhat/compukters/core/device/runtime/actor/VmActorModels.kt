@@ -118,6 +118,7 @@ data class ProgramRuntimeActorMetrics(
     val totalHostContinuationDelayTicks: Long,
     val maximumHostContinuationDelayTicks: Long,
     val rejectedInputRequests: Long,
+    val coalescedRedstoneInputs: Long,
     val lastPumpEvents: Int,
     val lastPumpNanos: Long,
 )

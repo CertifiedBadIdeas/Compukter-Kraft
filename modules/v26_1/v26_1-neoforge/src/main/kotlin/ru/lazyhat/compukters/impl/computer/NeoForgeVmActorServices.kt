@@ -117,7 +117,8 @@ internal object NeoForgeVmActorServices {
                 "hostToAdvance=n=${metrics.hostContinuationSamples}/" +
                 "avg=${metrics.totalHostContinuationDelayTicks / continuationSamples}/" +
                 "max=${metrics.maximumHostContinuationDelayTicks} ticks, " +
-                "inputRejected=${metrics.rejectedInputRequests}, mailboxRejected=${scheduler.mailboxFullRejections}, " +
+                "inputRejected=${metrics.rejectedInputRequests}, inputCoalesced=${metrics.coalescedRedstoneInputs}, " +
+                "mailboxRejected=${scheduler.mailboxFullRejections}, " +
                 "permitRejected=${scheduler.permitPendingRejections}"
         }
     }
