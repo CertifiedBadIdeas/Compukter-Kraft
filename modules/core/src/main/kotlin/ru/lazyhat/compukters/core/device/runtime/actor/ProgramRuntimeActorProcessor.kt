@@ -38,7 +38,7 @@ internal class ProgramRuntimeActorProcessor(
     private val host: ProgramRuntimeHost,
     private val redstonePort: ActorRedstoneHostPort? = null,
     private val soundPort: ActorSoundHostPort? = null,
-) : VmActorProcessor<ProgramRuntimeActorCommand, ProgramRuntimeActorReply> {
+) : VmActorProcessor<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply> {
     private val deploymentCandidates = mutableMapOf<ProgramDeploymentToken, ProgramDeploymentCandidate>()
     private var nextDeploymentToken = 0L
     private var pendingRedstoneRequest: ProgramRuntimeRequestId? = null

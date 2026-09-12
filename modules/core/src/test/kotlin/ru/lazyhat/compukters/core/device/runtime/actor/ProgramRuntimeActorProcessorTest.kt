@@ -392,7 +392,7 @@ class ProgramRuntimeActorProcessorTest {
         val host = ProgramRuntimeHost(ProgramVmSessionFactory { session }, redstoneHostPort = port)
         val endpoint = VmActorEndpoint(ComputerId.fromLongs(5, 6), 1)
         val expected = RedstoneWire.replaceOutput(0, 2, 7)
-        VmActorScheduler<ProgramRuntimeActorCommand, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
+        VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
             assertTrue(scheduler.register(endpoint, ProgramRuntimeActorProcessor(host, port)))
             scheduler.submit(endpoint, ProgramRuntimeActorCommand.Start(request(1), byteArrayOf(1)))
             scheduler.awaitReplies(1)
@@ -479,7 +479,7 @@ class ProgramRuntimeActorProcessorTest {
             )
         val endpoint = VmActorEndpoint(ComputerId.fromLongs(1, 2), 1)
         val path = VmVirtualPath.of("/home/demo")
-        VmActorScheduler<ProgramRuntimeActorCommand, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
+        VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
             assertTrue(scheduler.register(endpoint, ProgramRuntimeActorProcessor(host)))
             val artifact = byteArrayOf(3, 4, 5)
             val prepare = ProgramRuntimeActorCommand.PrepareDeployment(request(6), artifact)
@@ -548,7 +548,7 @@ class ProgramRuntimeActorProcessorTest {
                 },
             )
         val endpoint = VmActorEndpoint(ComputerId.fromLongs(3, 4), 1)
-        VmActorScheduler<ProgramRuntimeActorCommand, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
+        VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
             assertTrue(scheduler.register(endpoint, ProgramRuntimeActorProcessor(host)))
             val artifact = byteArrayOf(1, 2, 3)
             val command = ProgramRuntimeActorCommand.Start(request(1), artifact)
@@ -586,7 +586,7 @@ class ProgramRuntimeActorProcessorTest {
         assertTrue(service.metrics().queuedResults >= count, "queued actor results: ${service.metrics()}")
     }
 
-    private fun VmActorScheduler<ProgramRuntimeActorCommand, ProgramRuntimeActorReply>.awaitReplies(
+    private fun VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>.awaitReplies(
         count: Int,
     ): List<ProgramRuntimeActorReply> {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)

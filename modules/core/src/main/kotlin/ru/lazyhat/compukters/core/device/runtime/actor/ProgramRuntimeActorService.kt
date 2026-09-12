@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicLong
 class ProgramRuntimeActorService(
     config: VmActorSchedulerConfig = VmActorSchedulerConfig(),
 ) : AutoCloseable {
-    private val scheduler = VmActorScheduler<ProgramRuntimeActorCommand, ProgramRuntimeActorReply>(config)
+    private val scheduler = VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>(config)
     private val pending = ConcurrentHashMap<RequestAddress, PendingRequest>()
     private val deferredWorldRequests = ConcurrentHashMap.newKeySet<VmActorEndpoint>()
     private val nextRequestId = AtomicLong()

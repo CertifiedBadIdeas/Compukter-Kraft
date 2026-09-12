@@ -32,6 +32,7 @@ data class VmActorEndpoint(
 enum class VmActorSubmission {
     ACCEPTED,
     MAILBOX_FULL,
+    PERMIT_PENDING,
     STALE_ENDPOINT,
     CLOSED,
 }
@@ -88,15 +89,19 @@ data class VmActorSchedulerMetrics(
     val registeredActors: Int,
     val scheduledActors: Int,
     val queuedMessages: Int,
+    val pendingPermits: Int,
     val busyWorkers: Int,
     val queuedResults: Int,
     val acceptedMessages: Long,
     val processedMessages: Long,
+    val acceptedPermits: Long,
+    val processedPermits: Long,
     val totalQueueLatencyNanos: Long,
     val maximumQueueLatencyNanos: Long,
     val totalExecutionNanos: Long,
     val maximumExecutionNanos: Long,
     val mailboxFullRejections: Long,
+    val permitPendingRejections: Long,
     val staleEndpointRejections: Long,
     val closedRejections: Long,
     val drainedEvents: Long,
@@ -117,8 +122,10 @@ data class ProgramRuntimeActorMetrics(
     val lastPumpNanos: Long,
 )
 
-interface VmActorProcessor<in C : Any, out R : Any> : AutoCloseable {
+interface VmActorProcessor<in C : Any, in P : Any, out R : Any> : AutoCloseable {
     fun process(command: C): R?
+
+    fun advance(permit: P): R?
 
     override fun close() = Unit
 }

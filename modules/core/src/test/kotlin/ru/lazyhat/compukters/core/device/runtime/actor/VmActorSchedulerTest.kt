@@ -63,12 +63,14 @@ class VmActorSchedulerTest {
         fun blocker(
             entered: CountDownLatch,
             release: CountDownLatch,
-        ) = object : VmActorProcessor<Int, Int> {
+        ) = object : VmActorProcessor<Int, Int, Int> {
             override fun process(command: Int): Int? {
                 entered.countDown()
                 check(release.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
                 return null
             }
+
+            override fun advance(permit: Int): Int? = null
         }
         scheduler(workerCount = 2, messagesPerTurn = 1).use { scheduler ->
             try {
@@ -156,6 +158,87 @@ class VmActorSchedulerTest {
             assertEquals((1L..21L).toList(), results.map { it.sequence })
             assertEquals(List(21) { endpoint }, results.map { it.endpoint })
             assertEquals(1, maximumConcurrent.get())
+        }
+    }
+
+    @Test
+    fun `permit runs through its mailbox fence and a second permit is rejected atomically`() {
+        val firstEntered = CountDownLatch(1)
+        val releaseFirst = CountDownLatch(1)
+        val actions = mutableListOf<String>()
+        val endpoint = endpoint(1)
+        scheduler(workerCount = 1, messagesPerTurn = 4).use { scheduler ->
+            assertTrue(
+                scheduler.register(
+                    endpoint,
+                    object : VmActorProcessor<Int, Int, Int> {
+                        override fun process(command: Int): Int {
+                            if (command == 1) {
+                                firstEntered.countDown()
+                                assertTrue(releaseFirst.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+                            }
+                            actions += "command:$command"
+                            return command
+                        }
+
+                        override fun advance(permit: Int): Int {
+                            actions += "permit:$permit"
+                            return permit
+                        }
+                    },
+                ),
+            )
+
+            assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(endpoint, 1))
+            assertTrue(firstEntered.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+            assertEquals(VmActorSubmission.ACCEPTED, scheduler.submitWithPermit(endpoint, listOf(2), 100))
+            assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(endpoint, 3))
+            assertEquals(VmActorSubmission.PERMIT_PENDING, scheduler.submitWithPermit(endpoint, listOf(99), 101))
+            releaseFirst.countDown()
+
+            assertEquals(listOf(1, 2, 100, 3), scheduler.awaitResults(4).map { it.value })
+            assertEquals(listOf("command:1", "command:2", "permit:100", "command:3"), actions)
+            val metrics = scheduler.metrics()
+            assertEquals(3, metrics.acceptedMessages)
+            assertEquals(3, metrics.processedMessages)
+            assertEquals(1, metrics.acceptedPermits)
+            assertEquals(1, metrics.processedPermits)
+            assertEquals(0, metrics.pendingPermits)
+            assertEquals(1, metrics.permitPendingRejections)
+        }
+    }
+
+    @Test
+    fun `mailbox-full permit admission accepts neither effects nor permit`() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val endpoint = endpoint(1)
+        scheduler(workerCount = 1, mailboxCapacity = 1).use { scheduler ->
+            assertTrue(
+                scheduler.register(
+                    endpoint,
+                    processor { command: Int ->
+                        if (command == 1) {
+                            entered.countDown()
+                            assertTrue(release.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+                        }
+                        command
+                    },
+                ),
+            )
+
+            assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(endpoint, 1))
+            assertTrue(entered.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+            assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(endpoint, 2))
+            assertEquals(VmActorSubmission.MAILBOX_FULL, scheduler.submitWithPermit(endpoint, listOf(3), 100))
+            release.countDown()
+
+            assertEquals(listOf(1, 2), scheduler.awaitResults(2).map { it.value })
+            val metrics = scheduler.metrics()
+            assertEquals(2, metrics.acceptedMessages)
+            assertEquals(0, metrics.acceptedPermits)
+            assertEquals(0, metrics.pendingPermits)
+            assertEquals(1, metrics.mailboxFullRejections)
         }
     }
 
@@ -252,11 +335,13 @@ class VmActorSchedulerTest {
             assertTrue(
                 scheduler.register(
                     oldEndpoint,
-                    object : VmActorProcessor<Int, Int> {
+                    object : VmActorProcessor<Int, Int, Int> {
                         override fun process(command: Int): Int {
                             events += "command:$command:${Thread.currentThread().name}"
                             return command
                         }
+
+                        override fun advance(permit: Int): Int = permit
 
                         override fun close() {
                             events += "close:${Thread.currentThread().name}"
@@ -315,6 +400,7 @@ class VmActorSchedulerTest {
             assertEquals(1_000, metrics.registeredActors)
             assertEquals(0, metrics.scheduledActors)
             assertEquals(0, metrics.queuedMessages)
+            assertEquals(0, metrics.pendingPermits)
             assertEquals(0, metrics.busyWorkers)
             assertEquals(0, metrics.queuedResults)
             assertEquals(0, calls.get())
@@ -365,7 +451,7 @@ class VmActorSchedulerTest {
         maximumActors: Int = 16,
         mailboxCapacity: Int = 16,
         messagesPerTurn: Int = 4,
-    ): VmActorScheduler<Int, Int> =
+    ): VmActorScheduler<Int, Int, Int> =
         VmActorScheduler(
             VmActorSchedulerConfig(
                 workerCount = workerCount,
@@ -376,10 +462,10 @@ class VmActorSchedulerTest {
             ),
         )
 
-    private fun VmActorScheduler<Int, Int>.awaitResults(count: Int): List<VmActorEvent.Result<Int>> =
+    private fun VmActorScheduler<Int, Int, Int>.awaitResults(count: Int): List<VmActorEvent.Result<Int>> =
         awaitEvents(count).map { assertIs<VmActorEvent.Result<Int>>(it) }
 
-    private fun VmActorScheduler<Int, Int>.awaitEvents(count: Int): List<VmActorEvent<Int>> {
+    private fun VmActorScheduler<Int, Int, Int>.awaitEvents(count: Int): List<VmActorEvent<Int>> {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
         val events = mutableListOf<VmActorEvent<Int>>()
         while (events.size < count && System.nanoTime() < deadline) {
@@ -395,9 +481,11 @@ class VmActorSchedulerTest {
         epoch: Long = 1,
     ): VmActorEndpoint = VmActorEndpoint(ComputerId.fromLongs(0, value.toLong() + 1), epoch)
 
-    private fun <C : Any, R : Any> processor(block: (C) -> R): VmActorProcessor<C, R> =
-        object : VmActorProcessor<C, R> {
+    private fun <C : Any, R : Any> processor(block: (C) -> R): VmActorProcessor<C, C, R> =
+        object : VmActorProcessor<C, C, R> {
             override fun process(command: C): R = block(command)
+
+            override fun advance(permit: C): R = block(permit)
         }
 
     private companion object {
