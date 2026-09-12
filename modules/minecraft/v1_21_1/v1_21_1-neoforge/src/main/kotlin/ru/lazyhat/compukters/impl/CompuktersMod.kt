@@ -31,6 +31,7 @@ import net.neoforged.neoforge.common.NeoForge
 import net.neoforged.neoforge.event.tick.ServerTickEvent
 import ru.lazyhat.compukters.core.LOGGER
 import ru.lazyhat.compukters.core.MOD_ID
+import ru.lazyhat.compukters.impl.benchmark.VmBenchmarkCommands
 import ru.lazyhat.compukters.impl.compiler.NeoForgeCompilerServices
 import ru.lazyhat.compukters.impl.computer.NeoForgeVmActorServices
 import ru.lazyhat.compukters.impl.config.CompuktersClientConfig
@@ -55,6 +56,7 @@ class CompuktersMod(
         eventBus.addListener(IdeTargetNetwork::register)
         if (FMLEnvironment.dist == Dist.CLIENT) IdeClientBootstrap.register(eventBus)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onLevelSave)
+        NeoForge.EVENT_BUS.addListener(VmBenchmarkCommands::register)
         NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::onServerStarting)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onServerStarting)
         NeoForge.EVENT_BUS.addListener(
@@ -62,6 +64,12 @@ class CompuktersMod(
             ServerTickEvent.Pre::class.java,
             NeoForgeVmActorServices::beforeServerTick,
         )
+        NeoForge.EVENT_BUS.addListener(
+            EventPriority.NORMAL,
+            ServerTickEvent.Post::class.java,
+            VmBenchmarkCommands::afterServerTick,
+        )
+        NeoForge.EVENT_BUS.addListener(VmBenchmarkCommands::onServerStopping)
         NeoForge.EVENT_BUS.addListener(NeoForgeVmActorServices::onServerStopping)
         NeoForge.EVENT_BUS.addListener(NeoForgeWorldFileSystemStores::onServerStopping)
         NeoForge.EVENT_BUS.addListener(NeoForgeCompilerServices::onServerStopping)

@@ -25,6 +25,7 @@ import net.neoforged.fml.common.EventBusSubscriber
 import net.neoforged.neoforge.event.RegisterGameTestsEvent
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate
 import ru.lazyhat.compukters.core.MOD_ID
+import ru.lazyhat.compukters.impl.benchmark.VmBenchmarkGameTestScenario
 
 @PrefixGameTestTemplate(false)
 object CompuktersGameTests {
@@ -43,6 +44,15 @@ object CompuktersGameTests {
     @JvmStatic
     @GameTest(template = EMPTY_TEMPLATE, templateNamespace = "minecraft", timeoutTicks = TIMEOUT_TICKS)
     fun vmActorService(helper: GameTestHelper) = VmActorServiceGameTestScenario.run(helper)
+
+    @JvmStatic
+    @GameTest(
+        batch = "benchmark",
+        template = EMPTY_TEMPLATE,
+        templateNamespace = "minecraft",
+        timeoutTicks = TIMEOUT_TICKS,
+    )
+    fun vmBenchmark(helper: GameTestHelper) = VmBenchmarkGameTestScenario.run(helper)
 
     private const val EMPTY_TEMPLATE = "bastion/mobs/empty"
     private const val TIMEOUT_TICKS = 10_000

@@ -42,13 +42,15 @@ internal object VmBenchmarkCommands {
     private val latestRuns = IdentityHashMap<MinecraftServer, LatestRun>()
     private val areaDispatcher = VmBenchmarkAreaDispatcher()
 
-    fun register(event: RegisterCommandsEvent) = register(event.dispatcher)
+    fun register(event: RegisterCommandsEvent) {
+        register(event.dispatcher)
+    }
 
     internal fun register(dispatcher: CommandDispatcher<CommandSourceStack>) {
         dispatcher.register(
             Commands
                 .literal("compukters")
-                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .requires(::hasGameMasterPermission)
                 .then(
                     Commands
                         .literal("vmbench")
