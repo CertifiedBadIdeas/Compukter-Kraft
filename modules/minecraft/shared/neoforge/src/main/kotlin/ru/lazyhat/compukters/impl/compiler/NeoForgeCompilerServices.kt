@@ -102,7 +102,6 @@ internal class NeoForgeCompilerService private constructor(
 
     companion object {
         fun open(worldRoot: Path): NeoForgeCompilerService {
-            check(Runtime.version().feature() >= 25) { "Compukters compiler worker requires JDK 25" }
             val paths = CompilerServicePaths.at(worldRoot)
             Files.createDirectories(paths.temporaryRoot)
             val packaged =
