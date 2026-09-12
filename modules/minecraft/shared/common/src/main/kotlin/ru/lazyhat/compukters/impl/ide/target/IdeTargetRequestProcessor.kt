@@ -28,7 +28,7 @@ import ru.lazyhat.compukters.ide.client.target.IdeVerificationTicket
 import ru.lazyhat.compukters.ide.client.target.IdeVerifyResult
 import java.util.UUID
 
-internal class IdeTargetRequestProcessor(
+class IdeTargetRequestProcessor(
     private val leases: IdeTargetLeaseService,
     private val deployments: IdeTargetDeploymentService,
     private val files: IdeTargetFileSystemService = IdeTargetFileSystemService(leases),

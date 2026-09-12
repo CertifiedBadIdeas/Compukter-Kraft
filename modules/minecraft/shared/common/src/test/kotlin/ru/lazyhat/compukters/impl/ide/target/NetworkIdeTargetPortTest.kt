@@ -39,11 +39,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 
-class NeoForgeIdeTargetPortTest {
+class NetworkIdeTargetPortTest {
     @Test
     fun `verification uploads exactly one ordered 32 KiB chunk at a time before verify`() {
         val channel = Channel()
-        val port = NeoForgeIdeTargetPort(channel)
+        val port = NetworkIdeTargetPort(channel)
         val target = target()
         val bytes = ByteArray(65_537) { index -> index.toByte() }
         val artifact = IdeTargetArtifact(sha256(bytes), bytes)
@@ -79,7 +79,7 @@ class NeoForgeIdeTargetPortTest {
     @Test
     fun `port maps target operations and closes its request channel`() {
         val channel = Channel()
-        val port = NeoForgeIdeTargetPort(channel)
+        val port = NetworkIdeTargetPort(channel)
         val target = target()
         val path = IdeDeploymentPath.fromProgramName("demo")
         val ticket = IdeVerificationTicket.of(byteArrayOf(4), target, hash(5), artifactBytes = 7)

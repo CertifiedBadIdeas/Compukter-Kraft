@@ -34,7 +34,7 @@ import ru.lazyhat.compukters.ide.client.target.IdeVerificationTicket
 import ru.lazyhat.compukters.ide.client.target.IdeVerifyResult
 import java.util.concurrent.CompletableFuture
 
-internal class NeoForgeIdeTargetPort(
+class NetworkIdeTargetPort(
     private val channel: IdeTargetRequestChannel,
 ) : IdeTargetPort,
     AutoCloseable {
@@ -55,8 +55,8 @@ internal class NeoForgeIdeTargetPort(
         val bytes = artifact.bytes()
         var stage =
             channel.request(IdeTargetRequest.BeginUpload(reference, artifact.hash, bytes.size))
-        for (offset in bytes.indices step IdeTargetWireProtocol.MAXIMUM_CHUNK_BYTES) {
-            val end = minOf(offset + IdeTargetWireProtocol.MAXIMUM_CHUNK_BYTES, bytes.size)
+        for (offset in bytes.indices step IdeTargetProtocolLimits.CHUNK_BYTES) {
+            val end = minOf(offset + IdeTargetProtocolLimits.CHUNK_BYTES, bytes.size)
             stage =
                 stage.thenCompose { reply ->
                     if (reply != IdeTargetReply.UploadAccepted) {
@@ -242,6 +242,6 @@ internal class NeoForgeIdeTargetPort(
     private fun protocolFailure(detail: String) = IdeTargetFailure(IdeTargetFailureKind.Protocol, detail)
 }
 
-internal class IdeTargetProtocolException(
+class IdeTargetProtocolException(
     message: String,
 ) : IllegalStateException(message)

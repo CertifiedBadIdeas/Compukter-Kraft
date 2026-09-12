@@ -14,12 +14,6 @@ package ru.lazyhat.compukters.impl.ide.target
 
 import java.util.concurrent.CompletableFuture
 
-internal interface IdeTargetRequestChannel {
-    fun request(request: IdeTargetRequest): CompletableFuture<IdeTargetReply>
-
-    fun disconnect()
-}
-
 internal class IdeTargetRequestBroker(
     private val send: (IdeTargetRequestPayload) -> Unit,
     private val maximumPendingRequests: Int = DEFAULT_MAXIMUM_PENDING_REQUESTS,

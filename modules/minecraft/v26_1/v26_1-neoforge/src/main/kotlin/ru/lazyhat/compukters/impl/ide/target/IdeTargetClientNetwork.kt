@@ -26,11 +26,11 @@ internal object IdeTargetClientNetwork {
     private var current: IdeTargetRequestBroker? = null
     private var currentTerminal: IdeTargetTerminalClient? = null
 
-    fun openPort(): NeoForgeIdeTargetPort {
+    fun openPort(): NetworkIdeTargetPort {
         disconnect()
         val broker = IdeTargetRequestBroker(ClientPacketDistributor::sendToServer)
         current = broker
-        return NeoForgeIdeTargetPort(OwnedChannel(broker))
+        return NetworkIdeTargetPort(OwnedChannel(broker))
     }
 
     fun openTerminal(): IdeTargetTerminalClient {
