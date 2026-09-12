@@ -107,7 +107,7 @@ internal object ComputerLifecycleGameTestScenario {
                 helper.assertTrue(entity.runtimeState == ProgramComputerState.Closed, "removing the block did not close its VM")
                 verifyForegroundProcessAndReboot(
                     helper,
-                    ComputerId.fromLongs(0x50524F43L, 0x455353L),
+                    uniqueComputerId(),
                 )
                 verifyTwoComputerCompilation(helper)
                 verifyPersistentProgrammingLoop(helper)
@@ -290,8 +290,8 @@ internal object ComputerLifecycleGameTestScenario {
 
     private fun verifyTwoComputerCompilation(helper: GameTestHelper) {
         val rom = processTestRom()
-        val firstId = ComputerId.fromLongs(0x434F4D50494C45L, 1)
-        val secondId = ComputerId.fromLongs(0x434F4D50494C45L, 2)
+        val firstId = uniqueComputerId()
+        val secondId = uniqueComputerId()
         val firstContext = NeoForgeWorldFileSystemStores.contextSource.create(helper.level, firstId, rom)
         val secondContext = NeoForgeWorldFileSystemStores.contextSource.create(helper.level, secondId, rom)
         writeFixture(firstContext.store, firstId, "filesystem-compilation-source.cpkt")
@@ -331,8 +331,8 @@ internal object ComputerLifecycleGameTestScenario {
 
     private fun verifyPersistentProgrammingLoop(helper: GameTestHelper) {
         val rom = processTestRom()
-        val firstId = ComputerId.fromLongs(0x454449544F52L, 1)
-        val secondId = ComputerId.fromLongs(0x454449544F52L, 2)
+        val firstId = uniqueComputerId()
+        val secondId = uniqueComputerId()
         val firstContext = NeoForgeWorldFileSystemStores.contextSource.create(helper.level, firstId, rom)
         val secondContext = NeoForgeWorldFileSystemStores.contextSource.create(helper.level, secondId, rom)
         val router =
@@ -414,7 +414,7 @@ internal object ComputerLifecycleGameTestScenario {
     }
 
     private fun verifyIdeTargetFileImport(helper: GameTestHelper) {
-        val computerId = ComputerId.fromLongs(0x49444546494C45L, 1)
+        val computerId = uniqueComputerId()
         val rom = processTestRom()
         val context = NeoForgeWorldFileSystemStores.contextSource.create(helper.level, computerId, rom)
         writeFixture(context.store, computerId, "filesystem-write.cpkt", rom)
@@ -572,10 +572,18 @@ internal object ComputerLifecycleGameTestScenario {
             val firstState = first.serverTick()
             val secondState = second.serverTick()
             if (firstState == ProgramComputerState.WaitingForInput && secondState == ProgramComputerState.WaitingForInput) return
-            check(firstState == ProgramComputerState.Running || firstState == ProgramComputerState.WaitingForCompiler) {
+            check(
+                firstState == ProgramComputerState.Running ||
+                    firstState == ProgramComputerState.WaitingForCompiler ||
+                    firstState == ProgramComputerState.WaitingForInput,
+            ) {
                 "first computer terminated before waiting for input: $firstState"
             }
-            check(secondState == ProgramComputerState.Running || secondState == ProgramComputerState.WaitingForCompiler) {
+            check(
+                secondState == ProgramComputerState.Running ||
+                    secondState == ProgramComputerState.WaitingForCompiler ||
+                    secondState == ProgramComputerState.WaitingForInput,
+            ) {
                 "second computer terminated before waiting for input: $secondState"
             }
             if (firstState == ProgramComputerState.WaitingForCompiler || secondState == ProgramComputerState.WaitingForCompiler) {
@@ -857,6 +865,9 @@ internal object ComputerLifecycleGameTestScenario {
         }
 
     private fun neverStarted(): ProgramComputerState = ProgramComputerState.PoweredOff(ProgramComputerStopReason.NeverStarted)
+
+    private fun uniqueComputerId(): ComputerId =
+        UUID.randomUUID().let { value -> ComputerId.fromLongs(value.mostSignificantBits, value.leastSignificantBits) }
 
     private const val FIRST_MARKER = "fun main() = 42\n"
     private const val SECOND_MARKER = "fun main() = 7\n"
