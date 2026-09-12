@@ -725,4 +725,9 @@ private fun VmResourceSnapshot.toProgramSnapshot(
         filesystemNodes = filesystemNodes,
         filesystemNodeCapacity = filesystemNodeCapacity,
         countersSaturated = countersSaturated || granted.saturated,
+        taskCapacity = taskCapacity,
+        liveTasks = liveTasks,
+        runnableTasks = runnableTasks,
+        suspendedTasks = suspendedTasks,
+        completedTasks = completedTasks,
     )

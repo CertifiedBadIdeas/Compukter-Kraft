@@ -41,12 +41,13 @@ class RuntimeBundleSupportTest {
     lateinit var temporary: Path
 
     @Test
-    fun pinsTheCurrentAbi10RuntimeRelease() {
+    fun pinsTheCurrentAbi12RuntimeRelease() {
         val contract = currentRuntimeBundleContract("0".repeat(40))
 
-        assertEquals("0.10.0", contract.runtimeVersion)
-        assertEquals("v0.10.0", contract.releaseTag)
-        assertEquals(10, contract.ffiAbi)
+        assertEquals("0.12.0", contract.runtimeVersion)
+        assertEquals("v0.12.0", contract.releaseTag)
+        assertEquals(12, contract.ffiAbi)
+        assertEquals(2, contract.formats["resource-snapshot"])
     }
 
     @Test

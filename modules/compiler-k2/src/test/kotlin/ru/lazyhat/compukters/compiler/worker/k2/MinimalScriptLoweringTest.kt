@@ -79,12 +79,21 @@ class MinimalScriptLoweringTest {
                     request(
                         """
                         import compukter.concurrent.Tasks
+                        import compukter.redstone.Redstone
 
-                        suspend fun reader() {}
+                        suspend fun reader() {
+                            readln()
+                        }
+
+                        suspend fun writer() {
+                            Redstone.right.set(13)
+                        }
 
                         suspend fun main() {
-                            val task = Tasks.launch(::reader)
-                            task.join()
+                            val readerTask = Tasks.launch(::reader)
+                            val writerTask = Tasks.launch(::writer)
+                            readerTask.join()
+                            writerTask.join()
                         }
                         """.trimIndent(),
                     ),
@@ -99,6 +108,9 @@ class MinimalScriptLoweringTest {
             assertEquals(64u, artifact.manifest.maximumCoroutines)
             assertTrue(SemanticFeature.COROUTINES in artifact.semanticFeatures)
             assertTrue(result.diagnostics.none { it.severity.name == "ERROR" }, result.diagnostics.toString())
+            System.getProperty("compukter.vm.tasksArtifact")?.let { output ->
+                Path.of(output).also { it.parent.createDirectories() }.writeBytes(artifactBytes)
+            }
         }
 
     @Test

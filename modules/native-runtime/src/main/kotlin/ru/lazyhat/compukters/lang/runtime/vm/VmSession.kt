@@ -492,7 +492,7 @@ private class ResourceSnapshotWireDecoder(
     private val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
 
     fun snapshot(): VmResourceSnapshot {
-        require(u8() == 1) { "unsupported resource snapshot wire version" }
+        require(u8() == 2) { "unsupported resource snapshot wire version" }
         val flags = u8()
         require(flags and 0xfe == 0) { "invalid resource snapshot flags" }
         val snapshot =
@@ -506,6 +506,11 @@ private class ResourceSnapshotWireDecoder(
                 heapUsedBytes = nonNegativeLong(),
                 liveObjects = nonNegativeLong(),
                 mutableExecutionResidentBytes = nonNegativeLong(),
+                taskCapacity = nonNegativeLong(),
+                liveTasks = nonNegativeLong(),
+                runnableTasks = nonNegativeLong(),
+                suspendedTasks = nonNegativeLong(),
+                completedTasks = nonNegativeLong(),
                 filesystemLogicalBytes = nonNegativeLong(),
                 filesystemLogicalCapacityBytes = nonNegativeLong(),
                 filesystemNodes = unsignedInt(),

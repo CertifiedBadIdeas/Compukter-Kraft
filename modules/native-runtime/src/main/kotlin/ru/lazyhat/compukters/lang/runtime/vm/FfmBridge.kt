@@ -812,7 +812,7 @@ internal class FfmBridge private constructor(
         private const val MAXIMUM_STORE_OPEN_BYTES = 10
         private const val MAXIMUM_STORE_HEALTH_BYTES = 2
         private const val MAXIMUM_STORE_GENERATION_BYTES = 9
-        private const val RESOURCE_SNAPSHOT_BYTES = 98
+        private const val RESOURCE_SNAPSHOT_BYTES = 138
         private const val MAXIMUM_EXECUTABLE_REVISION_BYTES = 10
         private const val MAXIMUM_COMPILATION_REQUEST_BYTES = 512 * 1024
         private const val MAXIMUM_FILESYSTEM_RESULT_BYTES = 2 * 1024 * 1024
@@ -910,7 +910,7 @@ internal class FfmBridge private constructor(
                     terminalTextHandle =
                         downcall(FfmAbiFunction.TERMINAL_TEXT),
                 ).also { bridge ->
-                    if (bridge.abiVersion() != 11) throw VmBridgeException("unsupported Compukter FFM ABI")
+                    if (bridge.abiVersion() != 12) throw VmBridgeException("unsupported Compukter FFM ABI")
                 }
             } catch (error: Throwable) {
                 arena.close()

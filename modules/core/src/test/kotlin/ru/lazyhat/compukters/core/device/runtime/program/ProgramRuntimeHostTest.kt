@@ -98,6 +98,11 @@ class ProgramRuntimeHostTest {
         assertEquals(23, snapshot.executedInstructions)
         assertEquals(100, snapshot.heapCapacityBytes)
         assertEquals(40, snapshot.heapUsedBytes)
+        assertEquals(8, snapshot.taskCapacity)
+        assertEquals(3, snapshot.liveTasks)
+        assertEquals(1, snapshot.runnableTasks)
+        assertEquals(2, snapshot.suspendedTasks)
+        assertEquals(4, snapshot.completedTasks)
         assertEquals(80, snapshot.filesystemLogicalBytes)
         assertEquals(100, snapshot.filesystemLogicalCapacityBytes)
 
@@ -1190,6 +1195,11 @@ class ProgramRuntimeHostTest {
                 filesystemNodes = 6,
                 filesystemNodeCapacity = 10,
                 countersSaturated = false,
+                taskCapacity = 8,
+                liveTasks = 3,
+                runnableTasks = 1,
+                suspendedTasks = 2,
+                completedTasks = 4,
             )
     }
 }

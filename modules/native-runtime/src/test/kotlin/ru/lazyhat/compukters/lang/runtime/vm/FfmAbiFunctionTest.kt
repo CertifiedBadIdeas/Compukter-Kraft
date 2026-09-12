@@ -24,7 +24,7 @@ import kotlin.test.assertEquals
 
 class FfmAbiFunctionTest {
     @Test
-    fun `ABI v11 inventory has 40 unique C status and scalar functions`() {
+    fun `ABI v12 inventory has 40 unique C status and scalar functions`() {
         val functions = FfmAbiFunction.entries
 
         assertEquals(40, functions.size)

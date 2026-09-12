@@ -237,6 +237,15 @@ registerKotlinVmConformance(
     conformanceScenario = "suspend-call",
 )
 registerKotlinVmConformance(
+    taskName = "testKotlinTasksVmConformance",
+    taskDescription = "Executes cooperative K2 Guest tasks with independent host requests.",
+    artifactTask = ":compiler-k2:generateTasksConformanceArtifact",
+    artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/tasks.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-tasks-conformance",
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_TASKS_ARTIFACT",
+    conformanceScenario = "tasks",
+)
+registerKotlinVmConformance(
     taskName = "testKotlinWhenVmConformance",
     taskDescription = "Executes bounded K2 when branches with the pinned Compukter VM.",
     artifactTask = ":compiler-k2:generateWhenConformanceArtifact",

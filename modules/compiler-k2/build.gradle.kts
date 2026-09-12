@@ -282,6 +282,7 @@ tasks.test {
 val kotlinSubsetConformanceArtifact = layout.buildDirectory.file("generated/conformance/kotlin-subset.cpkt")
 val blockingCallConformanceArtifact = layout.buildDirectory.file("generated/conformance/blocking-call.cpkt")
 val suspendCallConformanceArtifact = layout.buildDirectory.file("generated/conformance/suspend-call.cpkt")
+val tasksConformanceArtifact = layout.buildDirectory.file("generated/conformance/tasks.cpkt")
 val whenConformanceArtifact = layout.buildDirectory.file("generated/conformance/when.cpkt")
 val argvConformanceArtifact = layout.buildDirectory.file("generated/conformance/argv.cpkt")
 val platformScalarConformanceArtifact = layout.buildDirectory.file("generated/conformance/platform-scalar.cpkt")
@@ -323,6 +324,22 @@ val generateSuspendCallConformanceArtifact = tasks.register<Test>("generateSuspe
     doFirst {
         systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
         systemProperty("compukter.vm.suspendCallArtifact", suspendCallConformanceArtifact.get().asFile.absolutePath)
+    }
+}
+
+val generateTasksConformanceArtifact = tasks.register<Test>("generateTasksConformanceArtifact") {
+    description = "Compiles cooperative Guest tasks for pinned VM conformance."
+    group = "verification"
+    dependsOn(tasks.jar)
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter.includeTestsMatching("*direct top level suspend task lowers to spawn and join*")
+    inputs.file(workerJar)
+    outputs.file(tasksConformanceArtifact)
+    doFirst {
+        systemProperty("compukters.worker.jar", workerJar.get().asFile.absolutePath)
+        systemProperty("compukter.vm.tasksArtifact", tasksConformanceArtifact.get().asFile.absolutePath)
     }
 }
 

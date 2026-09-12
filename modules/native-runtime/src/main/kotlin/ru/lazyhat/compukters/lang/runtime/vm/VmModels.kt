@@ -270,6 +270,11 @@ data class VmResourceSnapshot(
     val filesystemNodes: Long,
     val filesystemNodeCapacity: Long,
     val countersSaturated: Boolean,
+    val taskCapacity: Long = 0,
+    val liveTasks: Long = 0,
+    val runnableTasks: Long = 0,
+    val suspendedTasks: Long = 0,
+    val completedTasks: Long = 0,
 ) {
     init {
         require(
@@ -287,11 +292,20 @@ data class VmResourceSnapshot(
                 filesystemLogicalCapacityBytes,
                 filesystemNodes,
                 filesystemNodeCapacity,
+                taskCapacity,
+                liveTasks,
+                runnableTasks,
+                suspendedTasks,
+                completedTasks,
             ).all { it >= 0 },
         ) { "resource snapshot values must not be negative" }
         require(heapUsedBytes <= heapCapacityBytes) { "heap usage exceeds capacity" }
         require(filesystemLogicalBytes <= filesystemLogicalCapacityBytes) { "filesystem usage exceeds capacity" }
         require(filesystemNodes <= filesystemNodeCapacity) { "filesystem node usage exceeds capacity" }
+        require(completedTasks <= taskCapacity && liveTasks <= taskCapacity - completedTasks) { "task usage exceeds capacity" }
+        require(runnableTasks <= liveTasks && suspendedTasks == liveTasks - runnableTasks) {
+            "live task state counts disagree"
+        }
     }
 }
 

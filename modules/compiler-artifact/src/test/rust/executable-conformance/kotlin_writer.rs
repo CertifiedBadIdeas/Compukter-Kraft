@@ -24,11 +24,102 @@ fn main() {
         "argv" => k2_string_array_entry_executes_exact_utf16_arguments(),
         "subset" => k2_string_materialization_executes_char_arrays_and_scalar_templates(),
         "suspend-call" => k2_suspend_project_call_resumes_across_async_capability(),
+        "tasks" => k2_tasks_keep_independent_host_requests_in_flight(),
         "when" => k2_bounded_when_selects_matched_and_fallback_branches(),
         _ => panic!("unknown Kotlin-to-VM conformance scenario: {scenario}"),
     }
 
     println!("Kotlin-to-VM conformance scenario passed: {scenario}");
+}
+
+fn k2_tasks_keep_independent_host_requests_in_flight() {
+    let path = std::env::var("COMPUKTER_KOTLIN_TASKS_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_TASKS_ARTIFACT must be set for this conformance test");
+    let bytes = fs::read(path).expect("K2 tasks output must exist");
+    let verified = verify_artifact(Arc::from(bytes), ArtifactLimits::default())
+        .expect("pinned VM must verify K2 tasks output");
+    let side = [HostValueType::I32];
+    let side_and_level = [HostValueType::I32, HostValueType::I32];
+    let operations = [
+        OperationSchema::synchronous(&side, HostValueType::I32),
+        OperationSchema::asynchronous(&side, HostValueType::I32),
+        OperationSchema::asynchronous(&side_and_level, HostValueType::I32),
+        OperationSchema::asynchronous(&side_and_level, HostValueType::I32),
+        OperationSchema::asynchronous(&side_and_level, HostValueType::I32),
+        OperationSchema::synchronous(&[], HostValueType::I32),
+        OperationSchema::asynchronous(&side_and_level, HostValueType::Unit),
+        OperationSchema::asynchronous(&side, HostValueType::Unit),
+    ];
+    let binding = CapabilityBinding::new("compukter", "redstone", 1, 0, &operations);
+    let string_argument = [HostValueType::String];
+    let stdio_operations = [
+        OperationSchema::asynchronous(&[], HostValueType::String),
+        OperationSchema::synchronous(&string_argument, HostValueType::Unit),
+        OperationSchema::synchronous(&string_argument, HostValueType::Unit),
+    ];
+    let stdio = CapabilityBinding::new("compukter", "stdio", 1, 0, &stdio_operations);
+    let profile = ExecutionProfile {
+        heap_bytes: 1024 * 1024,
+        frame_storage_bytes: 1024 * 1024,
+        maximum_call_depth: 64,
+        maximum_coroutines: 64,
+        maximum_host_requests: 64,
+        maximum_events: 0,
+        maximum_slice_budget: u32::MAX,
+        compiler_abi: [0; 32],
+        platform_abi: [0; 32],
+        maximum_host_arguments: 16,
+        maximum_outbound_utf16_code_units: 4096,
+        maximum_inbound_utf16_code_units: 4096,
+        maximum_accepted_responses: 64,
+        entry_argument_limits: entry_argument_limits(),
+    };
+    let mut session = Session::admit(verified, profile, &[binding, stdio])
+        .expect("K2 cooperative tasks must admit");
+    session.start(&[]).expect("K2 cooperative tasks must start");
+
+    let AdvanceOutcome::HostRequestBatch(batch) = session
+        .advance(4096, 64)
+        .expect("K2 cooperative tasks must advance")
+    else {
+        panic!("K2 cooperative tasks did not publish a host request batch")
+    };
+    assert_eq!(2, batch.len());
+    let read = batch.get(0).expect("reader request must be present");
+    let write = batch.get(1).expect("writer request must be present");
+    assert_eq!("stdio", read.name());
+    assert_eq!(0, read.operation());
+    assert_eq!("redstone", write.name());
+    assert_eq!(6, write.operation());
+    assert_ne!(read.task_id(), write.task_id());
+    let read_identity = (read.task_id(), read.id());
+    let write_identity = (write.task_id(), write.id());
+
+    session
+        .resume_for(
+            write_identity.0,
+            write_identity.1,
+            HostResponse::Success(HostValueInput::Unit),
+        )
+        .expect("writer task must resume first");
+    session
+        .resume_for(
+            read_identity.0,
+            read_identity.1,
+            HostResponse::Success(HostValueInput::String(&utf16("ready"))),
+        )
+        .expect("reader task must resume second");
+
+    loop {
+        match session
+            .advance(4096, 64)
+            .expect("K2 cooperative tasks must finish")
+        {
+            AdvanceOutcome::Halted(None) => break,
+            AdvanceOutcome::SliceExhausted => {}
+            outcome => panic!("unexpected K2 cooperative tasks outcome: {outcome:?}"),
+        }
+    }
 }
 
 fn pinned_vm_verifies_kotlin_executable_instruction_artifact() {
