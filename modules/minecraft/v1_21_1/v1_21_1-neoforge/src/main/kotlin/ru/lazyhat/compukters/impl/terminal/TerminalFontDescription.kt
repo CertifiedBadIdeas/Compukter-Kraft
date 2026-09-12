@@ -16,8 +16,6 @@
  * limitations under the License.
  */
 
-@file:Suppress("ktlint:standard:filename")
-
 package ru.lazyhat.compukters.impl.terminal
 
 import net.minecraft.resources.ResourceLocation

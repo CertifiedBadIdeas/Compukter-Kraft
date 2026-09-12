@@ -24,7 +24,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
-class ComputerBlockResource1211Test {
+class ComputerBlockResourceTest {
     @Test
     fun `blockstate uses the legacy variant model format`() {
         val variants = resourceJson("/assets/compukters/blockstates/compukter.json").getAsJsonObject("variants")

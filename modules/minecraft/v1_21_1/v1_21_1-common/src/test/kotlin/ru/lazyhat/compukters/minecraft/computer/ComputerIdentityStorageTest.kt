@@ -25,7 +25,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-class ComputerIdentityStorage1211Test {
+class ComputerIdentityStorageTest {
     @Test
     fun `identity survives the 1_21_1 CompoundTag format`() {
         val original = ComputerIdentityStorage()
