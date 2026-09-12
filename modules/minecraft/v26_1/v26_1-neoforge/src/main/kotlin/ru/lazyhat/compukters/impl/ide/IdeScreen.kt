@@ -391,7 +391,7 @@ internal class IdeScreen(
                 prompt = prompt.state,
                 treeFirstRow = treeFirstRow,
                 selectedTreePath = selectedTreePath,
-                terminalState = terminalOverlay.state(),
+                terminalState = terminalOverlay.state().presentationStatus(),
                 terminalVisible = terminalOverlay.visible,
                 explorerDrag = input.explorerDragVisual,
                 projectSwitcherOpen = projectSwitcherOpen && prompt.state == null && state.dialog == null,
@@ -516,7 +516,7 @@ internal class IdeScreen(
                 prompt = prompt.state,
                 treeFirstRow = treeFirstRow,
                 selectedTreePath = selectedTreePath,
-                terminalState = terminalOverlay.state(),
+                terminalState = terminalOverlay.state().presentationStatus(),
                 terminalVisible = terminalOverlay.visible,
                 explorerDrag = input.explorerDragVisual,
                 projectSwitcherOpen = projectSwitcherOpen && prompt.state == null && state.dialog == null,
@@ -769,3 +769,12 @@ private fun KeyEvent.toIdeInput(): IdeKeyInput =
         modifiers = modifiers(),
         paste = isPaste,
     )
+
+private fun IdeTargetTerminalState.presentationStatus(): IdeTerminalStatus =
+    when (this) {
+        IdeTargetTerminalState.Closed -> IdeTerminalStatus.Closed
+        is IdeTargetTerminalState.Opening -> IdeTerminalStatus.Opening
+        is IdeTargetTerminalState.Active -> IdeTerminalStatus.Active
+        is IdeTargetTerminalState.Resyncing -> IdeTerminalStatus.Resyncing
+        is IdeTargetTerminalState.Failed -> IdeTerminalStatus.Failed(detail, retryable)
+    }

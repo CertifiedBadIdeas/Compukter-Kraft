@@ -43,10 +43,9 @@ import ru.lazyhat.compukters.ide.client.target.IdeTargetState
 import ru.lazyhat.compukters.ide.editor.EditorRange
 import ru.lazyhat.compukters.ide.highlight.KotlinLexicalKind
 import ru.lazyhat.compukters.ide.project.fs.ProjectPath
-import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalState
 import ru.lazyhat.compukters.impl.terminal.TerminalFontProfile
 
-internal object IdeRenderer {
+object IdeRenderer {
     fun extract(
         state: IdeViewState,
         geometry: IdeRenderGeometry,
@@ -54,7 +53,7 @@ internal object IdeRenderer {
         prompt: IdePromptState? = null,
         treeFirstRow: Int = 0,
         selectedTreePath: ProjectPath? = null,
-        terminalState: IdeTargetTerminalState = IdeTargetTerminalState.Closed,
+        terminalState: IdeTerminalStatus = IdeTerminalStatus.Closed,
         terminalVisible: Boolean = false,
         explorerDrag: IdeExplorerDragVisual? = null,
         projectSwitcherOpen: Boolean = false,
@@ -98,7 +97,7 @@ internal object IdeRenderer {
         private val font: TerminalFontProfile,
         private val treeFirstRow: Int,
         private val selectedTreePath: ProjectPath?,
-        private val terminalState: IdeTargetTerminalState,
+        private val terminalState: IdeTerminalStatus,
         private val terminalVisible: Boolean,
         private val explorerDrag: IdeExplorerDragVisual?,
         private val projectSwitcherOpen: Boolean,
@@ -465,8 +464,8 @@ internal object IdeRenderer {
 
         private fun terminalTooltip(): String? =
             when (val state = terminalState) {
-                is IdeTargetTerminalState.Opening -> "Opening target terminal…"
-                is IdeTargetTerminalState.Failed -> state.detail
+                IdeTerminalStatus.Opening -> "Opening target terminal…"
+                is IdeTerminalStatus.Failed -> state.detail
                 else -> null
             }
 

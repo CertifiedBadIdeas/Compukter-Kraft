@@ -80,7 +80,6 @@ import ru.lazyhat.compukters.ide.project.ProjectCatalog
 import ru.lazyhat.compukters.ide.project.ToolchainLockIdentity
 import ru.lazyhat.compukters.ide.project.fs.ProjectPath
 import ru.lazyhat.compukters.ide.project.tree.ProjectTreeStore
-import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalState
 import ru.lazyhat.compukters.impl.terminal.TerminalFontProfile
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
@@ -576,7 +575,7 @@ class IdeRendererStateTest {
             IdeRenderer.extract(
                 workspaceState(IdeEditorView.Empty, IdeBuildState.Idle, target = capable),
                 geometry(),
-                terminalState = IdeTargetTerminalState.Opening(1),
+                terminalState = IdeTerminalStatus.Opening,
                 terminalVisible = true,
             )
 
@@ -589,7 +588,7 @@ class IdeRendererStateTest {
             IdeRenderer.extract(
                 workspaceState(IdeEditorView.Empty, IdeBuildState.Idle, target = capable),
                 geometry(),
-                terminalState = IdeTargetTerminalState.Failed("Target stopped", retryable = true),
+                terminalState = IdeTerminalStatus.Failed("Target stopped", retryable = true),
                 terminalVisible = false,
             )
         val failedTarget = failed.hitTargets.single { it.action == IdeHitAction.Terminal }

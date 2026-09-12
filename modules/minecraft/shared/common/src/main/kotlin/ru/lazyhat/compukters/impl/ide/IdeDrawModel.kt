@@ -78,6 +78,21 @@ enum class IdeHitAction {
 
 enum class IdeFocusGroup { Page, Dialog }
 
+sealed interface IdeTerminalStatus {
+    data object Closed : IdeTerminalStatus
+
+    data object Opening : IdeTerminalStatus
+
+    data object Active : IdeTerminalStatus
+
+    data object Resyncing : IdeTerminalStatus
+
+    data class Failed(
+        val detail: String,
+        val retryable: Boolean,
+    ) : IdeTerminalStatus
+}
+
 sealed interface IdeTextStyle {
     data object Ui : IdeTextStyle
 

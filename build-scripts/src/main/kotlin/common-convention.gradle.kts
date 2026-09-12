@@ -23,10 +23,10 @@ plugins {
 val libs = libsCatalog()
 
 dependencies {
+    implementation(project(":compiler-client"))
     implementation(project(":core"))
     implementation(project(":ide-client"))
     implementation(project(":native-runtime-api"))
-    testImplementation(project(":compiler-client"))
 
     implementation(libs.findLibrary("kotlin-stdlib").get())
     implementation(libs.findLibrary("kotlin-logging").get())
