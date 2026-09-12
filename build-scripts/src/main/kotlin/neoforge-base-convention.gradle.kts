@@ -37,6 +37,21 @@ architectury {
 
 val common = configurations.create("common")
 val shadowBundle = configurations.create("shadowBundle")
+val devRuntimeBundle =
+    configurations.create("devRuntimeBundle") {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+    }
+
+shadowBundle.dependencies.whenObjectAdded {
+    if (this is ProjectDependency) {
+        val mergedSourceProjectPaths = common.dependencies.withType<ProjectDependency>().map(ProjectDependency::getPath)
+        if (path in mergedSourceProjectPaths) return@whenObjectAdded
+        val devRuntimeDependency = dependencies.project(mapOf("path" to path)) as ProjectDependency
+        devRuntimeDependency.isTransitive = false
+        dependencies.add(devRuntimeBundle.name, devRuntimeDependency)
+    }
+}
 
 configurations {
     compileClasspath { extendsFrom(common) }
@@ -79,6 +94,16 @@ val productionJar = tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks
     duplicatesStrategy = DuplicatesStrategy.FAIL
     exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
 }
+
+val devRuntimeLibrariesJar =
+    tasks.register<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("devRuntimeLibrariesJar") {
+        configurations = listOf(devRuntimeBundle)
+        archiveClassifier.set("dev-runtime-libraries")
+        duplicatesStrategy = DuplicatesStrategy.FAIL
+        exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
+    }
+
+dependencies.add("forgeRuntimeLibrary", files(devRuntimeLibrariesJar))
 
 extensions.getByType<LoomGradleExtensionAPI>().nestJars(productionJar, configurations.named("include"))
 
