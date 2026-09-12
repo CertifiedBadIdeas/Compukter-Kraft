@@ -31,7 +31,7 @@ coverage.
 | --- | --- | --- | --- |
 | Artifact container, records, indexed tables, and canonical encoding | Unit tests under `src/decode`, `src/bytes.rs`, and `src/test_encode.rs`; `tests/container_rejection.rs`, `tests/minimal_artifact.rs`, `tests/golden_fixtures.rs`, and `tests/bounded_failures.rs` | Canonical forms, digests, section scope/order, record shapes, size/count limits, mutation robustness, and committed fixture reproducibility | Compiler agreement belongs to conformance rather than these decoder tests |
 | Semantic verification and admission | `src/verify/tests.rs`, `src/execution/image.rs`, `tests/semantic_verification.rs`, and `tests/session_api.rs` | CFG typing, initialization, calls, exceptions, module linking, feature bits, capability compatibility, entry resolution, and profile admission atomicity | Kotlin source support is tracked by compiler tests and conformance |
-| Scalar execution, control flow, calls, frames, quotas, and traces | `src/execution/tests.rs`, `frame.rs`, `numeric.rs`, `layout.rs`, and `error.rs` | JVM-compatible scalar behavior, deterministic block charging, calls/returns, frame bounds, stack overflow, trace digests, terminal outcomes, and failure payload bounds | Hardware timing is intentionally excluded from semantic gates |
+| Scalar execution, control flow, calls, frames, quotas, tasks, channels, and traces | `src/execution/tests.rs`, `channel.rs`, `task.rs`, `frame.rs`, `numeric.rs`, `layout.rs`, and `error.rs` | JVM-compatible scalar behavior, deterministic block charging, calls/returns, frame bounds, stack overflow, bounded FIFO channel handoff, task wake order, trace digests, terminal outcomes, and failure payload bounds | Hardware timing is intentionally excluded from semantic gates |
 | Managed heap, GC, strings, and external roots | `heap_tests.rs`, `gc_tests.rs`, `text_tests.rs`, and `external_roots.rs` | Portable layouts, allocation atomicity, arrays/objects/statics, exact safepoint roots, collection, OOM retry, UTF-16 semantics, stale handles, and steady-state allocation invariants | Hardware-specific baselines are opt-in ignored tests |
 | Host requests, capabilities, suspension, and batching | `requests_tests.rs`, `session_tests.rs`, and the vertical tests in `computer.rs` | Bounded request storage, task/request identity, LWW reduction, out-of-order completion, capability admission, wait/resume atomicity, string transport, and host-failure classification | Multi-task scheduling is future work tracked separately from transport coverage |
 | Terminal, stdio, and redstone devices | `tests/terminal_device.rs`, unit tests in `src/stdio.rs` and `src/redstone.rs`, plus `computer.rs` vertical tests | Grid mutation, replication/resync, bounded input, canonical/raw ownership, Unicode handling, redstone packets, waits, and output merging | Minecraft block-direction mapping belongs to GameTest |
@@ -56,9 +56,9 @@ compatibility, corruption, and resume matrix.
 
 ## Cross-layer map
 
-The eight registered Kotlin-to-VM conformance scenarios cover the executable artifact writer, the supported Kotlin
-subset, suspend-call lowering, `when`, `Array<String>` entry arguments, platform scalar calls, bounded `Int` loops, and
-specialized `IntArray` operations. These prove compiler/runtime agreement; they do not add independent decoder,
+The nine registered Kotlin-to-VM conformance scenarios cover the executable artifact writer, the supported Kotlin
+subset, suspend-call lowering, VM-owned bounded channel handoff, `when`, `Array<String>` entry arguments, platform
+scalar calls, bounded `Int` loops, and specialized `IntArray` operations. These prove compiler/runtime agreement; they do not add independent decoder,
 verifier, allocator, or failure-path coverage.
 
 The two `ProgramRuntimeHostIntegrationTest` scenarios cover ROM boot, foreground child execution, reboot, terminal
@@ -70,7 +70,7 @@ These are vertical ownership checks, not replacements for the direct Rust tests 
 
 ## Inventory notes
 
-After issue #598, `cargo test --workspace -- --list` registers 514 Rust tests across the VM, FFI, persistence crash
+After issue #614, `cargo test --workspace -- --list` registers 538 Rust tests across the VM, FFI, persistence crash
 fixture, runtime-bundler, xtask, integrations, and doctests. Nine are intentionally ignored by the normal workspace
 run: seven hardware-specific performance or artifact-regeneration tests in the VM, one fixture regeneration test, and
 one dynamic-library smoke test that requires a separately built library. The normal semantic gates cover their

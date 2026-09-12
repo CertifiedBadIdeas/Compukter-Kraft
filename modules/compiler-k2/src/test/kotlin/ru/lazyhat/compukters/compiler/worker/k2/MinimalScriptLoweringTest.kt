@@ -108,6 +108,9 @@ class MinimalScriptLoweringTest {
             assertEquals(1u, artifact.manifest.maximumChannels)
             assertEquals(1u, artifact.manifest.maximumChannelValues)
             assertTrue(SemanticFeature.CHANNELS in artifact.semanticFeatures)
+            System.getProperty("compukter.vm.channelArtifact")?.let { output ->
+                Path.of(output).also { it.parent.createDirectories() }.writeBytes(bytes)
+            }
         }
 
     @Test

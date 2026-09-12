@@ -253,6 +253,16 @@ supported.
   represent recursion, but no Kotlin-to-VM recursive source conformance test
   defines it as a supported language contract. Tracking: not scheduled
 
+- [ ] **Top-level state — Partial** — immutable top-level properties support
+  direct `Int`, `Boolean`, `Char`, and `String` literals plus direct
+  `IntChannel(capacity)` construction. They lower to lazily initialized static
+  VM storage. Top-level `var`, custom or delegated accessors, initializer
+  dependencies, and arbitrary object construction remain unsupported. Evidence:
+  [`MinimalScriptLoweringTest`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/compiler-k2/src/test/kotlin/ru/lazyhat/compukters/compiler/worker/k2/MinimalScriptLoweringTest.kt),
+  tests `top level IntChannel lowers to VM owned bounded handoff` and
+  `IntChannel construction rejects unsupported ownership and capacity`.
+  Tracking: [#614](https://github.com/CertifiedBadIdeas/Compukters/issues/614)
+
 ## Classes and object model
 
 - [ ] **Immutable constructor classes — Partial** — classes with a primary
@@ -425,6 +435,18 @@ supported.
   task. Scheduling and host-request ownership are deterministic. Public
   cancellation, explicit yield, delay, scopes, and `kotlinx.coroutines` remain
   unsupported. Tracking: [#567](https://github.com/CertifiedBadIdeas/Compukters/issues/567)
+
+- [ ] **Bounded integer channels — Partial** — a top-level
+  `IntChannel(capacity)` provides deterministic FIFO `send(Int)` and
+  `receive(): Int` suspension between cooperative tasks. Capacity must be a
+  positive compile-time constant; channel storage and waiter state are admitted
+  up front and communication stays inside the VM without a host request.
+  Generic payloads, close, cancellation, selection, timeouts, and cross-process
+  channels remain unsupported. Evidence:
+  [`channel.rs`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/host/compukter-vm/src/execution/channel.rs),
+  [`MinimalScriptLoweringTest`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/compiler-k2/src/test/kotlin/ru/lazyhat/compukters/compiler/worker/k2/MinimalScriptLoweringTest.kt),
+  and the `testKotlinChannelVmConformance` task.
+  Tracking: [#614](https://github.com/CertifiedBadIdeas/Compukters/issues/614)
 
 - [ ] **Parallel Guest execution — Unsupported** — one process waits at a
   time executes Guest instructions. Cooperative tasks provide concurrency at

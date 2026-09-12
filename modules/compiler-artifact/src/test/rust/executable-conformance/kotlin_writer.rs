@@ -25,6 +25,7 @@ fn main() {
         "subset" => k2_string_materialization_executes_char_arrays_and_scalar_templates(),
         "suspend-call" => k2_suspend_project_call_resumes_across_async_capability(),
         "tasks" => k2_tasks_keep_independent_host_requests_in_flight(),
+        "channel" => k2_channel_handoff_stays_inside_the_vm(),
         "when" => k2_bounded_when_selects_matched_and_fallback_branches(),
         _ => panic!("unknown Kotlin-to-VM conformance scenario: {scenario}"),
     }
@@ -63,6 +64,8 @@ fn k2_tasks_keep_independent_host_requests_in_flight() {
         frame_storage_bytes: 1024 * 1024,
         maximum_call_depth: 64,
         maximum_coroutines: 64,
+        maximum_channels: 64,
+        maximum_channel_values: 4096,
         maximum_host_requests: 64,
         maximum_events: 0,
         maximum_slice_budget: u32::MAX,
@@ -122,6 +125,53 @@ fn k2_tasks_keep_independent_host_requests_in_flight() {
     }
 }
 
+fn k2_channel_handoff_stays_inside_the_vm() {
+    let path = std::env::var("COMPUKTER_KOTLIN_CHANNEL_ARTIFACT")
+        .expect("COMPUKTER_KOTLIN_CHANNEL_ARTIFACT must be set for this conformance test");
+    let bytes = fs::read(path).expect("K2 channel output must exist");
+    let verified = verify_artifact(Arc::from(bytes), ArtifactLimits::default())
+        .expect("pinned VM must verify K2 channel output");
+    let string_argument = [HostValueType::String];
+    let operations = [
+        OperationSchema::asynchronous(&[], HostValueType::String),
+        OperationSchema::synchronous(&string_argument, HostValueType::Unit),
+        OperationSchema::synchronous(&string_argument, HostValueType::Unit),
+    ];
+    let stdio = CapabilityBinding::new("compukter", "stdio", 1, 0, &operations);
+    let profile = ExecutionProfile {
+        heap_bytes: 1024 * 1024,
+        frame_storage_bytes: 1024 * 1024,
+        maximum_call_depth: 64,
+        maximum_coroutines: 64,
+        maximum_channels: 1,
+        maximum_channel_values: 1,
+        maximum_host_requests: 64,
+        maximum_events: 0,
+        maximum_slice_budget: u32::MAX,
+        compiler_abi: [0; 32],
+        platform_abi: [0; 32],
+        maximum_host_arguments: 16,
+        maximum_outbound_utf16_code_units: 4096,
+        maximum_inbound_utf16_code_units: 4096,
+        maximum_accepted_responses: 64,
+        entry_argument_limits: entry_argument_limits(),
+    };
+    let mut session = Session::admit(verified, profile, &[stdio]).expect("K2 channel must admit");
+    session.start(&[]).expect("K2 channel must start");
+
+    let write = next_host_request(&mut session, "println", 1, Some(&utf16("13\n")));
+    session
+        .resume(write, HostResponse::Success(HostValueInput::Unit))
+        .expect("println must resume the receiving task");
+    loop {
+        match session.advance(64, 64).expect("K2 channel must finish") {
+            AdvanceOutcome::SliceExhausted => {}
+            AdvanceOutcome::Halted(None) => break,
+            outcome => panic!("unexpected K2 channel outcome: {outcome:?}"),
+        }
+    }
+}
+
 fn pinned_vm_verifies_kotlin_executable_instruction_artifact() {
     let path = std::env::var("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT")
         .expect("COMPUKTER_KOTLIN_EXECUTABLE_ARTIFACT must be set for this conformance test");
@@ -152,6 +202,8 @@ fn k2_int_loops_execute_across_quota_slices_without_host_io() {
         frame_storage_bytes: 1024 * 1024,
         maximum_call_depth: 64,
         maximum_coroutines: 1,
+        maximum_channels: 64,
+        maximum_channel_values: 4096,
         maximum_host_requests: 64,
         maximum_events: 0,
         maximum_slice_budget: 64,
@@ -274,6 +326,8 @@ fn execute_int_array_artifact(bytes: &[u8], mode: i32) -> IntArrayExecution {
         frame_storage_bytes: 1024 * 1024,
         maximum_call_depth: 64,
         maximum_coroutines: 1,
+        maximum_channels: 64,
+        maximum_channel_values: 4096,
         maximum_host_requests: 64,
         maximum_events: 0,
         maximum_slice_budget: 64,
@@ -341,6 +395,8 @@ fn k2_platform_scalar_precondition_traps_before_publishing_a_value() {
         frame_storage_bytes: 1024 * 1024,
         maximum_call_depth: 64,
         maximum_coroutines: 1,
+        maximum_channels: 64,
+        maximum_channel_values: 4096,
         maximum_host_requests: 64,
         maximum_events: 0,
         maximum_slice_budget: u32::MAX,
@@ -438,6 +494,8 @@ fn k2_string_array_entry_executes_exact_utf16_arguments() {
         frame_storage_bytes: 1024 * 1024,
         maximum_call_depth: 64,
         maximum_coroutines: 1,
+        maximum_channels: 64,
+        maximum_channel_values: 4096,
         maximum_host_requests: 64,
         maximum_events: 0,
         maximum_slice_budget: u32::MAX,
@@ -539,6 +597,8 @@ fn k2_string_materialization_executes_char_arrays_and_scalar_templates() {
         frame_storage_bytes: 1024 * 1024,
         maximum_call_depth: 64,
         maximum_coroutines: 1,
+        maximum_channels: 64,
+        maximum_channel_values: 4096,
         maximum_host_requests: 64,
         maximum_events: 0,
         maximum_slice_budget: u32::MAX,
@@ -646,6 +706,8 @@ fn k2_suspend_project_call_resumes_across_async_capability() {
         frame_storage_bytes: 1024 * 1024,
         maximum_call_depth: 64,
         maximum_coroutines: 1,
+        maximum_channels: 64,
+        maximum_channel_values: 4096,
         maximum_host_requests: 64,
         maximum_events: 0,
         maximum_slice_budget: u32::MAX,
@@ -753,6 +815,8 @@ fn execute_when_artifact(bytes: &[u8], key: i32) -> Vec<u16> {
         frame_storage_bytes: 1024 * 1024,
         maximum_call_depth: 64,
         maximum_coroutines: 1,
+        maximum_channels: 64,
+        maximum_channel_values: 4096,
         maximum_host_requests: 64,
         maximum_events: 0,
         maximum_slice_budget: u32::MAX,

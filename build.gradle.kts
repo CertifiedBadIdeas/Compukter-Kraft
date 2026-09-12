@@ -246,6 +246,15 @@ registerKotlinVmConformance(
     conformanceScenario = "tasks",
 )
 registerKotlinVmConformance(
+    taskName = "testKotlinChannelVmConformance",
+    taskDescription = "Executes a K2-produced VM-owned bounded channel handoff.",
+    artifactTask = ":compiler-k2:generateChannelConformanceArtifact",
+    artifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/channel.cpkt"),
+    cargoTargetDirectory = ".toolchain/build/cargo/compiler-k2-channel-conformance",
+    artifactEnvironmentVariable = "COMPUKTER_KOTLIN_CHANNEL_ARTIFACT",
+    conformanceScenario = "channel",
+)
+registerKotlinVmConformance(
     taskName = "testKotlinWhenVmConformance",
     taskDescription = "Executes bounded K2 when branches with the pinned Compukter VM.",
     artifactTask = ":compiler-k2:generateWhenConformanceArtifact",
