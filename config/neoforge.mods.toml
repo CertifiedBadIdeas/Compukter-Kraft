@@ -1,3 +1,5 @@
+modLoader="${mod_loader}"
+loaderVersion="${loader_version_range}"
 license="${mod_license}"
 
 [[mods]]

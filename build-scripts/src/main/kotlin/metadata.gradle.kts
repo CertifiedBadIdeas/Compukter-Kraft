@@ -50,6 +50,19 @@ val generateModMetadata =
             into("META-INF")
         }
         into(intoDir)
+
+        doLast {
+            val metadata = intoDir.resolve("META-INF/neoforge.mods.toml").readText()
+            check("${'$'}{" !in metadata) { "unexpanded placeholder in generated neoforge.mods.toml" }
+            mapOf(
+                "modLoader" to "mod_loader",
+                "loaderVersion" to "loader_version_range",
+            ).forEach { (metadataKey, propertyKey) ->
+                check("$metadataKey=\"${replaceProperties.getValue(propertyKey)}\"" in metadata) {
+                    "wrong $metadataKey in generated neoforge.mods.toml"
+                }
+            }
+        }
     }
 
 tasks.named<ProcessResources>("processResources") {
