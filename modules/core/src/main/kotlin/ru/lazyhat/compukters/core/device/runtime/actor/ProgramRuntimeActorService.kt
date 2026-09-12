@@ -36,7 +36,8 @@ import java.util.concurrent.atomic.AtomicLong
 class ProgramRuntimeActorService(
     config: VmActorSchedulerConfig = VmActorSchedulerConfig(),
 ) : AutoCloseable {
-    private val scheduler = VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>(config)
+    private val scheduler =
+        VmActorScheduler<ProgramRuntimeActorMessage, ProgramRuntimeTickPermit, ProgramRuntimeActorReply>(config)
     private val pending = ConcurrentHashMap<RequestAddress, PendingRequest>()
     private val deferredWorldRequests = ConcurrentHashMap.newKeySet<VmActorEndpoint>()
     private val nextRequestId = AtomicLong()
@@ -111,17 +112,42 @@ class ProgramRuntimeActorService(
         require(preparedCommand.requestId == requestId) { "runtime command factory returned a mismatched request id" }
         val address = RequestAddress(endpoint, requestId)
         val future = CompletableFuture<ProgramRuntimeActorReply>()
-        val pendingRequest =
-            PendingRequest(
-                future,
-                preparedCommand is ProgramRuntimeActorCommand.ContinueRedstoneOutput ||
-                    preparedCommand is ProgramRuntimeActorCommand.ContinueSound,
-            )
+        val pendingRequest = PendingRequest(future, completesWorldRequest = false)
         check(pending.putIfAbsent(address, pendingRequest) == null) { "runtime request id collision" }
         val submission = scheduler.submit(endpoint, preparedCommand)
         if (submission != VmActorSubmission.ACCEPTED) {
             pending.remove(address, pendingRequest)
             if (preparedCommand.isInput()) rejectedInputRequests.incrementAndGet()
+            future.completeExceptionally(ProgramRuntimeActorRequestException(submission))
+        } else {
+            future.whenComplete { _, _ ->
+                if (future.isCancelled) pending.remove(address, pendingRequest)
+            }
+        }
+        return future
+    }
+
+    /** Atomically admits the world effects observed for [worldTick] and one bounded VM turn behind them. */
+    fun turn(
+        endpoint: VmActorEndpoint,
+        worldTick: Long,
+        effects: List<ProgramRuntimeActorEffect> = emptyList(),
+    ): CompletableFuture<ProgramRuntimeActorReply> {
+        val requestId = ProgramRuntimeRequestId(nextRequestId.updateAndGet(::incrementRequestId))
+        val address = RequestAddress(endpoint, requestId)
+        val future = CompletableFuture<ProgramRuntimeActorReply>()
+        val pendingRequest =
+            PendingRequest(
+                future,
+                effects.any {
+                    it is ProgramRuntimeActorEffect.CompleteRedstoneOutput || it is ProgramRuntimeActorEffect.CompleteSound
+                },
+            )
+        check(pending.putIfAbsent(address, pendingRequest) == null) { "runtime request id collision" }
+        val submission = scheduler.submitWithPermit(endpoint, effects, ProgramRuntimeTickPermit(requestId, worldTick))
+        if (submission != VmActorSubmission.ACCEPTED) {
+            pending.remove(address, pendingRequest)
+            if (effects.any { it is ProgramRuntimeActorEffect.RedstoneInput }) rejectedInputRequests.incrementAndGet()
             future.completeExceptionally(ProgramRuntimeActorRequestException(submission))
         } else {
             future.whenComplete { _, _ ->
@@ -218,10 +244,7 @@ class ProgramRuntimeActorService(
         fun ProgramRuntimeActorCommand.isInput(): Boolean =
             this is ProgramRuntimeActorCommand.SendTerminalKey ||
                 this is ProgramRuntimeActorCommand.SendTerminalText ||
-                this is ProgramRuntimeActorCommand.SubmitCanonicalLine ||
-                this is ProgramRuntimeActorCommand.SubmitRedstoneInput ||
-                this is ProgramRuntimeActorCommand.ContinueRedstoneOutput ||
-                this is ProgramRuntimeActorCommand.ContinueSound
+                this is ProgramRuntimeActorCommand.SubmitCanonicalLine
     }
 }
 

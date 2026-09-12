@@ -98,13 +98,14 @@ internal object NeoForgeVmActorServices {
 
     private fun logMetrics(metrics: ProgramRuntimeActorMetrics) {
         val scheduler = metrics.scheduler
-        val processed = scheduler.processedMessages.coerceAtLeast(1)
+        val processed = (scheduler.processedMessages + scheduler.processedPermits).coerceAtLeast(1)
         val drained = scheduler.drainedEvents.coerceAtLeast(1)
         val continuationSamples = metrics.hostContinuationSamples.coerceAtLeast(1)
         LOGGER.debug {
             "VM actors: registered=${scheduler.registeredActors}/${scheduler.maximumActors}, " +
                 "runnable=${scheduler.scheduledActors}, " +
-                "mailbox=${scheduler.queuedMessages}, results=${scheduler.queuedResults}, workers=${scheduler.busyWorkers}, " +
+                "mailbox=${scheduler.queuedMessages}, permits=${scheduler.pendingPermits}, " +
+                "results=${scheduler.queuedResults}, workers=${scheduler.busyWorkers}, " +
                 "queueAvgUs=${scheduler.totalQueueLatencyNanos / processed / 1_000}, " +
                 "queueMaxUs=${scheduler.maximumQueueLatencyNanos / 1_000}, " +
                 "executionAvgUs=${scheduler.totalExecutionNanos / processed / 1_000}, " +
@@ -116,7 +117,8 @@ internal object NeoForgeVmActorServices {
                 "hostToAdvance=n=${metrics.hostContinuationSamples}/" +
                 "avg=${metrics.totalHostContinuationDelayTicks / continuationSamples}/" +
                 "max=${metrics.maximumHostContinuationDelayTicks} ticks, " +
-                "inputRejected=${metrics.rejectedInputRequests}, mailboxRejected=${scheduler.mailboxFullRejections}"
+                "inputRejected=${metrics.rejectedInputRequests}, mailboxRejected=${scheduler.mailboxFullRejections}, " +
+                "permitRejected=${scheduler.permitPendingRejections}"
         }
     }
 

@@ -59,7 +59,10 @@ internal interface ComputerCarrier : AutoCloseable {
 
     fun turnOn(): ProgramComputerState
 
-    fun serverTick(worldTick: Long): ProgramComputerState
+    fun serverTick(
+        worldTick: Long,
+        redstoneInput: Int? = null,
+    ): ProgramComputerState
 
     fun terminalFullStateAsync(): CompletableFuture<TerminalState?>
 
@@ -103,8 +106,6 @@ internal interface ComputerCarrier : AutoCloseable {
     ): CompletableFuture<VmExecutableRevision?>
 
     fun submitCanonicalLineAsync(line: CharArray): CompletableFuture<Boolean>
-
-    fun submitRedstoneInputAsync(packet: Int): CompletableFuture<Boolean>
 
     fun reboot(): ProgramComputerState
 
@@ -173,8 +174,11 @@ private class ActorComputerCarrier(
         return observedState
     }
 
-    override fun serverTick(worldTick: Long): ProgramComputerState {
-        delegate.serverTick(worldTick)
+    override fun serverTick(
+        worldTick: Long,
+        redstoneInput: Int?,
+    ): ProgramComputerState {
+        delegate.serverTick(worldTick, redstoneInput)
         observeRuntime()
         return observedState
     }
@@ -251,8 +255,6 @@ private class ActorComputerCarrier(
     }
 
     override fun submitCanonicalLineAsync(line: CharArray) = accepted { ProgramRuntimeActorCommand.SubmitCanonicalLine(it, line) }
-
-    override fun submitRedstoneInputAsync(packet: Int) = accepted { ProgramRuntimeActorCommand.SubmitRedstoneInput(it, packet) }
 
     override fun reboot(): ProgramComputerState {
         delegate.reboot().whenComplete { _, failure -> if (failure == null) observeRuntime() else actorFailure(failure) }

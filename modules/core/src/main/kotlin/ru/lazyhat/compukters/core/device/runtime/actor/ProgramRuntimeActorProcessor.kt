@@ -38,7 +38,7 @@ internal class ProgramRuntimeActorProcessor(
     private val host: ProgramRuntimeHost,
     private val redstonePort: ActorRedstoneHostPort? = null,
     private val soundPort: ActorSoundHostPort? = null,
-) : VmActorProcessor<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply> {
+) : VmActorProcessor<ProgramRuntimeActorMessage, ProgramRuntimeTickPermit, ProgramRuntimeActorReply> {
     private val deploymentCandidates = mutableMapOf<ProgramDeploymentToken, ProgramDeploymentCandidate>()
     private var nextDeploymentToken = 0L
     private var pendingRedstoneRequest: ProgramRuntimeRequestId? = null
@@ -46,10 +46,30 @@ internal class ProgramRuntimeActorProcessor(
     val closed = CompletableFuture<Long?>()
     private var lastFileSystemGeneration: Long? = null
 
-    override fun process(command: ProgramRuntimeActorCommand): ProgramRuntimeActorReply {
+    override fun process(command: ProgramRuntimeActorMessage): ProgramRuntimeActorReply? =
+        when (command) {
+            is ProgramRuntimeActorCommand -> {
+                process(command)
+            }
+
+            is ProgramRuntimeActorEffect -> {
+                execute(command)
+                captureGeneration()
+                null
+            }
+        }
+
+    fun process(command: ProgramRuntimeActorCommand): ProgramRuntimeActorReply = reply(command.requestId) { execute(command) }
+
+    override fun advance(permit: ProgramRuntimeTickPermit): ProgramRuntimeActorReply = reply(permit.requestId) { advance(permit.requestId) }
+
+    private fun reply(
+        requestId: ProgramRuntimeRequestId,
+        operation: () -> ProgramRuntimeActorValue,
+    ): ProgramRuntimeActorReply {
         val value =
             try {
-                execute(command).also { captureGeneration() }
+                operation().also { captureGeneration() }
             } catch (failure: VmFileSystemReadException) {
                 ProgramRuntimeActorValue.Rejected(ProgramRuntimeActorFailure.FileSystem(failure.failure))
             } catch (_: VmVerificationException) {
@@ -75,7 +95,7 @@ internal class ProgramRuntimeActorProcessor(
                     ProgramRuntimeActorFailure.Bridge(failure.message ?: "native VM bridge failure"),
                 )
             }
-        return ProgramRuntimeActorReply(command.requestId, host.state, value, lastFileSystemGeneration)
+        return ProgramRuntimeActorReply(requestId, host.state, value, lastFileSystemGeneration)
     }
 
     private fun execute(command: ProgramRuntimeActorCommand): ProgramRuntimeActorValue =
@@ -94,10 +114,6 @@ internal class ProgramRuntimeActorProcessor(
                 pendingSoundRequest = null
                 discardAllCandidates()
                 ProgramRuntimeActorValue.Start(host.startBoot())
-            }
-
-            is ProgramRuntimeActorCommand.Advance -> {
-                advance(command.requestId)
             }
 
             is ProgramRuntimeActorCommand.TerminalFullState -> {
@@ -159,34 +175,6 @@ internal class ProgramRuntimeActorProcessor(
                 ProgramRuntimeActorValue.Accepted(host.submitCanonicalLine(command.lineChars()))
             }
 
-            is ProgramRuntimeActorCommand.SubmitRedstoneInput -> {
-                ProgramRuntimeActorValue.Accepted(host.submitRedstoneInput(command.packet))
-            }
-
-            is ProgramRuntimeActorCommand.ContinueRedstoneOutput -> {
-                val accepted =
-                    pendingRedstoneRequest == command.outputRequestId &&
-                        host.completeRedstoneOutput(command.packed, command.result)
-                if (!accepted) {
-                    ProgramRuntimeActorValue.Accepted(false)
-                } else {
-                    pendingRedstoneRequest = null
-                    advance(command.requestId)
-                }
-            }
-
-            is ProgramRuntimeActorCommand.ContinueSound -> {
-                val accepted =
-                    pendingSoundRequest == command.soundRequestId &&
-                        host.completeSound(command.result)
-                if (!accepted) {
-                    ProgramRuntimeActorValue.Accepted(false)
-                } else {
-                    pendingSoundRequest = null
-                    advance(command.requestId)
-                }
-            }
-
             is ProgramRuntimeActorCommand.Shutdown -> {
                 captureGeneration()
                 pendingRedstoneRequest = null
@@ -205,6 +193,26 @@ internal class ProgramRuntimeActorProcessor(
                 ProgramRuntimeActorValue.Start(host.startBoot())
             }
         }
+
+    private fun execute(effect: ProgramRuntimeActorEffect) {
+        when (effect) {
+            is ProgramRuntimeActorEffect.RedstoneInput -> {
+                host.submitRedstoneInput(effect.packet)
+            }
+
+            is ProgramRuntimeActorEffect.CompleteRedstoneOutput -> {
+                check(pendingRedstoneRequest == effect.outputRequestId) { "redstone completion does not match pending request" }
+                check(host.completeRedstoneOutput(effect.packed, effect.result)) { "redstone completion was rejected" }
+                pendingRedstoneRequest = null
+            }
+
+            is ProgramRuntimeActorEffect.CompleteSound -> {
+                check(pendingSoundRequest == effect.soundRequestId) { "sound completion does not match pending request" }
+                check(host.completeSound(effect.result)) { "sound completion was rejected" }
+                pendingSoundRequest = null
+            }
+        }
+    }
 
     private fun advance(requestId: ProgramRuntimeRequestId): ProgramRuntimeActorValue {
         host.serverTick()

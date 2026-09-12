@@ -301,7 +301,11 @@ internal object VmBenchmarkCommands {
         areaRuns[server]?.run?.snapshot(server.tickCount.toLong())
 
     private fun HeadlessVmBenchmarkSnapshot.describe(): String {
-        val processed = (metrics.scheduler.processedMessages - baseline.scheduler.processedMessages).coerceAtLeast(1)
+        val processed =
+            (
+                metrics.scheduler.processedMessages - baseline.scheduler.processedMessages +
+                    metrics.scheduler.processedPermits - baseline.scheduler.processedPermits
+            ).coerceAtLeast(1)
         val drained = (metrics.scheduler.drainedEvents - baseline.scheduler.drainedEvents).coerceAtLeast(1)
         val queueNanos = (metrics.scheduler.totalQueueLatencyNanos - baseline.scheduler.totalQueueLatencyNanos).coerceAtLeast(0)
         val executionNanos = (metrics.scheduler.totalExecutionNanos - baseline.scheduler.totalExecutionNanos).coerceAtLeast(0)
@@ -319,12 +323,14 @@ internal object VmBenchmarkCommands {
         return "Headless VM benchmark: $status; $phaseDetails" +
             "actors=$activeActors active$waitingDetails/$completedActors completed/$failedActors failed/" +
             "$admittedActors admitted ($requestedActors requested), closing=$closingActors, rounds=$rounds, " +
-            "ticks=$elapsedTicks, MSPT=${"%.3f".format(Locale.ROOT, currentMspt)}, mailbox=${metrics.scheduler.queuedMessages}, " +
+            "ticks=$elapsedTicks, MSPT=${"%.3f".format(Locale.ROOT, currentMspt)}, " +
+            "mailbox=${metrics.scheduler.queuedMessages}, permits=${metrics.scheduler.pendingPermits}, " +
             "results=${metrics.scheduler.queuedResults}, workers=${metrics.scheduler.busyWorkers}, " +
             "queueAvgUs=${queueNanos / processed / 1_000}, executionAvgUs=${executionNanos / processed / 1_000}, " +
             "resultAvgUs=${resultNanos / drained / 1_000}, drainedLast=${metrics.lastPumpEvents}, " +
             "pumpLastUs=${metrics.lastPumpNanos / 1_000}, " +
-            "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}" +
+            "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}, " +
+            "permitRejected=${metrics.scheduler.permitPendingRejections - baseline.scheduler.permitPendingRejections}" +
             capacityDetails
     }
 
@@ -340,7 +346,11 @@ internal object VmBenchmarkCommands {
         baseline: ProgramRuntimeActorMetrics,
     ): String {
         val metrics = NeoForgeVmActorServices.metrics(server) ?: baseline
-        val processed = (metrics.scheduler.processedMessages - baseline.scheduler.processedMessages).coerceAtLeast(1)
+        val processed =
+            (
+                metrics.scheduler.processedMessages - baseline.scheduler.processedMessages +
+                    metrics.scheduler.processedPermits - baseline.scheduler.processedPermits
+            ).coerceAtLeast(1)
         val drained = (metrics.scheduler.drainedEvents - baseline.scheduler.drainedEvents).coerceAtLeast(1)
         val queueNanos =
             (metrics.scheduler.totalQueueLatencyNanos - baseline.scheduler.totalQueueLatencyNanos).coerceAtLeast(0)
@@ -366,12 +376,14 @@ internal object VmBenchmarkCommands {
             "world=$worldRequests, worldDeferred=${metrics.deferredWorldRequests}$pulseProgress, " +
             "hostToAdvance=n=$continuationSamples/" +
             "avg=${continuationTicks / continuationSamples.coerceAtLeast(1)} ticks, " +
-            "mailbox=${metrics.scheduler.queuedMessages}, results=${metrics.scheduler.queuedResults}, " +
+            "mailbox=${metrics.scheduler.queuedMessages}, permits=${metrics.scheduler.pendingPermits}, " +
+            "results=${metrics.scheduler.queuedResults}, " +
             "workers=${metrics.scheduler.busyWorkers}, queueAvgUs=${queueNanos / processed / 1_000}, " +
             "resultAvgUs=${resultNanos / drained / 1_000}, drainedLast=${metrics.lastPumpEvents}, " +
             "pumpLastUs=${metrics.lastPumpNanos / 1_000}, " +
             "inputRejected=${metrics.rejectedInputRequests - baseline.rejectedInputRequests}, " +
-            "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}"
+            "mailboxRejected=${metrics.scheduler.mailboxFullRejections - baseline.scheduler.mailboxFullRejections}, " +
+            "permitRejected=${metrics.scheduler.permitPendingRejections - baseline.scheduler.permitPendingRejections}"
     }
 
     private const val MAXIMUM_ACTORS = VmActorSchedulerConfig.DEFAULT_MAXIMUM_ACTORS

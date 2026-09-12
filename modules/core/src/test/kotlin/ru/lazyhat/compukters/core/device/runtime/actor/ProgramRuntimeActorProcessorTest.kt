@@ -62,6 +62,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -245,6 +246,50 @@ class ProgramRuntimeActorProcessorTest {
     }
 
     @Test
+    fun `redstone input wakes a waiting actor before the same tick permit advances it`() {
+        val session = RecordingSession()
+        val endpoint = VmActorEndpoint(ComputerId.fromLongs(13, 14), 1)
+        ProgramRuntimeActorService(schedulerConfig()).use { service ->
+            val host =
+                ProgramRuntimeHost(
+                    object : ProgramVmSessionFactory {
+                        override fun open(artifact: ByteArray): ProgramVmSession = session
+
+                        override fun boot(): ProgramVmSession = session
+                    },
+                )
+            val carrier =
+                ActorProgramComputer(
+                    service,
+                    requireNotNull(service.attach(endpoint, host)),
+                    { RedstoneCommitResult.Committed },
+                )
+            carrier.turnOn()
+            awaitQueuedResult(service)
+            service.pump(1)
+            assertEquals(ProgramRuntimeState.Running, carrier.state)
+            session.nextOutcome = VmOutcome.WaitingForTerminalEvent
+            carrier.serverTick(1)
+            awaitQueuedResult(service)
+            service.pump(1)
+            assertEquals(ProgramRuntimeState.WaitingForInput, carrier.state)
+
+            val packet = RedstoneWire.packInput(1, intArrayOf(13, 0, 0, 0, 0, 0))
+            val callsBeforeWake = session.calls.size
+            carrier.serverTick(2, packet)
+            awaitQueuedResult(service)
+            service.pump(1)
+
+            assertEquals(ProgramRuntimeState.Running, carrier.state)
+            val wakeCalls = session.calls.drop(callsBeforeWake).map { it.substringBefore(':') }
+            assertEquals("submitRedstoneInput", wakeCalls.first())
+            assertTrue(wakeCalls.indexOf("submitRedstoneInput") < wakeCalls.indexOf("advance"))
+            assertEquals(2, service.metrics().acceptedPermits)
+            carrier.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
     fun `mailbox rejection retains world completion for a later continuation`() {
         val session = RecordingSession()
         val port = ActorRedstoneHostPort()
@@ -346,7 +391,7 @@ class ProgramRuntimeActorProcessorTest {
                         listOf(VmHostRequest(id, REDSTONE, 6, listOf(VmValue.I32(2), VmValue.I32(7)))),
                     )
                 return assertIs<ProgramRuntimeActorValue.RedstoneOutputRequested>(
-                    processor.process(ProgramRuntimeActorCommand.Advance(request(id), id)).value,
+                    processor.advance(ProgramRuntimeTickPermit(request(id), id)).value,
                 ).packed
             }
             val packed = output(2)
@@ -354,28 +399,24 @@ class ProgramRuntimeActorProcessorTest {
             processor.process(ProgramRuntimeActorCommand.Start(request(4), byteArrayOf(1)))
             assertEquals(packed, output(5))
             val advancesBeforeStale = session.calls.count { it.startsWith("advance:") }
-            val stale =
+            assertFailsWith<IllegalStateException> {
                 processor.process(
-                    ProgramRuntimeActorCommand.ContinueRedstoneOutput(
-                        request(6),
-                        worldTick = 6,
+                    ProgramRuntimeActorEffect.CompleteRedstoneOutput(
                         outputRequestId = request(2),
                         packed = packed,
                         result = RedstoneCommitResult.Committed,
                     ),
                 )
-            assertEquals(false, assertIs<ProgramRuntimeActorValue.Accepted>(stale.value).accepted)
+            }
             assertEquals(advancesBeforeStale, session.calls.count { it.startsWith("advance:") })
-            val current =
-                processor.process(
-                    ProgramRuntimeActorCommand.ContinueRedstoneOutput(
-                        request(7),
-                        worldTick = 7,
-                        outputRequestId = request(5),
-                        packed = packed,
-                        result = RedstoneCommitResult.Committed,
-                    ),
-                )
+            processor.process(
+                ProgramRuntimeActorEffect.CompleteRedstoneOutput(
+                    outputRequestId = request(5),
+                    packed = packed,
+                    result = RedstoneCommitResult.Committed,
+                ),
+            )
+            val current = processor.advance(ProgramRuntimeTickPermit(request(7), 7))
             assertIs<ProgramRuntimeActorValue.None>(current.value)
             assertTrue(session.calls.count { it.startsWith("advance:") } > advancesBeforeStale)
         }
@@ -392,11 +433,15 @@ class ProgramRuntimeActorProcessorTest {
         val host = ProgramRuntimeHost(ProgramVmSessionFactory { session }, redstoneHostPort = port)
         val endpoint = VmActorEndpoint(ComputerId.fromLongs(5, 6), 1)
         val expected = RedstoneWire.replaceOutput(0, 2, 7)
-        VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
+        VmActorScheduler<
+            ProgramRuntimeActorMessage,
+            ProgramRuntimeTickPermit,
+            ProgramRuntimeActorReply,
+        >(schedulerConfig()).use { scheduler ->
             assertTrue(scheduler.register(endpoint, ProgramRuntimeActorProcessor(host, port)))
             scheduler.submit(endpoint, ProgramRuntimeActorCommand.Start(request(1), byteArrayOf(1)))
             scheduler.awaitReplies(1)
-            scheduler.submit(endpoint, ProgramRuntimeActorCommand.Advance(request(2), 100))
+            scheduler.submitWithPermit(endpoint, emptyList(), ProgramRuntimeTickPermit(request(2), 100))
 
             val request = assertIs<ProgramRuntimeActorValue.RedstoneOutputRequested>(scheduler.awaitReplies(1).single().value)
             assertEquals(expected, request.packed)
@@ -405,29 +450,31 @@ class ProgramRuntimeActorProcessorTest {
                     listOf(VmHostRequest(2, REDSTONE, 6, listOf(VmValue.I32(3), VmValue.I32(9)))),
                 )
 
-            scheduler.submit(
+            scheduler.submitWithPermit(
                 endpoint,
-                ProgramRuntimeActorCommand.ContinueRedstoneOutput(
-                    request(3),
-                    worldTick = 101,
-                    outputRequestId = request(2),
-                    packed = request.packed,
-                    result = RedstoneCommitResult.Committed,
+                listOf(
+                    ProgramRuntimeActorEffect.CompleteRedstoneOutput(
+                        outputRequestId = request(2),
+                        packed = request.packed,
+                        result = RedstoneCommitResult.Committed,
+                    ),
                 ),
+                ProgramRuntimeTickPermit(request(3), 101),
             )
             val nextRequest =
                 assertIs<ProgramRuntimeActorValue.RedstoneOutputRequested>(scheduler.awaitReplies(1).single().value)
             assertEquals(RedstoneWire.replaceOutput(expected, 3, 9), nextRequest.packed)
 
-            scheduler.submit(
+            scheduler.submitWithPermit(
                 endpoint,
-                ProgramRuntimeActorCommand.ContinueRedstoneOutput(
-                    request(4),
-                    worldTick = 102,
-                    outputRequestId = request(3),
-                    packed = nextRequest.packed,
-                    result = RedstoneCommitResult.Committed,
+                listOf(
+                    ProgramRuntimeActorEffect.CompleteRedstoneOutput(
+                        outputRequestId = request(3),
+                        packed = nextRequest.packed,
+                        result = RedstoneCommitResult.Committed,
+                    ),
                 ),
+                ProgramRuntimeTickPermit(request(4), 102),
             )
             assertIs<ProgramRuntimeActorValue.None>(scheduler.awaitReplies(1).single().value)
             assertEquals(2, session.calls.count { it.startsWith("resume:") })
@@ -448,19 +495,17 @@ class ProgramRuntimeActorProcessorTest {
 
             val emitted =
                 assertIs<ProgramRuntimeActorValue.SoundRequested>(
-                    processor.process(ProgramRuntimeActorCommand.Advance(request(2), 100)).value,
+                    processor.advance(ProgramRuntimeTickPermit(request(2), 100)).value,
                 )
             assertEquals(listOf(SoundRequest(12, 75)), emitted.requests)
 
-            val completed =
-                processor.process(
-                    ProgramRuntimeActorCommand.ContinueSound(
-                        request(3),
-                        worldTick = 101,
-                        soundRequestId = request(2),
-                        result = SoundCommitResult.Completed(listOf(true)),
-                    ),
-                )
+            processor.process(
+                ProgramRuntimeActorEffect.CompleteSound(
+                    soundRequestId = request(2),
+                    result = SoundCommitResult.Completed(listOf(true)),
+                ),
+            )
+            val completed = processor.advance(ProgramRuntimeTickPermit(request(3), 101))
             assertIs<ProgramRuntimeActorValue.None>(completed.value)
             assertEquals(listOf<HostResponse>(HostResponse.BoolSuccess(true)), session.responses)
         }
@@ -479,15 +524,25 @@ class ProgramRuntimeActorProcessorTest {
             )
         val endpoint = VmActorEndpoint(ComputerId.fromLongs(1, 2), 1)
         val path = VmVirtualPath.of("/home/demo")
-        VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
+        VmActorScheduler<
+            ProgramRuntimeActorMessage,
+            ProgramRuntimeTickPermit,
+            ProgramRuntimeActorReply,
+        >(schedulerConfig()).use { scheduler ->
             assertTrue(scheduler.register(endpoint, ProgramRuntimeActorProcessor(host)))
             val artifact = byteArrayOf(3, 4, 5)
             val prepare = ProgramRuntimeActorCommand.PrepareDeployment(request(6), artifact)
             artifact.fill(0)
+            assertEquals(
+                VmActorSubmission.ACCEPTED,
+                scheduler.submit(endpoint, ProgramRuntimeActorCommand.StartBoot(request(1))),
+            )
+            assertEquals(
+                VmActorSubmission.ACCEPTED,
+                scheduler.submitWithPermit(endpoint, emptyList(), ProgramRuntimeTickPermit(request(2), 100)),
+            )
             val commands =
-                listOf(
-                    ProgramRuntimeActorCommand.StartBoot(request(1)),
-                    ProgramRuntimeActorCommand.Advance(request(2), worldTick = 100),
+                listOf<ProgramRuntimeActorMessage>(
                     ProgramRuntimeActorCommand.SendTerminalText(request(3), "hello"),
                     ProgramRuntimeActorCommand.TerminalFullState(request(4)),
                     ProgramRuntimeActorCommand.FileRead(request(5), path, 0, 32, 7),
@@ -495,7 +550,7 @@ class ProgramRuntimeActorProcessorTest {
                 )
             commands.forEach { assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(endpoint, it)) }
 
-            val replies = scheduler.awaitReplies(commands.size)
+            val replies = scheduler.awaitReplies(commands.size + 2)
             assertIs<ProgramRuntimeActorValue.Start>(replies[0].value).also {
                 assertEquals(ProgramStartResult.Started, it.result)
             }
@@ -511,15 +566,15 @@ class ProgramRuntimeActorProcessorTest {
 
             val line = "run /home/demo".toCharArray()
             val remaining =
-                listOf(
+                listOf<ProgramRuntimeActorMessage>(
                     ProgramRuntimeActorCommand.Deploy(request(7), path.value, VmExecutableRevision.Absent, requireNotNull(token)),
                     ProgramRuntimeActorCommand.SubmitCanonicalLine(request(8), line),
-                    ProgramRuntimeActorCommand.SubmitRedstoneInput(request(9), 0),
+                    ProgramRuntimeActorEffect.RedstoneInput(0),
                     ProgramRuntimeActorCommand.Shutdown(request(10)),
                 )
             line.fill('x')
             remaining.forEach { assertEquals(VmActorSubmission.ACCEPTED, scheduler.submit(endpoint, it)) }
-            val remainingReplies = scheduler.awaitReplies(remaining.size)
+            val remainingReplies = scheduler.awaitReplies(remaining.size - 1)
 
             assertEquals(
                 VmExecutableRevision.Present(8),
@@ -548,7 +603,11 @@ class ProgramRuntimeActorProcessorTest {
                 },
             )
         val endpoint = VmActorEndpoint(ComputerId.fromLongs(3, 4), 1)
-        VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>(schedulerConfig()).use { scheduler ->
+        VmActorScheduler<
+            ProgramRuntimeActorMessage,
+            ProgramRuntimeTickPermit,
+            ProgramRuntimeActorReply,
+        >(schedulerConfig()).use { scheduler ->
             assertTrue(scheduler.register(endpoint, ProgramRuntimeActorProcessor(host)))
             val artifact = byteArrayOf(1, 2, 3)
             val command = ProgramRuntimeActorCommand.Start(request(1), artifact)
@@ -586,7 +645,7 @@ class ProgramRuntimeActorProcessorTest {
         assertTrue(service.metrics().queuedResults >= count, "queued actor results: ${service.metrics()}")
     }
 
-    private fun VmActorScheduler<ProgramRuntimeActorCommand, Unit, ProgramRuntimeActorReply>.awaitReplies(
+    private fun VmActorScheduler<ProgramRuntimeActorMessage, ProgramRuntimeTickPermit, ProgramRuntimeActorReply>.awaitReplies(
         count: Int,
     ): List<ProgramRuntimeActorReply> {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)

@@ -194,17 +194,16 @@ open class ComputerBlockEntity internal constructor(
             runtimeState = current.turnOn()
         }
         val serverLevel = level as? ServerLevel
-        if (serverLevel != null) {
-            sampleRedstoneInputs { direction ->
-                serverLevel.getSignal(blockPos.relative(direction), direction)
-            }?.let { packet ->
-                current.submitRedstoneInputAsync(packet).whenComplete { accepted, failure ->
-                    if (failure != null || accepted != true) markRedstoneInputDirty()
+        val redstoneInput =
+            serverLevel?.let {
+                sampleRedstoneInputs { direction ->
+                    serverLevel.getSignal(blockPos.relative(direction), direction)
                 }
             }
-        }
         if (runtimeState.isPoweredOn()) {
-            runtimeState = current.serverTick(serverLevel?.server?.tickCount?.toLong() ?: 0L)
+            runtimeState = current.serverTick(serverLevel?.server?.tickCount?.toLong() ?: 0L, redstoneInput)
+        } else if (redstoneInput != null) {
+            markRedstoneInputDirty()
         }
     }
 

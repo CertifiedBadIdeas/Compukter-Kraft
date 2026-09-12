@@ -396,7 +396,7 @@ private class ActorServiceBenchmarkActor(
         }
 
     override fun advance(worldTick: Long): CompletableFuture<ProgramRuntimeState> =
-        service.request(lease.endpoint) { ProgramRuntimeActorCommand.Advance(it, worldTick) }.thenApply { it.state }
+        service.turn(lease.endpoint, worldTick).thenApply { it.state }
 
     override fun resourceSnapshot(): CompletableFuture<ProgramResourceSnapshot?> =
         service.request(lease.endpoint) { ProgramRuntimeActorCommand.ResourceSnapshot(it) }.thenApply {

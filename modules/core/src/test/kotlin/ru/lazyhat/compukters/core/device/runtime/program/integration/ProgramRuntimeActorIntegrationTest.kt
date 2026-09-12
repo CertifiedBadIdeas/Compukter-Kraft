@@ -66,10 +66,7 @@ class ProgramRuntimeActorIntegrationTest {
             var state = started.state
             var worldTick = 0L
             while (state != ProgramRuntimeState.WaitingForInput && worldTick < MAXIMUM_TICKS) {
-                val advanced =
-                    scheduler.awaitRequest(
-                        endpoint,
-                    ) { requestId -> ProgramRuntimeActorCommand.Advance(requestId, worldTick++) }
+                val advanced = scheduler.awaitTurn(endpoint, worldTick++)
                 state = advanced.state
             }
             assertEquals(ProgramRuntimeState.WaitingForInput, state)
@@ -109,6 +106,20 @@ class ProgramRuntimeActorIntegrationTest {
             Thread.onSpinWait()
         }
         error("runtime actor reply timed out")
+    }
+
+    private fun ProgramRuntimeActorService.awaitTurn(
+        endpoint: VmActorEndpoint,
+        worldTick: Long,
+    ): ProgramRuntimeActorReply {
+        val future = turn(endpoint, worldTick)
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS)
+        while (System.nanoTime() < deadline) {
+            pump(1)
+            if (future.isDone) return future.get()
+            Thread.onSpinWait()
+        }
+        error("runtime actor turn timed out")
     }
 
     private fun terminalText(state: TerminalState): String =

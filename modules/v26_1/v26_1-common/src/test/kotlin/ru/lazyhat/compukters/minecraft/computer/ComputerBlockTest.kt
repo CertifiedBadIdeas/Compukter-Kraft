@@ -112,7 +112,10 @@ class ComputerBlockTest {
             return state
         }
 
-        override fun serverTick(worldTick: Long): ProgramComputerState {
+        override fun serverTick(
+            worldTick: Long,
+            redstoneInput: Int?,
+        ): ProgramComputerState {
             serverTickCalls++
             return state
         }
@@ -133,8 +136,6 @@ class ComputerBlockTest {
         override fun sendTerminalTextAsync(value: String) = CompletableFuture.completedFuture(false)
 
         override fun filesystemGeneration(): Long? = null
-
-        override fun submitRedstoneInputAsync(packet: Int) = CompletableFuture.completedFuture(true)
 
         override fun fileStatAsync(path: VmVirtualPath) = CompletableFuture.completedFuture<VmFileStat?>(null)
 

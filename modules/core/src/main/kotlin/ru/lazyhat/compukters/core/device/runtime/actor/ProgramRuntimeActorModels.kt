@@ -56,7 +56,9 @@ value class ProgramDeploymentToken(
     }
 }
 
-sealed interface ProgramRuntimeActorCommand {
+sealed interface ProgramRuntimeActorMessage
+
+sealed interface ProgramRuntimeActorCommand : ProgramRuntimeActorMessage {
     val requestId: ProgramRuntimeRequestId
 
     class Start(
@@ -71,15 +73,6 @@ sealed interface ProgramRuntimeActorCommand {
     data class StartBoot(
         override val requestId: ProgramRuntimeRequestId,
     ) : ProgramRuntimeActorCommand
-
-    data class Advance(
-        override val requestId: ProgramRuntimeRequestId,
-        val worldTick: Long,
-    ) : ProgramRuntimeActorCommand {
-        init {
-            require(worldTick >= 0) { "world tick must not be negative" }
-        }
-    }
 
     data class TerminalFullState(
         override val requestId: ProgramRuntimeRequestId,
@@ -181,36 +174,6 @@ sealed interface ProgramRuntimeActorCommand {
         internal fun lineChars(): CharArray = line.copyOf()
     }
 
-    data class SubmitRedstoneInput(
-        override val requestId: ProgramRuntimeRequestId,
-        val packet: Int,
-    ) : ProgramRuntimeActorCommand
-
-    data class ContinueRedstoneOutput(
-        override val requestId: ProgramRuntimeRequestId,
-        val worldTick: Long,
-        val outputRequestId: ProgramRuntimeRequestId,
-        val packed: Int,
-        val result: RedstoneCommitResult,
-    ) : ProgramRuntimeActorCommand {
-        init {
-            require(worldTick >= 0) { "world tick must not be negative" }
-            require(result != RedstoneCommitResult.Deferred) { "redstone completion cannot be deferred" }
-        }
-    }
-
-    data class ContinueSound(
-        override val requestId: ProgramRuntimeRequestId,
-        val worldTick: Long,
-        val soundRequestId: ProgramRuntimeRequestId,
-        val result: SoundCommitResult,
-    ) : ProgramRuntimeActorCommand {
-        init {
-            require(worldTick >= 0) { "world tick must not be negative" }
-            require(result != SoundCommitResult.Deferred) { "sound completion cannot be deferred" }
-        }
-    }
-
     data class Shutdown(
         override val requestId: ProgramRuntimeRequestId,
     ) : ProgramRuntimeActorCommand
@@ -218,6 +181,40 @@ sealed interface ProgramRuntimeActorCommand {
     data class Reboot(
         override val requestId: ProgramRuntimeRequestId,
     ) : ProgramRuntimeActorCommand
+}
+
+sealed interface ProgramRuntimeActorEffect : ProgramRuntimeActorMessage {
+    data class RedstoneInput(
+        val packet: Int,
+    ) : ProgramRuntimeActorEffect
+
+    data class CompleteRedstoneOutput(
+        val outputRequestId: ProgramRuntimeRequestId,
+        val packed: Int,
+        val result: RedstoneCommitResult,
+    ) : ProgramRuntimeActorEffect {
+        init {
+            require(result != RedstoneCommitResult.Deferred) { "redstone completion cannot be deferred" }
+        }
+    }
+
+    data class CompleteSound(
+        val soundRequestId: ProgramRuntimeRequestId,
+        val result: SoundCommitResult,
+    ) : ProgramRuntimeActorEffect {
+        init {
+            require(result != SoundCommitResult.Deferred) { "sound completion cannot be deferred" }
+        }
+    }
+}
+
+data class ProgramRuntimeTickPermit(
+    val requestId: ProgramRuntimeRequestId,
+    val worldTick: Long,
+) {
+    init {
+        require(worldTick >= 0) { "world tick must not be negative" }
+    }
 }
 
 data class ProgramRuntimeActorReply(

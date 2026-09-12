@@ -358,8 +358,12 @@ class ComputerBlockEntityTest {
             return publishState(ProgramComputerState.Running)
         }
 
-        override fun serverTick(worldTick: Long): ProgramComputerState {
+        override fun serverTick(
+            worldTick: Long,
+            redstoneInput: Int?,
+        ): ProgramComputerState {
             serverTickCalls++
+            redstoneInput?.let(redstoneInputs::add)
             return state
         }
 
@@ -395,11 +399,6 @@ class ComputerBlockEntityTest {
         }
 
         override fun filesystemGeneration(): Long? = null
-
-        override fun submitRedstoneInputAsync(packet: Int): CompletableFuture<Boolean> {
-            redstoneInputs += packet
-            return CompletableFuture.completedFuture(true)
-        }
 
         override fun verifyForDeployAsync(artifact: ByteArray): CompletableFuture<ProgramDeploymentCandidate?> {
             verifiedArtifact = artifact.toList()

@@ -19,6 +19,7 @@
 package ru.lazyhat.compukters.core.device.computer
 
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorCommand
+import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorEffect
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorLease
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorReply
 import ru.lazyhat.compukters.core.device.runtime.actor.ProgramRuntimeActorRequestException
@@ -33,6 +34,7 @@ import ru.lazyhat.compukters.core.device.runtime.program.RedstoneHostPort
 import ru.lazyhat.compukters.core.device.runtime.program.SoundCommitResult
 import ru.lazyhat.compukters.core.device.runtime.program.SoundHostPort
 import ru.lazyhat.compukters.lang.runtime.vm.HostFailureKind
+import ru.lazyhat.compukters.lang.runtime.vm.RedstoneWire
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 
@@ -52,6 +54,7 @@ class ActorProgramComputer(
     private var advance: CompletableFuture<ProgramRuntimeActorReply>? = null
     private var pendingOutput: PendingOutput? = null
     private var pendingSound: PendingSound? = null
+    private var pendingRedstoneInput: Int? = null
     private var closeResult: CompletableFuture<Long?>? = null
     private var bootRequest: CompletableFuture<ProgramRuntimeActorReply>? = null
     private var lastAdvanceTick = -1L
@@ -93,10 +96,7 @@ class ActorProgramComputer(
         send { id ->
             val prepared = command(id)
             require(
-                prepared !is ProgramRuntimeActorCommand.Advance &&
-                    prepared !is ProgramRuntimeActorCommand.ContinueRedstoneOutput &&
-                    prepared !is ProgramRuntimeActorCommand.ContinueSound &&
-                    prepared !is ProgramRuntimeActorCommand.Start &&
+                prepared !is ProgramRuntimeActorCommand.Start &&
                     prepared !is ProgramRuntimeActorCommand.StartBoot &&
                     prepared !is ProgramRuntimeActorCommand.Reboot &&
                     prepared !is ProgramRuntimeActorCommand.Shutdown,
@@ -104,24 +104,59 @@ class ActorProgramComputer(
             prepared
         }
 
-    fun serverTick(worldTick: Long) {
+    fun serverTick(
+        worldTick: Long,
+        redstoneInput: Int? = null,
+    ) {
         checkOwner()
         require(worldTick >= 0)
+        redstoneInput?.let { packet -> pendingRedstoneInput = mergeRedstoneInput(pendingRedstoneInput, packet) }
         lastObservedServerTick = maxOf(lastObservedServerTick, worldTick)
         if (closeResult != null) return
-        if (pendingOutput != null || pendingSound != null) {
-            continueWorldRequest(worldTick)
-            return
-        }
         if (advance != null || worldTick <= lastAdvanceTick ||
-            (state != ProgramRuntimeState.Running && state != ProgramRuntimeState.WaitingForCompiler)
+            (
+                state != ProgramRuntimeState.Running &&
+                    state != ProgramRuntimeState.WaitingForCompiler &&
+                    pendingOutput == null &&
+                    pendingSound == null &&
+                    pendingRedstoneInput == null
+            )
         ) {
             return
         }
+        val output = pendingOutput
+        val requestedSound = pendingSound
+        check(output == null || requestedSound == null) { "computer cannot own two pending world requests" }
+        val input = pendingRedstoneInput
+        val effects =
+            buildList {
+                output?.let {
+                    add(
+                        ProgramRuntimeActorEffect.CompleteRedstoneOutput(
+                            it.requestId,
+                            it.packed,
+                            it.result,
+                        ),
+                    )
+                }
+                requestedSound?.let {
+                    add(ProgramRuntimeActorEffect.CompleteSound(it.requestId, it.result))
+                }
+                input?.let { add(ProgramRuntimeActorEffect.RedstoneInput(it)) }
+            }
         lastAdvanceTick = worldTick
         val currentLifecycle = lifecycle
-        val future = send { ProgramRuntimeActorCommand.Advance(it, worldTick) }
+        val future = observe(service.turn(lease.endpoint, worldTick, effects), lifecycle)
         advance = future
+        if (!future.isCompletedExceptionally) {
+            pendingOutput = null
+            pendingSound = null
+            pendingRedstoneInput = null
+            hostCompletionTick?.let { completedAt ->
+                service.recordHostContinuationDelay((worldTick - completedAt).coerceAtLeast(0))
+                hostCompletionTick = null
+            }
+        }
         future.whenComplete { reply, failure ->
             if (advance === future) advance = null
             if (currentLifecycle != lifecycle || closeResult != null) return@whenComplete
@@ -140,68 +175,12 @@ class ActorProgramComputer(
         lifecycle++
         pendingOutput = null
         pendingSound = null
+        pendingRedstoneInput = null
         hostCompletionTick = null
         val result = lease.closeAsync()
         closeResult = result
         publish(ProgramRuntimeState.Closed)
         return result.copy()
-    }
-
-    private fun continueWorldRequest(worldTick: Long) {
-        if (advance != null || worldTick <= lastAdvanceTick) return
-        val output = pendingOutput
-        val sound = pendingSound
-        check(output == null || sound == null) { "computer cannot own two pending world requests" }
-        lastAdvanceTick = worldTick
-        val currentLifecycle = lifecycle
-        val future =
-            when {
-                output != null -> {
-                    send {
-                        ProgramRuntimeActorCommand.ContinueRedstoneOutput(
-                            it,
-                            worldTick,
-                            output.requestId,
-                            output.packed,
-                            output.result,
-                        )
-                    }
-                }
-
-                sound != null -> {
-                    send {
-                        ProgramRuntimeActorCommand.ContinueSound(it, worldTick, sound.requestId, sound.result)
-                    }
-                }
-
-                else -> {
-                    return
-                }
-            }
-        advance = future
-        if (!future.isCompletedExceptionally) {
-            hostCompletionTick?.let { completedAt ->
-                service.recordHostContinuationDelay((worldTick - completedAt).coerceAtLeast(0))
-                hostCompletionTick = null
-            }
-        }
-        future.whenComplete { reply, failure ->
-            if (advance === future) advance = null
-            if (currentLifecycle != lifecycle || closeResult != null) return@whenComplete
-            if (pendingOutput !== output || pendingSound !== sound || closeResult != null) return@whenComplete
-            if (failure != null) {
-                // Retain the exact completion when the mailbox is full. Do not repeat the world mutation.
-                failUnlessBusy(failure)
-                return@whenComplete
-            }
-            if ((reply.value as? ProgramRuntimeActorValue.Accepted)?.accepted == false) {
-                publish(ProgramRuntimeState.Failed(ProgramFailure.Bridge("world request completion was rejected")))
-                return@whenComplete
-            }
-            pendingOutput = null
-            pendingSound = null
-            acceptAdvanceReply(reply, currentLifecycle)
-        }
     }
 
     private fun acceptAdvanceReply(
@@ -254,6 +233,7 @@ class ActorProgramComputer(
         advance = null
         pendingOutput = null
         pendingSound = null
+        pendingRedstoneInput = null
         hostCompletionTick = null
         return observe(submitted, lifecycle)
     }
@@ -279,8 +259,22 @@ class ActorProgramComputer(
 
     private fun failUnlessBusy(failure: Throwable) {
         val cause = if (failure is CompletionException) failure.cause ?: failure else failure
-        if (cause is ProgramRuntimeActorRequestException && cause.submission == VmActorSubmission.MAILBOX_FULL) return
+        if (
+            cause is ProgramRuntimeActorRequestException &&
+            (cause.submission == VmActorSubmission.MAILBOX_FULL || cause.submission == VmActorSubmission.PERMIT_PENDING)
+        ) {
+            return
+        }
         publish(ProgramRuntimeState.Failed(ProgramFailure.Bridge(cause.message ?: "actor request failed")))
+    }
+
+    private fun mergeRedstoneInput(
+        pending: Int?,
+        latest: Int,
+    ): Int {
+        val checkedLatest = RedstoneWire.requireInputPacket(latest)
+        val changed = RedstoneWire.inputChangedMask(checkedLatest) or (pending?.let(RedstoneWire::inputChangedMask) ?: 0)
+        return (checkedLatest and RedstoneWire.ALL_SIDES_MASK.inv()) or changed
     }
 
     private fun publish(next: ProgramRuntimeState) {
