@@ -40,14 +40,14 @@ group = readAllModProperties().getValue("common_mod_group_id")
 version = rootProject.version
 
 kotlin {
-    jvmToolchain(25)
-    compilerOptions.jvmTarget.set(JvmTarget.JVM_25)
+    jvmToolchain(21)
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
 }
 
 java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(25))
-    sourceCompatibility = JavaVersion.VERSION_25
-    targetCompatibility = JavaVersion.VERSION_25
+    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 tasks.test {

@@ -39,6 +39,7 @@ import ru.lazyhat.compukters.impl.ide.IdeClientBootstrap
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetNetwork
 import ru.lazyhat.compukters.impl.registry.CompuktersRegistry
 import ru.lazyhat.compukters.impl.terminal.TerminalNetwork
+import ru.lazyhat.compukters.lang.runtime.vm.FfmRuntimeBackend
 import ru.lazyhat.compukters.lang.runtime.vm.VmRuntime
 
 @Mod(MOD_ID)
@@ -76,6 +77,9 @@ class CompuktersMod(
     }
 
     companion object {
-        internal fun requireNativeRuntime() = VmRuntime.requireLoaded()
+        internal fun requireNativeRuntime() =
+            VmRuntime
+                .also { it.install(FfmRuntimeBackend) }
+                .requireLoaded()
     }
 }

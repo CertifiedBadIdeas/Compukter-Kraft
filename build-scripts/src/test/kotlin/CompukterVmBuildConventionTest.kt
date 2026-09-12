@@ -51,7 +51,7 @@ class CompukterVmBuildConventionTest {
 
     @Test
     fun releaseRuntimeBundlesDownloadByDefaultAndRetainAnOfflineOverride() {
-        val nativeBuildScript = repoRoot().resolve("modules/native-runtime/build.gradle.kts").readText()
+        val nativeBuildScript = repoRoot().resolve("modules/native-runtime/ffm/build.gradle.kts").readText()
         val support = repoRoot().resolve("build-scripts/src/main/kotlin/RuntimeBundleSupport.kt").readText()
 
         assertTrue(nativeBuildScript.contains("compukterRuntimeBundleDir"))

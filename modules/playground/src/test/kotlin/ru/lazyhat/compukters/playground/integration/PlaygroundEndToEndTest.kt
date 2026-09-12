@@ -20,6 +20,8 @@ package ru.lazyhat.compukters.playground.integration
 
 import kotlinx.coroutines.runBlocking
 import ru.lazyhat.compukters.compiler.worker.controller.CompilerWorkerPolicy
+import ru.lazyhat.compukters.lang.runtime.vm.FfmRuntimeBackend
+import ru.lazyhat.compukters.lang.runtime.vm.VmRuntime
 import ru.lazyhat.compukters.playground.ForkedPlaygroundCompiler
 import ru.lazyhat.compukters.playground.NativePlaygroundExecutor
 import ru.lazyhat.compukters.playground.PlaygroundApplication
@@ -40,6 +42,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlaygroundEndToEndTest {
+    init {
+        VmRuntime.install(FfmRuntimeBackend)
+    }
+
     @Test
     fun `real compiler FFM and VM execute hello with exact terminal transcript`() =
         runBlocking {

@@ -13,7 +13,8 @@ When work touches `host/compukter-vm`, check for `host/compukter-vm/AGENTS.md` a
 ## Project Structure & Module Organization
 
 Compukters is a Gradle multi-module Kotlin project with native Rust VM components. Kotlin modules live under
-`modules/`: `core` contains shared device/runtime logic, `native-runtime` contains architecture-neutral runtime models, and
+`modules/`: `core` contains shared device/runtime logic, `native-runtime/api` contains the Java 21 runtime API and models,
+`native-runtime/ffm` contains the JDK 25 FFM transport, and `native-runtime/jni` is the Java 21 JNI transport leaf, while
 `v26_1/v26_1-common` plus `v26_1/v26_1-neoforge` contain the Minecraft 26.1.2 integration. Host-side Rust
 VM code lives in `host/compukter-vm`. Documentation is in
 `docs/`, mod metadata is in `config/`, and visual/model assets are in
@@ -39,7 +40,7 @@ VM code lives in `host/compukter-vm`. Documentation is in
   NeoForge GameTest server, and the production artifact packaged for the locally configured native platform.
 - `./gradlew build` builds all Gradle modules and runs standard checks.
 - `./gradlew test` runs JVM unit tests across Kotlin modules.
-- `./gradlew :core:test` or `./gradlew :native-runtime:test` runs focused module tests.
+- `./gradlew :core:test`, `./gradlew :native-runtime-api:test`, or `./gradlew :native-runtime-ffm:verifyNativeRuntime` runs focused module tests.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runClient` launches the NeoForge dev client.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runGameTestServer` runs the real NeoForge GameTest server.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildProductionUniversalJar` builds the official-name production mod jar without a remap stage.

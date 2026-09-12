@@ -24,7 +24,7 @@ val libs = libsCatalog()
 
 dependencies {
     implementation(project(":core"))
-    implementation(project(":native-runtime"))
+    implementation(project(":native-runtime-api"))
 
     implementation(libs.findLibrary("kotlin-stdlib").get())
     implementation(libs.findLibrary("kotlin-logging").get())

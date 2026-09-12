@@ -21,10 +21,24 @@ plugins {
     alias(libs.plugins.kotlinConvention)
 }
 
+// The standalone application keeps using FFM until the Java 21 JNI transport
+// is available later in issue #615.
+kotlin {
+    jvmToolchain(25)
+    compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
+}
+
+java {
+    toolchain.languageVersion.set(JavaLanguageVersion.of(25))
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
 dependencies {
     implementation(projects.compilerClient)
     implementation(projects.ideCore)
-    implementation(projects.nativeRuntime)
+    implementation(projects.nativeRuntimeApi)
+    implementation(projects.nativeRuntimeFfm)
     implementation(projects.platformBundle)
     implementation(libs.kotlin.stdlib)
     implementation(libs.kotlinx.coroutines.core)

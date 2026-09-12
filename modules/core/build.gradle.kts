@@ -20,16 +20,31 @@ plugins {
     alias(libs.plugins.kotlinConvention)
 }
 
+val nativeIntegrationTest = sourceSets.create("nativeIntegrationTest")
+
+kotlin.target.compilations.named(nativeIntegrationTest.name) {
+    associateWith(kotlin.target.compilations.getByName("main"))
+}
+
+configurations[nativeIntegrationTest.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
+configurations[nativeIntegrationTest.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+configurations[nativeIntegrationTest.runtimeClasspathConfigurationName].attributes {
+    attribute(org.gradle.api.attributes.java.TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 25)
+}
+nativeIntegrationTest.compileClasspath += sourceSets.main.get().output
+nativeIntegrationTest.runtimeClasspath += sourceSets.main.get().output
+
 dependencies {
     implementation(projects.compilerClient)
     implementation(projects.compilerRuntime)
-    implementation(projects.nativeRuntime)
+    implementation(projects.nativeRuntimeApi)
     implementation(libs.kotlin.logging)
     implementation(libs.slf4j.api)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.xz)
     testImplementation(projects.platformBundle)
+    add(nativeIntegrationTest.runtimeOnlyConfigurationName, projects.nativeRuntimeFfm)
 }
 
 val compukterFfiLibrary =
@@ -54,7 +69,7 @@ val processInstallRomExecutableArtifact =
     rootProject.layout.projectDirectory.file("host/compukter-vm/tests/fixtures/process-install-rom-executable.cpkt")
 
 tasks.test {
-    filter.excludeTestsMatching("ru.lazyhat.compukters.core.device.runtime.program.integration.*")
+    useJUnitPlatform()
 }
 
 val programRuntimeIntegrationTest =
@@ -70,12 +85,18 @@ val programRuntimeIntegrationTest =
             ":tooling-runtime:toolingRuntimeBundle",
             ":tooling-runtime:toolingRuntimeManifest",
             rootProject.tasks.named("cargoBuildCompukterFfi"),
+            ":native-runtime-ffm:jar",
         )
         useJUnitPlatform()
-        testClassesDirs = sourceSets.test.get().output.classesDirs
-        classpath = sourceSets.test.get().runtimeClasspath
+        testClassesDirs = nativeIntegrationTest.output.classesDirs
+        classpath = nativeIntegrationTest.runtimeClasspath
         filter.includeTestsMatching("ru.lazyhat.compukters.core.device.runtime.program.integration.*")
         jvmArgs("--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny")
+        javaLauncher.set(
+            javaToolchains.launcherFor {
+                languageVersion.set(JavaLanguageVersion.of(25))
+            },
+        )
         inputs.file(compukterFfiLibrary)
         inputs.file(programRuntimeArtifact)
         inputs.file(bootRuntimeArtifact)

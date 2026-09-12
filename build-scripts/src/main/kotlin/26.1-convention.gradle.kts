@@ -16,6 +16,8 @@
  * limitations under the License.
  */
 
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("kotlin-convention")
     id("dev.architectury.loom-no-remap")
@@ -46,4 +48,15 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation(libs.findLibrary("kotlinx-coroutines-test").get())
+}
+
+kotlin {
+    jvmToolchain(25)
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_25)
+}
+
+java {
+    toolchain.languageVersion.set(JavaLanguageVersion.of(25))
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }

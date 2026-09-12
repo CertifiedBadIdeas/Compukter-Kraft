@@ -338,11 +338,8 @@ val verifyActiveMinecraftBaseline =
                 "1.21." + "1",
                 "Parch" + "ment",
                 "Java " + "17",
-                "Java " + "21",
                 "JDK " + "17",
-                "JDK " + "21",
                 "JVM " + "17",
-                "JVM " + "21",
                 "architectury-" + "neoforge",
                 "Remap" + "JarTask",
             )
@@ -365,6 +362,64 @@ val verifyActiveMinecraftBaseline =
                     .toList()
             check(matches.isEmpty()) {
                 "stale Minecraft/JDK baseline references: ${matches.joinToString()}"
+            }
+        }
+    }
+
+val portableJava21Projects =
+    listOf(
+        ":native-runtime-api",
+        ":platform-bundle",
+        ":platform-k2",
+        ":compiler-artifact",
+        ":worker-client",
+        ":tooling-runtime",
+        ":compiler-client",
+        ":compiler-runtime",
+        ":compiler-k2-engine",
+        ":compiler-k2",
+        ":guest-platform",
+        ":ide-core",
+        ":ide-kotlin-formatter",
+        ":ide-analysis-client",
+        ":ide-analysis-k2",
+        ":ide-client",
+        ":core",
+    )
+
+val verifyPortableJava21Bytecode =
+    tasks.register("verifyPortableJava21Bytecode") {
+        group = "verification"
+        description = "Checks that portable production classes remain loadable on Java 21."
+        val archives =
+            portableJava21Projects.map { path ->
+                project(path).tasks.named<Jar>("jar").flatMap(Jar::getArchiveFile)
+            }
+        dependsOn(portableJava21Projects.map { "$it:jar" })
+        inputs.files(archives)
+        doLast {
+            val maximumMajorVersion = 65
+            archives.forEach { archiveProvider ->
+                val archive = archiveProvider.get().asFile
+                java.util.zip.ZipFile(archive).use { zip ->
+                    zip
+                        .entries()
+                        .asSequence()
+                        .filter { !it.isDirectory && it.name.endsWith(".class") }
+                        .forEach { entry ->
+                            java.io.DataInputStream(zip.getInputStream(entry)).use { input ->
+                                check(input.readInt() == 0xCAFEBABE.toInt()) {
+                                    "invalid class file ${entry.name} in ${archive.name}"
+                                }
+                                input.readUnsignedShort()
+                                val majorVersion = input.readUnsignedShort()
+                                check(majorVersion <= maximumMajorVersion) {
+                                    "portable class ${entry.name} in ${archive.name} targets class version " +
+                                        "$majorVersion, expected <= $maximumMajorVersion"
+                                }
+                            }
+                        }
+                }
             }
         }
     }
@@ -487,12 +542,14 @@ tasks.register("verifyLocalFast") {
     group = "verification"
     dependsOn(buildScriptsTest)
     dependsOn(verifyActiveMinecraftBaseline)
+    dependsOn(verifyPortableJava21Bytecode)
     dependsOn(verifyLicensePolicy)
     dependsOn(":core:test")
     dependsOn(":ide-client:check")
     dependsOn(":ide-analysis-client:check")
     dependsOn(":ide-analysis-k2:check")
-    dependsOn(":native-runtime:test")
+    dependsOn(":native-runtime-api:test")
+    dependsOn(":native-runtime-ffm:test")
     dependsOn(":playground:test")
     dependsOn(":v26_1-common:test")
     dependsOn(":v26_1-neoforge:test")

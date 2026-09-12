@@ -338,7 +338,7 @@ val forkedWorkerTest = tasks.register<Test>("forkedWorkerTest") {
     doFirst {
         systemProperty("compukters.analysis.testClasspath", classpath.files.joinToString(File.pathSeparator))
         systemProperty("compukters.analysis.java", javaToolchains.launcherFor {
-            languageVersion = JavaLanguageVersion.of(25)
+            languageVersion = JavaLanguageVersion.of(21)
         }.get().executablePath.asFile.absolutePath)
         systemProperty(
             "compukters.analysis.payload",
@@ -373,7 +373,7 @@ val incrementalAnalysisPerformanceTest = tasks.register<Test>("incrementalAnalys
         systemProperty("compukters.analysis.performance", "true")
         systemProperty("compukters.analysis.testClasspath", classpath.files.joinToString(File.pathSeparator))
         systemProperty("compukters.analysis.java", javaToolchains.launcherFor {
-            languageVersion = JavaLanguageVersion.of(25)
+            languageVersion = JavaLanguageVersion.of(21)
         }.get().executablePath.asFile.absolutePath)
         systemProperty(
             "compukters.analysis.payload",

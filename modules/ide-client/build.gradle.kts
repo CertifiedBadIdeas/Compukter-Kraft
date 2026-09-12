@@ -70,7 +70,7 @@ tasks.test {
         systemProperty(
             "compukters.ide.java",
             javaToolchains.launcherFor {
-                languageVersion = JavaLanguageVersion.of(25)
+                languageVersion = JavaLanguageVersion.of(21)
             }.get().executablePath.asFile.absolutePath,
         )
     }

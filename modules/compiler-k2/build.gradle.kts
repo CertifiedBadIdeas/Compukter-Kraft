@@ -607,7 +607,7 @@ val forkedWorkerTest = tasks.register<Test>("forkedWorkerTest") {
     outputs.file(workerMeasurementReport)
     doFirst {
         systemProperty("compukters.worker.payload", sharedToolingPayloadDirectory.get().asFile.absolutePath)
-        systemProperty("compukters.worker.java", javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }.get().executablePath)
+        systemProperty("compukters.worker.java", javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }.get().executablePath)
         systemProperty("compukters.worker.test-classpath", sourceSets.test.get().runtimeClasspath.asPath)
         systemProperty("compukters.worker.measurement-report", workerMeasurementReport.get().asFile.absolutePath)
     }

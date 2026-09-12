@@ -56,7 +56,12 @@ fun include(
     }
 }
 
-include("native-runtime", modulesDir)
+include("native-runtime-api")
+project(":native-runtime-api").projectDir = modulesDir.resolve("native-runtime/api")
+include("native-runtime-ffm")
+project(":native-runtime-ffm").projectDir = modulesDir.resolve("native-runtime/ffm")
+include("native-runtime-jni")
+project(":native-runtime-jni").projectDir = modulesDir.resolve("native-runtime/jni")
 include("platform-bundle", modulesDir)
 include("platform-k2", modulesDir)
 include("compiler-artifact", modulesDir)

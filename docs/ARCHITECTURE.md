@@ -135,7 +135,8 @@ barrier does not depend on server result pumping and may complete on a worker th
 
 `ProgramRuntimeHost` owns one current Rust `ComputerMachine`, advances it with bounded guest and maintenance budgets,
 commits terminal changes once per active server tick, and exposes typed full/delta states and failures through JDK 25
-FFM. It does not own a second grid or output transcript. It is loader-independent and confined to its actor worker.
+FFM on the 26.1 product line. The Java 21 runtime API owns the same typed session boundary independently of its native
+transport. It does not own a second grid or output transcript. It is loader-independent and confined to its actor worker.
 Within one process, the Rust VM may schedule several bounded cooperative Guest tasks. Exactly one task executes
 instructions at once; suspension on a host request or `Task.join()` transfers execution to the next runnable task in
 FIFO order. Pending requests retain their `(TaskId, RequestId)` owner, so independent reads and writes may remain in
@@ -293,7 +294,9 @@ bundles remain later layers.
 
 | Module | Purpose |
 |---|---|
-| `native-runtime` | Kotlin-facing JDK 25 FFM VM session, opaque world-store lifecycle, and trusted host capabilities |
+| `native-runtime-api` | Java 21 Kotlin-facing VM session, wire validation, opaque world-store lifecycle, and trusted host capabilities |
+| `native-runtime-ffm` | Explicit JDK 25 FFM transport, native resource loading, and FFM integration evidence |
+| `native-runtime-jni` | Java 21 JNI transport leaf; its adapter is completed by the multi-version runtime foundation |
 | `platform-bundle` | Canonical platform bundle model, codec, module graph, identities, and default imports |
 | `platform-k2` | Shared K2 metadata and FIR integration for the Compukters platform |
 | `compiler-artifact` | Canonical executable artifact model, validation, and encoding |

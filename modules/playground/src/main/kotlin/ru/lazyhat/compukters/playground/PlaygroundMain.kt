@@ -19,10 +19,13 @@
 package ru.lazyhat.compukters.playground
 
 import kotlinx.coroutines.runBlocking
+import ru.lazyhat.compukters.lang.runtime.vm.FfmRuntimeBackend
+import ru.lazyhat.compukters.lang.runtime.vm.VmRuntime
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
 fun main(arguments: Array<String>) {
+    VmRuntime.install(FfmRuntimeBackend)
     val debug = "--debug" in arguments
     val exit =
         try {

@@ -146,6 +146,8 @@ dependencies {
     common(project(path = projects.v261Common.path)) { isTransitive = false }
     shadowBundle(project(path = projects.v261Common.path, configuration = "transformProductionNeoForge"))
     testImplementation(project(path = projects.v261Common.path))
+    implementation(projects.nativeRuntimeFfm)
+    shadowBundle(project(path = projects.nativeRuntimeFfm.path)) { isTransitive = false }
     implementation(projects.platformBundle)
     shadowBundle(project(path = projects.platformBundle.path)) { isTransitive = false }
 
@@ -666,7 +668,7 @@ tasks.register("buildReleaseUniversalJar") {
     dependsOn(
         verifyUniversalReleaseState,
         verifyPackagedCompukterFfi,
-        ":native-runtime:packagedNativeIntegrationTest",
+        ":native-runtime-ffm:packagedNativeIntegrationTest",
     )
 }
 
