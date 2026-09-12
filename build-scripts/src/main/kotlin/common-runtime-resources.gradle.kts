@@ -69,7 +69,6 @@ tasks.processResources {
     }
     listOf(
         "antlr4-runtime-4.11.1-BSD-3-Clause.txt",
-        "checker-qual-3.21.2-MIT.txt",
         "xz-java-1.10-0BSD.txt",
     ).forEach { filename ->
         from(rootProject.layout.projectDirectory.file("licenses/jvm/$filename")) {

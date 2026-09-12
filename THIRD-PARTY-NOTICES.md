@@ -106,8 +106,6 @@ project manifests and lock files:
   at `META-INF/licenses/Compukters-Apache-2.0.txt`.
 - ANTLR 4 Runtime 4.11.1 — BSD-3-Clause; complete text at
   `licenses/jvm/antlr4-runtime-4.11.1-BSD-3-Clause.txt`.
-- Checker Qual 3.21.2 — MIT; complete text at
-  `licenses/jvm/checker-qual-3.21.2-MIT.txt`.
 
 ## Statically linked Rust crates
 

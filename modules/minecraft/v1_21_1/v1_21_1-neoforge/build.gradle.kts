@@ -112,6 +112,13 @@ val verifyProductionJar =
                 }
             }
             check(entries.size == entries.toSet().size) { "duplicate archive entries found in ${archive.name}" }
+            check(
+                entries.none {
+                    it.startsWith("META-INF/jars/checker-qual-") && it.endsWith(".jar")
+                },
+            ) {
+                "compile-only Checker Qual annotations must not be nested in ${archive.name}"
+            }
             val nativeEntries = entries.filter { it.startsWith("META-INF/natives/") }
             validateNativeResources(nativeEntries, expectedPackagedNativeResources)
             check(entries.none { "compukter_ffi" in it || it.endsWith("/FfmRuntimeBackend.class") }) {

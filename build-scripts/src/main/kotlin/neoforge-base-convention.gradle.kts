@@ -79,9 +79,9 @@ dependencies {
         "kotlinx-coroutines-core",
         "tomlj",
         "antlr4-runtime",
-        "checker-qual",
         "xz",
     ).forEach { alias -> neoForgeImplementation(libs.findLibrary(alias).get()) }
+    compileOnly(libs.findLibrary("checker-qual").get())
 }
 
 tasks.named<Jar>("jar") {
