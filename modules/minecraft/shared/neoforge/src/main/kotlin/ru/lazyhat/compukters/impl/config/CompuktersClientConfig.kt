@@ -24,6 +24,7 @@ import ru.lazyhat.compukters.impl.ide.IdeLayoutStore
 import ru.lazyhat.compukters.impl.terminal.TerminalFontProfile
 import java.util.function.Predicate
 
+/** Client preferences backed by the NeoForge configuration store. */
 object CompuktersClientConfig {
     private val builder = ModConfigSpec.Builder()
 

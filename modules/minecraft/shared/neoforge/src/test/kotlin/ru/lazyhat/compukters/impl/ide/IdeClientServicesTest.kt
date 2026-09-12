@@ -26,6 +26,11 @@ import ru.lazyhat.compukters.ide.analysis.protocol.AnalysisLimits
 import ru.lazyhat.compukters.ide.client.analysis.IdeVisibleLatencyKind
 import ru.lazyhat.compukters.ide.client.analysis.IdeVisibleLatencyTrace
 import ru.lazyhat.compukters.ide.client.controller.IdeClientTooling
+import ru.lazyhat.compukters.impl.ide.target.IdeTargetReply
+import ru.lazyhat.compukters.impl.ide.target.IdeTargetRequest
+import ru.lazyhat.compukters.impl.ide.target.IdeTargetRequestChannel
+import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalClient
+import ru.lazyhat.compukters.impl.ide.target.NetworkIdeTargetPort
 import ru.lazyhat.compukters.platform.bundle.PlatformBundleCodec
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -40,7 +45,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
-class IdeClientServicesTest {
+internal class IdeClientServicesTest {
     @Test
     fun `attached source loader admits exact Unicode Kotlin text`() {
         val archive = createTempDirectory("compukters-attached-source-").resolve("sources.jar")
@@ -84,7 +89,7 @@ class IdeClientServicesTest {
         var application: IdeClientApplication? = null
         try {
             application =
-                ProductionIdeApplicationFactory.open(IdeClientPaths.at(gameRoot), trace) { _ ->
+                ProductionIdeApplicationFactory.open(IdeClientPaths.at(gameRoot), TestTargetTransport, TestLayoutStore, trace) { _ ->
                     pendingTooling
                 }
 
@@ -252,5 +257,30 @@ private class RecordingApplication(
     override fun close() {
         check(!closed)
         closed = true
+    }
+}
+
+internal object TestTargetTransport : IdeClientTargetTransport {
+    override fun openPort(): NetworkIdeTargetPort =
+        NetworkIdeTargetPort(
+            object : IdeTargetRequestChannel {
+                override fun request(request: IdeTargetRequest): CompletableFuture<IdeTargetReply> = CompletableFuture()
+
+                override fun disconnect() = Unit
+            },
+        )
+
+    override fun openTerminal(): IdeTargetTerminalClient = IdeTargetTerminalClient {}
+
+    override fun release(terminal: IdeTargetTerminalClient) = terminal.close()
+}
+
+internal object TestLayoutStore : IdeLayoutStore {
+    private var settings = IdeLayoutSettings.defaults()
+
+    override fun load(): IdeLayoutSettings = settings
+
+    override fun save(settings: IdeLayoutSettings) {
+        this.settings = settings
     }
 }

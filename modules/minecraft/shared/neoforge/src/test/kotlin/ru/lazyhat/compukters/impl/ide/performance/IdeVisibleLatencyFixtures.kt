@@ -72,6 +72,7 @@ internal class IdeVisibleLatencyFixture(
     }
 }
 
+/** Reusable production-like source fixtures for both supported Minecraft clients. */
 internal object IdeVisibleLatencyFixtures {
     fun singleFile(): IdeVisibleLatencyFixture {
         val active = ProjectPath.file("src/main.kt")

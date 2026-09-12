@@ -32,6 +32,8 @@ import net.neoforged.neoforge.common.NeoForge
 import org.lwjgl.glfw.GLFW
 import ru.lazyhat.compukters.core.MOD_ID
 import ru.lazyhat.compukters.ide.client.target.IdeTargetClaim
+import ru.lazyhat.compukters.impl.config.CompuktersClientConfig
+import ru.lazyhat.compukters.impl.ide.target.IdeTargetClientNetwork
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetOpeningClaim
 import ru.lazyhat.compukters.impl.ide.target.IdeTerminalTargetIdentity
 import ru.lazyhat.compukters.impl.terminal.TerminalScreen
@@ -94,7 +96,14 @@ internal object IdeClientBootstrap {
 
     private fun onClientSetup(event: FMLClientSetupEvent) {
         event.enqueueWork {
-            if (services == null) services = productionIdeClientServices(FMLPaths.GAMEDIR.get())
+            if (services == null) {
+                services =
+                    productionIdeClientServices(
+                        FMLPaths.GAMEDIR.get(),
+                        IdeTargetClientNetwork,
+                        CompuktersClientConfig.IdeLayout,
+                    )
+            }
         }
     }
 

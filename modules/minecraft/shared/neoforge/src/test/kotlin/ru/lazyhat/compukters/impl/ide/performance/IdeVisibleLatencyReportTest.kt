@@ -24,7 +24,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class IdeVisibleLatencyReportTest {
+internal class IdeVisibleLatencyReportTest {
     @Test
     fun `report renders deterministic schema three phase and total percentiles`() {
         val report =

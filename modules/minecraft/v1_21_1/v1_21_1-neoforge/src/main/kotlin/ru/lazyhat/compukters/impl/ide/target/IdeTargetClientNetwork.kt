@@ -20,13 +20,14 @@ package ru.lazyhat.compukters.impl.ide.target
 
 import net.neoforged.neoforge.network.PacketDistributor
 import net.neoforged.neoforge.network.handling.IPayloadContext
+import ru.lazyhat.compukters.impl.ide.IdeClientTargetTransport
 import java.util.concurrent.CompletableFuture
 
-internal object IdeTargetClientNetwork {
+internal object IdeTargetClientNetwork : IdeClientTargetTransport {
     private var current: IdeTargetRequestBroker? = null
     private var currentTerminal: IdeTargetTerminalClient? = null
 
-    fun openPort(): NetworkIdeTargetPort {
+    override fun openPort(): NetworkIdeTargetPort {
         disconnect()
         val broker =
             IdeTargetRequestBroker(send = { envelope ->
@@ -36,7 +37,7 @@ internal object IdeTargetClientNetwork {
         return NetworkIdeTargetPort(OwnedChannel(broker))
     }
 
-    fun openTerminal(): IdeTargetTerminalClient {
+    override fun openTerminal(): IdeTargetTerminalClient {
         currentTerminal?.close()
         return IdeTargetTerminalClient(::sendTerminal).also { currentTerminal = it }
     }
@@ -83,7 +84,7 @@ internal object IdeTargetClientNetwork {
         currentTerminal = null
     }
 
-    fun release(terminal: IdeTargetTerminalClient) {
+    override fun release(terminal: IdeTargetTerminalClient) {
         terminal.close()
         if (currentTerminal === terminal) currentTerminal = null
     }

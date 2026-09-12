@@ -23,7 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class CompuktersClientConfigTest {
+internal class CompuktersClientConfigTest {
     @Test
     fun `terminal font config defaults to Cozette and accepts catalog IDs only`() {
         val value = CompuktersClientConfig.terminalFontId

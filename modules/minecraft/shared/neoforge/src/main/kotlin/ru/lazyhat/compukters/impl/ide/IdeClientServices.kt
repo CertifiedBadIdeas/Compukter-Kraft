@@ -73,9 +73,8 @@ import ru.lazyhat.compukters.ide.project.ProjectLockCodec
 import ru.lazyhat.compukters.ide.project.ProjectLockService
 import ru.lazyhat.compukters.ide.project.ProjectResolution
 import ru.lazyhat.compukters.ide.project.ToolchainLockIdentity
-import ru.lazyhat.compukters.impl.config.CompuktersClientConfig
-import ru.lazyhat.compukters.impl.ide.target.IdeTargetClientNetwork
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalClient
+import ru.lazyhat.compukters.impl.ide.target.NetworkIdeTargetPort
 import ru.lazyhat.compukters.lang.runtime.vm.VmArtifactVerifier
 import ru.lazyhat.compukters.platform.bundle.PackagedPlatformBundleLoader
 import ru.lazyhat.compukters.platform.bundle.PlatformBundle
@@ -174,6 +173,7 @@ internal class IdeClientApplication(
     val targetTerminal: IdeTargetTerminalClient,
     val visibleLatency: IdeVisibleLatencyTrace,
     private val targetPort: AutoCloseable,
+    private val releaseTerminal: (IdeTargetTerminalClient) -> Unit,
 ) : AutoCloseable {
     private val closed = AtomicBoolean()
 
@@ -181,7 +181,7 @@ internal class IdeClientApplication(
         if (!closed.compareAndSet(false, true)) return
         var failure: Throwable? = null
         try {
-            IdeTargetClientNetwork.release(targetTerminal)
+            releaseTerminal(targetTerminal)
         } catch (error: Throwable) {
             failure = error
         }
@@ -199,13 +199,28 @@ internal class IdeClientApplication(
     }
 }
 
-internal fun productionIdeClientServices(gameRoot: Path): IdeClientServices<IdeClientApplication> {
-    val runtime = ProductionIdeRuntime(IdeClientPaths.at(gameRoot))
+/** Version-specific client packet transport used by the shared IDE runtime. */
+internal interface IdeClientTargetTransport {
+    fun openPort(): NetworkIdeTargetPort
+
+    fun openTerminal(): IdeTargetTerminalClient
+
+    fun release(terminal: IdeTargetTerminalClient)
+}
+
+internal fun productionIdeClientServices(
+    gameRoot: Path,
+    targetTransport: IdeClientTargetTransport,
+    layout: IdeLayoutStore,
+): IdeClientServices<IdeClientApplication> {
+    val runtime = ProductionIdeRuntime(IdeClientPaths.at(gameRoot), targetTransport, layout)
     return IdeClientServices(gameRoot, lifetime = runtime, opener = runtime::open)
 }
 
 private class ProductionIdeRuntime(
     paths: IdeClientPaths,
+    private val targetTransport: IdeClientTargetTransport,
+    private val layout: IdeLayoutStore,
 ) : AutoCloseable {
     private val executor: ExecutorService =
         Executors.newSingleThreadExecutor { task ->
@@ -214,7 +229,7 @@ private class ProductionIdeRuntime(
     private val prepared = CompletableFuture.supplyAsync({ ProductionIdeApplicationFactory.prepare(paths) }, executor)
 
     fun open(paths: IdeClientPaths): IdeClientApplication =
-        ProductionIdeApplicationFactory.open(paths) { workspace ->
+        ProductionIdeApplicationFactory.open(paths, targetTransport, layout) { workspace ->
             prepared.thenApplyAsync({ prepared ->
                 ProductionIdeApplicationFactory.createTooling(paths, workspace, prepared)
             }, executor)
@@ -246,7 +261,6 @@ internal object ProductionIdeApplicationFactory {
     )
 
     fun prepare(paths: IdeClientPaths): PreparedWorkers {
-        check(Runtime.version().feature() >= 25) { "Compukters IDE workers require JDK 25" }
         val workerLimits = WorkerLimits()
         val analysisLimits = AnalysisLimits()
         val bundle =
@@ -393,16 +407,18 @@ internal object ProductionIdeApplicationFactory {
 
     fun open(
         paths: IdeClientPaths,
+        targetTransport: IdeClientTargetTransport,
+        layout: IdeLayoutStore,
         visibleLatency: IdeVisibleLatencyTrace = IdeVisibleLatencyTrace.None,
         tooling: (DefaultIdeWorkspace) -> CompletableFuture<IdeClientTooling>,
     ): IdeClientApplication {
         val clientLimits = IdeClientLimits()
         val workspace = DefaultIdeWorkspace(paths.projects, clientLimits = clientLimits)
         val clock = IdeControllerClock.System
-        val targetPort = IdeTargetClientNetwork.openPort()
-        val targetTerminal = IdeTargetClientNetwork.openTerminal()
+        val targetPort = targetTransport.openPort()
+        val targetTerminal = targetTransport.openTerminal()
         val target = IdeTargetCoordinator(targetPort, clock, clientLimits)
-        val preferences = IdeClientPreferences(paths.preferences, CompuktersClientConfig.IdeLayout)
+        val preferences = IdeClientPreferences(paths.preferences, layout)
         val controller =
             IdeClientController(
                 workspace = workspace,
@@ -422,7 +438,7 @@ internal object ProductionIdeApplicationFactory {
                     },
             )
         controller.start()
-        return IdeClientApplication(controller, preferences, targetTerminal, visibleLatency, targetPort)
+        return IdeClientApplication(controller, preferences, targetTerminal, visibleLatency, targetPort, targetTransport::release)
     }
 
     private fun composeTooling(

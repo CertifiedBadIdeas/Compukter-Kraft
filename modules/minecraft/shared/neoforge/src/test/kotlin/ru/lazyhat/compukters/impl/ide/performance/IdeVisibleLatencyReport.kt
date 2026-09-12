@@ -76,6 +76,7 @@ internal class IdeVisiblePhaseSamples(
     }
 }
 
+/** Version-independent latency evidence produced by the shared IDE client runtime. */
 internal data class IdeVisibleLatencyReport(
     val presentation: IdeVisiblePhaseSamples,
     val completion: IdeVisiblePhaseSamples,

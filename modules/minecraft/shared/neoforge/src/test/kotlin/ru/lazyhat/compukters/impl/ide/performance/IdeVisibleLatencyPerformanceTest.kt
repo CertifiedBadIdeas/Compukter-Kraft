@@ -49,6 +49,8 @@ import ru.lazyhat.compukters.impl.ide.IdeRenderGeometry
 import ru.lazyhat.compukters.impl.ide.IdeRenderer
 import ru.lazyhat.compukters.impl.ide.IdeVisibleFrameEvidence
 import ru.lazyhat.compukters.impl.ide.ProductionIdeApplicationFactory
+import ru.lazyhat.compukters.impl.ide.TestLayoutStore
+import ru.lazyhat.compukters.impl.ide.TestTargetTransport
 import ru.lazyhat.compukters.impl.terminal.TerminalFontProfile
 import ru.lazyhat.compukters.worker.process.JdkWorkerProcessFactory
 import ru.lazyhat.compukters.worker.process.WorkerLaunch
@@ -66,7 +68,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class IdeVisibleLatencyPerformanceTest {
+internal class IdeVisibleLatencyPerformanceTest {
     @Test
     fun `production analysis reaches the first visible frame latency targets`() {
         listOf(IdeVisibleLatencyFixtures.singleFile(), IdeVisibleLatencyFixtures.fiveFiles()).forEach { fixture ->
@@ -96,7 +98,7 @@ class IdeVisibleLatencyPerformanceTest {
         var application: IdeClientApplication? = null
         try {
             application =
-                ProductionIdeApplicationFactory.open(paths, trace) { workspace ->
+                ProductionIdeApplicationFactory.open(paths, TestTargetTransport, TestLayoutStore, trace) { workspace ->
                     CompletableFuture.completedFuture(
                         ProductionIdeApplicationFactory.createTooling(
                             paths = paths,
