@@ -7,22 +7,22 @@ description: Write Kotlin in Minecraft and run it in a deterministic managed VM.
 # Programmable computers, bounded by design.
 
 {: .hero-copy }
-Compukters is an in-game programming platform for Minecraft. Write Kotlin, compile it with a pinned K2 toolchain, and run
-verified programs inside a deterministic, resource-bounded managed VM.
+Compukters is an in-game programming platform for Minecraft. Build multi-file Kotlin projects in the integrated IDE,
+use semantic editing and analysis, then deploy verified programs into a deterministic, resource-bounded managed VM.
 
 <div class="actions">
   <a class="button primary" href="{{ '/GETTING-STARTED/' | relative_url }}">Get started</a>
   <a class="button" href="https://github.com/CertifiedBadIdeas/Compukters">View source</a>
 </div>
 
-<span class="version-chip">Minecraft 26.1.2</span>
-<span class="version-chip">NeoForge 26.1.2.97+</span>
-<span class="version-chip">Java 25</span>
+<span class="version-chip">Minecraft 1.21.1 / 26.1.2</span>
+<span class="version-chip">NeoForge</span>
+<span class="version-chip">Java 21 / 25</span>
 
 <div class="feature-grid">
   <section class="feature-card">
-    <h3>Kotlin in game</h3>
-    <p>Edit and compile directly in a computer terminal, or work with multi-file projects in the client IDE.</p>
+    <h3>Integrated Kotlin IDE</h3>
+    <p>Create persistent multi-file projects with completion, diagnostics, navigation, formatting, build, deploy, and run actions.</p>
   </section>
   <section class="feature-card">
     <h3>Deterministic runtime</h3>
@@ -30,7 +30,7 @@ verified programs inside a deterministic, resource-bounded managed VM.
   </section>
   <section class="feature-card">
     <h3>Real automation</h3>
-    <p>Read redstone inputs, drive persistent outputs, handle terminal events, and keep programs on a persistent filesystem.</p>
+    <p>Deploy from the IDE, read redstone inputs, drive persistent outputs, handle terminal events, and keep programs on a persistent filesystem.</p>
   </section>
 </div>
 

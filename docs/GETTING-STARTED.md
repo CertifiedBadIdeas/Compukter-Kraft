@@ -6,26 +6,26 @@ description: Install Compukters and run your first Kotlin program from the termi
 
 # Getting started
 
-This guide takes you from a clean installation to a Kotlin program running inside a Minecraft computer. Compukters has
-two authoring paths: a small editor and compiler inside each computer, and a project-based client IDE. Both produce the
-same verified Compukter executable format.
+This guide takes you from a clean installation to a Kotlin program running inside a Minecraft computer. The primary
+authoring path is the project-based client IDE; a small editor and compiler inside each computer provide an autonomous
+terminal workflow. Both produce the same verified Compukter executable format.
 
 ## Requirements
 
 | Component | Supported baseline |
 |---|---|
-| Minecraft: Java Edition | Exactly **26.1.2** |
-| NeoForge | **26.1.2.97** or newer for Minecraft 26.1.2 |
-| Java | **JDK 25** |
+| Minecraft: Java Edition | Exactly **26.1.2** or **1.21.1** |
+| NeoForge | **26.1.2.97+** for Minecraft 26.1.2; **21.1.250+** for Minecraft 1.21.1 |
+| Java | **JDK 25** for 26.1.2; **Java 21** for 1.21.1 |
 | Packaged native runtime | **Linux x86_64** or **Windows x86_64** |
 
-The mod is required on both the client and server. macOS and ARM builds are not part of the current published universal
-artifact.
+The mod is required on both the client and server. macOS and ARM builds are not part of the current published
+artifacts.
 
 ## Install Compukters
 
-1. Install Java 25 and create a Minecraft 26.1.2 NeoForge profile.
-2. Download the `compukters-26.1.2-neoforge-<version>.jar` asset from the
+1. Install the Java, Minecraft, and NeoForge versions from one matching baseline above.
+2. Download the matching `compukters-<minecraft>-neoforge-<version>.jar` asset from the
    [latest Compukters release](https://github.com/CertifiedBadIdeas/Compukters/releases/latest).
 3. Put the JAR in the `mods` directory of the client and, for multiplayer, the server.
 4. Start the game with the matching NeoForge profile. Compukters has no Architectury runtime dependency.
@@ -45,15 +45,15 @@ take a **Compukter**, or run:
 Place the block and use it with an empty hand. Its terminal opens and the built-in shell displays a `>` prompt after the
 computer boots. Run `help` to see the currently available shell commands.
 
-## Path 1: write inside the computer
+## Path 1: build and run a project in the IDE
 
-At the terminal prompt, open a new source file:
+The IDE stores projects on the client under `<game directory>/compukters/ide/projects`. A project can contain multiple
+Kotlin files and can be deployed to the computer you opened it from.
 
-```text
-edit hello.kt
-```
-
-Enter this program:
+1. Click **IDE** in the computer terminal or press **Ctrl+I**. Opening the IDE from the terminal automatically attaches
+   that computer as the target. You can also look directly at a computer and press Ctrl+I.
+2. Choose **Create project**, enter `hello`, and confirm. The IDE creates `compukter.toml` and opens `src/main.kt`.
+3. Enter this program:
 
 ```kotlin
 fun main() {
@@ -61,7 +61,18 @@ fun main() {
 }
 ```
 
-Press **Ctrl+S** to save, then **Ctrl+X** to leave the editor. Compile the source:
+4. Press **Ctrl+S**, then use **Build** or press **Ctrl+F9**. Wait for the status line to report a successful build.
+5. Use **Deploy** to install `/home/hello` on the attached computer. Confirm the overwrite dialog if that path already
+   exists.
+6. Open the **Terminal** tool on the right and run `hello` at the shell prompt.
+
+The triangular **Run** action is the shortcut for the final sequence: it saves, builds, deploys the manifest program,
+and submits its installed path to the attached computer.
+
+## Path 2: write directly inside the computer
+
+The computer also carries a compact terminal editor and compiler. At the shell prompt, open a source file with
+`edit hello.kt`, enter the program above, press **Ctrl+S**, and then **Ctrl+X**. Compile it with:
 
 ```text
 kotlinc hello.kt
@@ -83,24 +94,6 @@ The source and executable live in this computer's writable `/home` filesystem. T
 `shell` programs live in the read-only `/rom` filesystem. `/home` survives ordinary saves and world reloads; breaking a
 computer removes its active filesystem and moves the data to a recoverable tombstone rather than treating the dropped
 block as a portable disk.
-
-## Path 2: build a project in the IDE
-
-The IDE stores projects on the client under `<game directory>/compukters/ide/projects`. A project can contain multiple
-Kotlin files and can be deployed to the computer you opened it from.
-
-1. Open the computer terminal, then click **IDE** or press **Ctrl+I**. Opening the IDE from the terminal automatically
-   attaches that computer as the target. You can also look directly at a computer and press Ctrl+I.
-2. Choose **Create project**, enter `hello`, and confirm. The IDE creates `compukter.toml` and opens `src/main.kt`.
-3. Replace the generated function with the `Hello from Compukters!` program above. **Ctrl+S** saves it; the IDE also
-   autosaves during ordinary interaction.
-4. Use the **Build** toolbar action, or press **Ctrl+F9**. Wait for the status line to report a successful build.
-5. Use **Deploy** to install `/home/hello` on the attached computer. Confirm the overwrite dialog if that path already
-   exists.
-6. Open the **Terminal** tool on the right and run `hello` at the shell prompt.
-
-The triangular **Run** action is the shortcut for the whole final sequence: it saves, builds, deploys the manifest
-program, and submits its installed path to the attached computer.
 
 ### Useful IDE shortcuts
 
