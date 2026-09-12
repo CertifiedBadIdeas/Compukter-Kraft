@@ -136,6 +136,11 @@ barrier does not depend on server result pumping and may complete on a worker th
 `ProgramRuntimeHost` owns one current Rust `ComputerMachine`, advances it with bounded guest and maintenance budgets,
 commits terminal changes once per active server tick, and exposes typed full/delta states and failures through JDK 25
 FFM. It does not own a second grid or output transcript. It is loader-independent and confined to its actor worker.
+Within one process, the Rust VM may schedule several bounded cooperative Guest tasks. Exactly one task executes
+instructions at once; suspension on a host request or `Task.join()` transfers execution to the next runnable task in
+FIFO order. Pending requests retain their `(TaskId, RequestId)` owner, so independent reads and writes may remain in
+flight and complete out of order without running Guest code re-entrantly. Returning from the root task ends the process
+and cancels its remaining task work.
 The production execution profile reserves a 256 KiB managed heap for each active foreground process; child-process
 capacity is charged independently while its parent is suspended. Heap arenas are released with their owning machine.
 An explicit actor request can also compose one immutable resource snapshot from host lifecycle/configuration and the

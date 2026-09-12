@@ -239,9 +239,15 @@ supported.
   test `guest object subset rejects mutable generic initialized secondary and explicitly cast shapes`.
   Tracking: not scheduled
 
-- [ ] **Lambdas, local functions, and function references — Unsupported** —
-  function objects and nested declaration ownership are not represented by the
-  current backend. Tracking: not scheduled
+- [ ] **Lambdas, local functions, and function references — Partial** —
+  `Tasks.launch(::worker)` accepts the one allocation-free form: a direct
+  reference to a top-level, zero-argument `suspend` function returning `Unit`.
+  Lambdas, captures, local or bound references, argument-taking references,
+  and general function values remain unsupported. Evidence:
+  [`MinimalScriptLoweringTest`](https://github.com/CertifiedBadIdeas/Compukters/blob/dev/modules/compiler-k2/src/test/kotlin/ru/lazyhat/compukters/compiler/worker/k2/MinimalScriptLoweringTest.kt),
+  tests `direct top level suspend task lowers to spawn and join` and
+  `task launch rejects callable shapes that require runtime function objects`.
+  Tracking: [#567](https://github.com/CertifiedBadIdeas/Compukters/issues/567)
 
 - [ ] **Recursion — Partial** — direct calls and bounded VM call depth can
   represent recursion, but no Kotlin-to-VM recursive source conformance test
@@ -413,13 +419,16 @@ supported.
   `vm_blocking_capability_does_not_claim_coroutine_semantics`.
   Tracking: not scheduled
 
-- [ ] **Coroutine builders, scopes, cancellation, and structured concurrency — Unsupported** —
-  `kotlinx.coroutines` is not part of the Guest standard library, and Guest
-  programs cannot create concurrent tasks. Tracking: not scheduled
+- [ ] **Cooperative Guest tasks — Partial** — `Tasks.launch(::worker)` starts a
+  bounded task and `Task.join()` waits for it. Tasks share one VM and execute
+  one at a time, but a task suspended on host I/O does not stop another runnable
+  task. Scheduling and host-request ownership are deterministic. Public
+  cancellation, explicit yield, delay, scopes, and `kotlinx.coroutines` remain
+  unsupported. Tracking: [#567](https://github.com/CertifiedBadIdeas/Compukters/issues/567)
 
 - [ ] **Parallel Guest execution — Unsupported** — one process waits at a
-  suspension point; concurrent scheduling within one program is future work.
-  Tracking: not scheduled
+  time executes Guest instructions. Cooperative tasks provide concurrency at
+  suspension points, not parallel instruction execution. Tracking: not scheduled
 
 ## Native platform modules
 
@@ -430,7 +439,7 @@ and the mandatory built-ins module; there is no ambient Kotlin/JVM classpath.
 | Module | Guest surface |
 | --- | --- |
 | `kotlin:builtins` | Core language types, arrays, function types, and structural declarations required by K2 |
-| `stdlib:core` | Small native core helpers such as `require` and supported array construction |
+| `stdlib:core` | Small native core helpers such as `require`, supported array construction, and bounded cooperative `Task` / `Tasks` declarations |
 | `stdlib:ranges` | Declaration surface for `IntRange`, `until`, and `rangeUntil`; canonical unit-step `Int` loops lower without runtime range objects |
 | `std:terminal` | `print`, `println`, `readln`, stderr, and raw terminal operations |
 | `std:filesystem` | The bounded filesystem facade |

@@ -18,6 +18,7 @@
 
 package ru.lazyhat.compukters.compiler.worker.k2
 
+import ru.lazyhat.compukters.compiler.artifact.model.AbiVersion
 import ru.lazyhat.compukters.compiler.artifact.model.Artifact
 import ru.lazyhat.compukters.compiler.artifact.model.Block
 import ru.lazyhat.compukters.compiler.artifact.model.BlockId
@@ -34,6 +35,7 @@ import ru.lazyhat.compukters.compiler.artifact.model.Module
 import ru.lazyhat.compukters.compiler.artifact.model.ModuleId
 import ru.lazyhat.compukters.compiler.artifact.model.ModuleKind
 import ru.lazyhat.compukters.compiler.artifact.model.NominalType
+import ru.lazyhat.compukters.compiler.artifact.model.SemanticFeature
 import ru.lazyhat.compukters.compiler.artifact.model.StringId
 import ru.lazyhat.compukters.compiler.artifact.model.StringValueType
 import ru.lazyhat.compukters.compiler.artifact.model.SymbolKind
@@ -69,6 +71,77 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MinimalScriptLoweringTest {
+    @Test
+    fun `direct top level suspend task lowers to spawn and join`() =
+        withAdapter { adapter ->
+            val result =
+                adapter.compile(
+                    request(
+                        """
+                        import compukter.concurrent.Tasks
+
+                        suspend fun reader() {}
+
+                        suspend fun main() {
+                            val task = Tasks.launch(::reader)
+                            task.join()
+                        }
+                        """.trimIndent(),
+                    ),
+                )
+            val artifactBytes = assertNotNull(result.artifact, result.diagnostics.joinToString()).toByteArray()
+            val artifact = ArtifactReader.read(artifactBytes)
+            val opcodes = allOpcodes(artifactBytes)
+
+            assertTrue(0x50 in opcodes, "task launch must lower to task.spawn: $opcodes")
+            assertTrue(0xe8 in opcodes, "task join must lower to task.join: $opcodes")
+            assertEquals(AbiVersion(1u, 1u), artifact.minimumRuntimeAbi)
+            assertEquals(64u, artifact.manifest.maximumCoroutines)
+            assertTrue(SemanticFeature.COROUTINES in artifact.semanticFeatures)
+            assertTrue(result.diagnostics.none { it.severity.name == "ERROR" }, result.diagnostics.toString())
+        }
+
+    @Test
+    fun `task launch rejects callable shapes that require runtime function objects`() =
+        withAdapter { adapter ->
+            val unsupported =
+                listOf(
+                    "Tasks.launch { reader() }",
+                    "suspend fun local() {}\n    Tasks.launch(::local)",
+                    "Tasks.launch(::ordinary)",
+                    "Tasks.launch(Reader()::read)",
+                )
+            unsupported.forEach { launch ->
+                val result =
+                    adapter.compile(
+                        request(
+                            """
+                            import compukter.concurrent.Tasks
+
+                            suspend fun reader() {}
+                            fun ordinary() {}
+                            class Reader { suspend fun read() {} }
+
+                            suspend fun main() {
+                                $launch
+                            }
+                            """.trimIndent(),
+                        ),
+                    )
+
+                assertNull(result.artifact, launch)
+                assertTrue(
+                    result.diagnostics.any {
+                        it.severity.name == "ERROR" &&
+                            it.message.contains(
+                                "Tasks.launch requires a direct reference to a top-level, zero-argument suspend function",
+                            )
+                    },
+                    "$launch: ${result.diagnostics}",
+                )
+            }
+        }
+
     @Test
     fun `sound beep lowers deterministically to a blocking Boolean capability operation`() =
         withAdapter { adapter ->

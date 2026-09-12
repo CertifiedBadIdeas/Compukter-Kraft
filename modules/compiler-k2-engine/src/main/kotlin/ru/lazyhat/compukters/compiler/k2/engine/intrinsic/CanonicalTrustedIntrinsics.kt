@@ -114,6 +114,14 @@ object CanonicalTrustedIntrinsics {
                 "fun(CharArray.Int,Int):String",
             )
             primitive("stdlib", "core", "kotlin", "emptyArray", "fun():Array<T>")
+            primitive("stdlib", "core", "compukter.concurrent", "Task.join", "fun():Unit")
+            primitive(
+                "stdlib",
+                "core",
+                "compukter.concurrent",
+                "Tasks.launch",
+                "fun(suspend()->Unit):Task",
+            )
             primitive("stdlib", "ranges", "kotlin.ranges", "IntRange.iterator", "fun():IntIterator")
             primitive("stdlib", "ranges", "kotlin.ranges", "rangeUntil", "fun(Int.Int):IntRange")
             primitive("stdlib", "ranges", "kotlin.ranges", "until", "fun(Int.Int):IntRange")

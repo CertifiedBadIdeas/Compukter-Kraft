@@ -42,10 +42,12 @@ import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrContinue
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrGetEnumValue
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrLoop
 import org.jetbrains.kotlin.ir.expressions.IrReturn
+import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
 import org.jetbrains.kotlin.ir.expressions.IrStringConcatenation
 import org.jetbrains.kotlin.ir.expressions.IrThrow
@@ -453,6 +455,7 @@ private class InlineValueClassRegistry private constructor(
 
 @OptIn(UnsafeDuringIrConstructionAPI::class)
 internal object KotlinProjectLowering {
+    private const val MAXIMUM_TASKS = 64u
     private const val CHAR_ARRAY_RUNTIME_TYPE = 0u
     private const val STRING_RUNTIME_TYPE = 1u
     private const val INT_ARRAY_RUNTIME_TYPE = 4u
@@ -1113,8 +1116,15 @@ internal object KotlinProjectLowering {
             )
         val modules = listOf(app, library)
         val maximumCallDepth = 16u
-        val requiredStackBytes = ExecutionStorage.requiredStackBytes(modules, maximumCallDepth)
+        val usesTasks = blocks.any { block -> block.instructions.any { it is Instruction.TaskSpawn || it is Instruction.TaskJoin } }
+        val maximumCoroutines = if (usesTasks) MAXIMUM_TASKS else 1u
+        val singleTaskStackBytes = ExecutionStorage.requiredStackBytes(modules, maximumCallDepth)
+        require(singleTaskStackBytes <= UInt.MAX_VALUE / maximumCoroutines) {
+            "required task frame storage exceeds u32"
+        }
+        val requiredStackBytes = singleTaskStackBytes * maximumCoroutines
         return Artifact(
+            minimumRuntimeAbi = if (usesTasks) AbiVersion(1u, 1u) else AbiVersion(1u, 0u),
             semanticFeatures =
                 setOfNotNull(
                     SemanticFeature.COROUTINES.takeIf { userFunctions.any { it.isSuspend } },
@@ -1125,7 +1135,7 @@ internal object KotlinProjectLowering {
                 Manifest(
                     requiredHeapBytes = 64u * 1024u,
                     requiredStackBytes = requiredStackBytes,
-                    maximumCoroutines = 1u,
+                    maximumCoroutines = maximumCoroutines,
                     maximumCallDepth = maximumCallDepth,
                     maximumHostRequests = 64u,
                     maximumEvents = 0u,
@@ -1864,6 +1874,14 @@ private class FunctionCompiler(
                 compileLoopJump(statement, breakJump = false)
             }
 
+            is IrSimpleFunction -> {
+                throw UnsupportedKotlinIr(
+                    statement,
+                    "local functions are unsupported; Tasks.launch requires a direct reference to a top-level, " +
+                        "zero-argument suspend function",
+                )
+            }
+
             is IrExpression -> {
                 compileExpression(statement)
             }
@@ -2108,6 +2126,10 @@ private class FunctionCompiler(
     @OptIn(UnsafeDuringIrConstructionAPI::class)
     private fun compileCall(call: IrCall): RegisterId? {
         val target = call.symbol.owner
+        when (target.fqNameWhenAvailable?.asString().takeIf { target.isExternal }) {
+            "compukter.concurrent.Tasks.launch" -> return compileTaskLaunch(call, target)
+            "compukter.concurrent.Task.join" -> return compileTaskJoin(call, target)
+        }
         platformScalars.constant(target)?.let { value ->
             val artifactConstant = value.scalarValue().toArtifactConstant(literalIds)
             val constantId =
@@ -2228,6 +2250,74 @@ private class FunctionCompiler(
         }
         if (target.returnType.isNothing()) emit(Instruction.Unreachable)
         return (destination as? Destination.Register)?.id
+    }
+
+    @OptIn(UnsafeDuringIrConstructionAPI::class)
+    private fun compileTaskLaunch(
+        call: IrCall,
+        target: IrSimpleFunction,
+    ): RegisterId {
+        val block =
+            target.parameters
+                .mapIndexedNotNull { index, parameter ->
+                    call.arguments.getOrNull(index)?.takeIf { parameter.kind == IrParameterKind.Regular }
+                }.singleOrNull()
+                ?: throw UnsupportedKotlinIr(
+                    call,
+                    "Tasks.launch requires a direct reference to a top-level, zero-argument suspend function",
+                )
+        val referenced =
+            when (block) {
+                is IrRichFunctionReference -> {
+                    if (block.boundValues.isNotEmpty()) null else block.reflectionTargetSymbol?.owner as? IrSimpleFunction
+                }
+
+                is IrFunctionReference -> {
+                    if (block.arguments.any { it != null }) null else block.reflectionTarget?.owner as? IrSimpleFunction
+                }
+
+                else -> {
+                    null
+                }
+            }
+                ?: throw UnsupportedKotlinIr(
+                    block,
+                    "Tasks.launch requires a direct reference to a top-level, zero-argument suspend function",
+                )
+        if (
+            referenced.parent !is IrFile ||
+            !referenced.isSuspend ||
+            referenced.returnType != unitType ||
+            loweredParameters(referenced, session).isNotEmpty()
+        ) {
+            throw UnsupportedKotlinIr(
+                block,
+                "Tasks.launch requires a direct reference to a top-level, zero-argument suspend function",
+            )
+        }
+        val functionRef =
+            functionIds[referenced.symbol]?.let(FunctionRef::Local)
+                ?: throw UnsupportedKotlinIr(block, "Tasks.launch target must be declared in the Guest project")
+        return allocate(valueType(call.type, call)).also { destination ->
+            emit(Instruction.TaskSpawn(destination, functionRef, emptyList()))
+        }
+    }
+
+    private fun compileTaskJoin(
+        call: IrCall,
+        target: IrSimpleFunction,
+    ): RegisterId? {
+        val receiver =
+            target.parameters
+                .mapIndexedNotNull { index, parameter ->
+                    call.arguments.getOrNull(index)?.takeIf { parameter.kind == IrParameterKind.DispatchReceiver }
+                }.singleOrNull()
+                ?: throw UnsupportedKotlinIr(call, "Task.join receiver is missing")
+        val task = compileExpression(receiver)
+        val resume = createBlock()
+        emit(Instruction.TaskJoin(Destination.Unit, task, blockId(resume)))
+        currentBlock = resume
+        return null
     }
 
     private fun resolveProjectCallArguments(
