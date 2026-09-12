@@ -149,6 +149,15 @@ sealed interface IdeTargetRequest {
     }
 }
 
+data class IdeTargetRequestEnvelope(
+    val requestId: Long,
+    val request: IdeTargetRequest,
+) {
+    init {
+        require(requestId > 0) { "request ID zero and negative IDs are reserved" }
+    }
+}
+
 sealed interface IdeTargetReply {
     data class Attached(
         val target: IdeAttachedTarget,
@@ -201,4 +210,13 @@ sealed interface IdeTargetReply {
     data class FileRead(
         val chunk: IdeTargetFileChunk,
     ) : IdeTargetReply
+}
+
+data class IdeTargetReplyEnvelope(
+    val requestId: Long,
+    val reply: IdeTargetReply,
+) {
+    init {
+        require(requestId > 0) { "request ID zero and negative IDs are reserved" }
+    }
 }

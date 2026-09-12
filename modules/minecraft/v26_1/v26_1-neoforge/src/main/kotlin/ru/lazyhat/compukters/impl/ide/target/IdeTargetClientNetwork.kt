@@ -28,7 +28,10 @@ internal object IdeTargetClientNetwork {
 
     fun openPort(): NetworkIdeTargetPort {
         disconnect()
-        val broker = IdeTargetRequestBroker(ClientPacketDistributor::sendToServer)
+        val broker =
+            IdeTargetRequestBroker(send = { envelope ->
+                ClientPacketDistributor.sendToServer(IdeTargetRequestPayload(envelope.requestId, envelope.request))
+            })
         current = broker
         return NetworkIdeTargetPort(OwnedChannel(broker))
     }
@@ -41,7 +44,9 @@ internal object IdeTargetClientNetwork {
     @JvmStatic
     @SubscribeEvent
     fun register(event: RegisterClientPayloadHandlersEvent) {
-        event.register(IdeTargetReplyPayload.TYPE) { payload, _ -> current?.receive(payload) }
+        event.register(IdeTargetReplyPayload.TYPE) { payload, _ ->
+            current?.receive(IdeTargetReplyEnvelope(payload.requestId, payload.reply))
+        }
         event.register(IdeTerminalOpenedPayload.TYPE) { payload, _ -> currentTerminal?.accept(payload) }
         event.register(IdeTerminalFullPayload.TYPE) { payload, _ -> currentTerminal?.accept(payload) }
         event.register(IdeTerminalDeltaPayload.TYPE) { payload, _ -> currentTerminal?.accept(payload) }

@@ -14,8 +14,8 @@ package ru.lazyhat.compukters.impl.ide.target
 
 import java.util.concurrent.CompletableFuture
 
-internal class IdeTargetRequestBroker(
-    private val send: (IdeTargetRequestPayload) -> Unit,
+class IdeTargetRequestBroker(
+    private val send: (IdeTargetRequestEnvelope) -> Unit,
     private val maximumPendingRequests: Int = DEFAULT_MAXIMUM_PENDING_REQUESTS,
 ) : IdeTargetRequestChannel {
     private val lock = Any()
@@ -35,7 +35,7 @@ internal class IdeTargetRequestBroker(
                 val requestId = allocateRequestId()
                 val future = CompletableFuture<IdeTargetReply>()
                 pending[requestId] = future
-                Registration(IdeTargetRequestPayload(requestId, request), future)
+                Registration(IdeTargetRequestEnvelope(requestId, request), future)
             }
         try {
             send(registration.payload)
@@ -46,9 +46,9 @@ internal class IdeTargetRequestBroker(
         return registration.future
     }
 
-    fun receive(payload: IdeTargetReplyPayload) {
-        val future = synchronized(lock) { pending.remove(payload.requestId) } ?: return
-        future.complete(payload.reply)
+    fun receive(envelope: IdeTargetReplyEnvelope) {
+        val future = synchronized(lock) { pending.remove(envelope.requestId) } ?: return
+        future.complete(envelope.reply)
     }
 
     override fun disconnect() {
@@ -72,7 +72,7 @@ internal class IdeTargetRequestBroker(
     }
 
     private data class Registration(
-        val payload: IdeTargetRequestPayload,
+        val payload: IdeTargetRequestEnvelope,
         val future: CompletableFuture<IdeTargetReply>,
     )
 
@@ -84,6 +84,6 @@ internal class IdeTargetRequestBroker(
     }
 }
 
-internal class IdeTargetConnectionException(
+class IdeTargetConnectionException(
     message: String,
 ) : IllegalStateException(message)

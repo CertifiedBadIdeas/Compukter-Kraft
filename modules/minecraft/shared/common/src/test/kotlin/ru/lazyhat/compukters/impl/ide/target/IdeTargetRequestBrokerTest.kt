@@ -23,24 +23,24 @@ import kotlin.test.assertTrue
 class IdeTargetRequestBrokerTest {
     @Test
     fun `out of order replies complete only their correlated request once`() {
-        val sent = mutableListOf<IdeTargetRequestPayload>()
+        val sent = mutableListOf<IdeTargetRequestEnvelope>()
         val broker = IdeTargetRequestBroker(sent::add)
         val first = broker.request(IdeTargetRequest.Attach(BinaryValue.of(byteArrayOf(1))))
         val second = broker.request(IdeTargetRequest.Attach(BinaryValue.of(byteArrayOf(2))))
 
-        assertEquals(listOf(1L, 2L), sent.map(IdeTargetRequestPayload::requestId))
-        broker.receive(IdeTargetReplyPayload(2, IdeTargetReply.Alive))
+        assertEquals(listOf(1L, 2L), sent.map(IdeTargetRequestEnvelope::requestId))
+        broker.receive(IdeTargetReplyEnvelope(2, IdeTargetReply.Alive))
         assertEquals(IdeTargetReply.Alive, second.join())
         assertFalse(first.isDone)
-        broker.receive(IdeTargetReplyPayload(2, IdeTargetReply.Detached))
+        broker.receive(IdeTargetReplyEnvelope(2, IdeTargetReply.Detached))
         assertEquals(IdeTargetReply.Alive, second.join())
-        broker.receive(IdeTargetReplyPayload(1, IdeTargetReply.Detached))
+        broker.receive(IdeTargetReplyEnvelope(1, IdeTargetReply.Detached))
         assertEquals(IdeTargetReply.Detached, first.join())
     }
 
     @Test
     fun `pending limit and disconnect fail requests without sending more payloads`() {
-        val sent = mutableListOf<IdeTargetRequestPayload>()
+        val sent = mutableListOf<IdeTargetRequestEnvelope>()
         val broker = IdeTargetRequestBroker(sent::add, maximumPendingRequests = 1)
         val pending = broker.request(IdeTargetRequest.Attach(BinaryValue.of(byteArrayOf(1))))
         val rejected = broker.request(IdeTargetRequest.Attach(BinaryValue.of(byteArrayOf(2))))
