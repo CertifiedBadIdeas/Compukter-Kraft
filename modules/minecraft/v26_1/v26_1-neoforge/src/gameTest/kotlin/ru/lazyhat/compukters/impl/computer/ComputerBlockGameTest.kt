@@ -18,6 +18,7 @@
 
 package ru.lazyhat.compukters.impl.computer
 
+import net.minecraft.core.Holder
 import net.minecraft.gametest.framework.TestData
 import net.minecraft.gametest.framework.TestEnvironmentDefinition
 import net.minecraft.resources.Identifier
@@ -33,17 +34,15 @@ object ComputerBlockGameTest {
     @JvmStatic
     @SubscribeEvent
     fun registerTests(event: RegisterGameTestsEvent) {
-        val environment =
-            event.registerEnvironment(
-                Identifier.fromNamespaceAndPath(MOD_ID, "empty"),
-                TestEnvironmentDefinition.AllOf(),
-            )
-        val testData =
+        fun testData(name: String): TestData<Holder<TestEnvironmentDefinition<*>>> =
             TestData(
-                environment,
+                event.registerEnvironment(
+                    Identifier.fromNamespaceAndPath(MOD_ID, name),
+                    TestEnvironmentDefinition.AllOf(),
+                ),
                 Identifier.withDefaultNamespace("bastion/mobs/empty"),
                 // GameTestServer runs ticks without pacing; allow real filesystem/compiler workers to finish.
-                10000,
+                100_000,
                 0,
                 true,
                 Rotation.NONE,
@@ -55,23 +54,23 @@ object ComputerBlockGameTest {
             )
         event.registerTest(
             Identifier.fromNamespaceAndPath(MOD_ID, "computer_lifecycle"),
-            ComputerLifecycleGameTest(testData),
+            ComputerLifecycleGameTest(testData("computer_lifecycle")),
         )
         event.registerTest(
             Identifier.fromNamespaceAndPath(MOD_ID, "computer_redstone"),
-            ComputerRedstoneGameTest(testData),
+            ComputerRedstoneGameTest(testData("computer_redstone")),
         )
         event.registerTest(
             Identifier.fromNamespaceAndPath(MOD_ID, "computer_sound"),
-            ComputerSoundGameTest(testData),
+            ComputerSoundGameTest(testData("computer_sound")),
         )
         event.registerTest(
             Identifier.fromNamespaceAndPath(MOD_ID, "vm_actor_service"),
-            VmActorServiceGameTest(testData),
+            VmActorServiceGameTest(testData("vm_actor_service")),
         )
         event.registerTest(
             Identifier.fromNamespaceAndPath(MOD_ID, "vm_benchmark"),
-            VmBenchmarkGameTest(testData),
+            VmBenchmarkGameTest(testData("vm_benchmark")),
         )
     }
 }

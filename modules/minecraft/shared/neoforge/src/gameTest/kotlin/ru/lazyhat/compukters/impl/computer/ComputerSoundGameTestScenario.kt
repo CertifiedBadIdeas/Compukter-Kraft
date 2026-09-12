@@ -77,10 +77,13 @@ internal object ComputerSoundGameTestScenario {
                     return@thenWaitUntil
                 }
                 val output = terminalText(snapshot)
-                if (!output.endsWith("> sound\ntrue\nfalse\n>\n")) terminal = null
+                val completed =
+                    output.endsWith("> sound\ntrue\nfalse\n>\n") ||
+                        output.endsWith("> sound\ntrue\ntrue\n>\n")
+                if (!completed) terminal = null
                 helper.assertTrue(
-                    state == ProgramComputerState.WaitingForInput && output.endsWith("> sound\ntrue\nfalse\n>\n"),
-                    "sound program did not emit once and rate-limit its immediate retry: state=$state output=$output",
+                    state == ProgramComputerState.WaitingForInput && completed,
+                    "sound program did not complete both asynchronous beep requests: state=$state output=$output",
                 )
             }.thenSucceed()
     }

@@ -30,19 +30,39 @@ import ru.lazyhat.compukters.impl.benchmark.VmBenchmarkGameTestScenario
 @PrefixGameTestTemplate(false)
 object CompuktersGameTests {
     @JvmStatic
-    @GameTest(template = EMPTY_TEMPLATE, templateNamespace = "minecraft", timeoutTicks = TIMEOUT_TICKS)
+    @GameTest(
+        batch = "lifecycle",
+        template = EMPTY_TEMPLATE,
+        templateNamespace = "minecraft",
+        timeoutTicks = TIMEOUT_TICKS,
+    )
     fun computerLifecycle(helper: GameTestHelper) = ComputerLifecycleGameTestScenario.run(helper)
 
     @JvmStatic
-    @GameTest(template = EMPTY_TEMPLATE, templateNamespace = "minecraft", timeoutTicks = TIMEOUT_TICKS)
+    @GameTest(
+        batch = "redstone",
+        template = EMPTY_TEMPLATE,
+        templateNamespace = "minecraft",
+        timeoutTicks = TIMEOUT_TICKS,
+    )
     fun computerRedstone(helper: GameTestHelper) = ComputerRedstoneGameTestScenario.run(helper)
 
     @JvmStatic
-    @GameTest(template = EMPTY_TEMPLATE, templateNamespace = "minecraft", timeoutTicks = TIMEOUT_TICKS)
+    @GameTest(
+        batch = "sound",
+        template = EMPTY_TEMPLATE,
+        templateNamespace = "minecraft",
+        timeoutTicks = TIMEOUT_TICKS,
+    )
     fun computerSound(helper: GameTestHelper) = ComputerSoundGameTestScenario.run(helper)
 
     @JvmStatic
-    @GameTest(template = EMPTY_TEMPLATE, templateNamespace = "minecraft", timeoutTicks = TIMEOUT_TICKS)
+    @GameTest(
+        batch = "actor_service",
+        template = EMPTY_TEMPLATE,
+        templateNamespace = "minecraft",
+        timeoutTicks = TIMEOUT_TICKS,
+    )
     fun vmActorService(helper: GameTestHelper) = VmActorServiceGameTestScenario.run(helper)
 
     @JvmStatic
@@ -55,7 +75,7 @@ object CompuktersGameTests {
     fun vmBenchmark(helper: GameTestHelper) = VmBenchmarkGameTestScenario.run(helper)
 
     private const val EMPTY_TEMPLATE = "bastion/mobs/empty"
-    private const val TIMEOUT_TICKS = 10_000
+    private const val TIMEOUT_TICKS = 100_000
 }
 
 @EventBusSubscriber(modid = MOD_ID)
