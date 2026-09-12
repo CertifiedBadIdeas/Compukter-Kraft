@@ -16,10 +16,8 @@
  * limitations under the License.
  */
 
-package ru.lazyhat.compukters.impl.ide.target
+package ru.lazyhat.compukters.impl.network
 
-import ru.lazyhat.compukters.impl.network.ServerOperationScope
-import ru.lazyhat.compukters.impl.network.awaitServerResult
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import kotlin.test.Test

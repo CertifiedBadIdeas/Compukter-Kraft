@@ -22,7 +22,7 @@ import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
 /** Bounds suspended requests as well as actively executing requests. Confined to the server thread. */
-internal class ServerOperationScope(
+class ServerOperationScope(
     private val maximumPending: Int = 256,
     private val maximumPendingPerPlayer: Int = 4,
 ) : AutoCloseable {

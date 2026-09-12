@@ -28,7 +28,7 @@ import kotlin.coroutines.startCoroutine
 import kotlin.coroutines.suspendCoroutine
 
 /** Starts on the caller's server thread; awaited actor replies resume on the server's result pump. */
-internal fun <T> serverOperation(operation: suspend () -> T): CompletableFuture<T> {
+fun <T> serverOperation(operation: suspend () -> T): CompletableFuture<T> {
     val result = CompletableFuture<T>()
     operation.startCoroutine(
         object : Continuation<T> {
@@ -42,7 +42,7 @@ internal fun <T> serverOperation(operation: suspend () -> T): CompletableFuture<
     return result
 }
 
-internal suspend fun <T> CompletableFuture<T>.awaitServerResult(): T =
+suspend fun <T> CompletableFuture<T>.awaitServerResult(): T =
     suspendCoroutine { continuation ->
         whenComplete { value, error ->
             if (error == null) {
