@@ -1,7 +1,7 @@
 # Compukters computer block textures
 
 - Assets: `back.png`, `front.png`, and `side.png` under
-  `modules/v26_1/v26_1-neoforge/src/main/resources/assets/compukters/textures/block/compukter/`
+  `modules/minecraft/shared/neoforge/src/main/resources/assets/compukters/textures/block/compukter/`
 - Creator and copyright holder: Vsevolod Petrov (lazyhat)
 - Copyright: 2026 Vsevolod Petrov (lazyhat)
 - Origin: original work created for Compukters; no upstream asset

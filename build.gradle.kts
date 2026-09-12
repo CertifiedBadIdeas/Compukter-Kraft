@@ -217,11 +217,11 @@ val verifyKotlinVmConformance =
     }
 
 val compilerArtifactVmConformanceHarness =
-    rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
+    rootProject.file("modules/common/compiler-artifact/src/test/rust/executable-conformance/Cargo.toml")
 val compilerArtifactVmConformanceLock =
-    rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock")
+    rootProject.file("modules/common/compiler-artifact/src/test/rust/executable-conformance/Cargo.lock")
 val compilerArtifactVmConformanceSource =
-    rootProject.file("modules/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs")
+    rootProject.file("modules/common/compiler-artifact/src/test/rust/executable-conformance/kotlin_writer.rs")
 
 fun registerKotlinVmConformance(
     taskName: String,
@@ -365,7 +365,7 @@ val buildScriptsTest = gradle.includedBuild("build-scripts").task(":test")
 val verifyActiveMinecraftBaseline =
     tasks.register("verifyActiveMinecraftBaseline") {
         group = "verification"
-        description = "Rejects stale Minecraft and JDK baseline configuration."
+        description = "Verifies supported Minecraft baselines and physical module ownership."
         val activeFiles =
             fileTree(rootDir) {
                 include(
@@ -394,23 +394,36 @@ val verifyActiveMinecraftBaseline =
             }
         val forbiddenTokens =
             listOf(
-                "v1" + "_21_1",
-                "1.21." + "1",
-                "Parch" + "ment",
                 "Java " + "17",
                 "JDK " + "17",
                 "JVM " + "17",
                 "architectury-" + "neoforge",
-                "Remap" + "JarTask",
             )
 
         inputs.files(activeFiles)
+        inputs.files(
+            fileTree(rootProject.file("modules/common")) {
+                include("**/*.java", "**/*.kt", "**/*.kts")
+                exclude("**/build/**")
+            },
+        )
         doLast {
-            check(rootProject.file("modules/v26_1/v26_1-common").isDirectory) {
-                "active common module modules/v26_1/v26_1-common is missing"
+            val expectedModuleGroups = setOf("common", "minecraft")
+            val actualModuleGroups =
+                rootProject.file("modules").listFiles().orEmpty()
+                    .filter(File::isDirectory)
+                    .map(File::getName)
+                    .toSet()
+            check(actualModuleGroups == expectedModuleGroups) {
+                "modules must be grouped as $expectedModuleGroups, found ${actualModuleGroups.sorted()}"
             }
-            check(rootProject.file("modules/v26_1/v26_1-neoforge").isDirectory) {
-                "active NeoForge module modules/v26_1/v26_1-neoforge is missing"
+            listOf("v1_21_1", "v26_1").forEach { versionDirectory ->
+                listOf("common", "neoforge").forEach { layer ->
+                    val moduleName = "$versionDirectory-$layer"
+                    check(rootProject.file("modules/minecraft/$versionDirectory/$moduleName").isDirectory) {
+                        "supported Minecraft module $moduleName is missing"
+                    }
+                }
             }
             val matches =
                 activeFiles.files
@@ -422,6 +435,25 @@ val verifyActiveMinecraftBaseline =
                     .toList()
             check(matches.isEmpty()) {
                 "stale Minecraft/JDK baseline references: ${matches.joinToString()}"
+            }
+
+            val minecraftImportsInCommon =
+                fileTree(rootProject.file("modules/common")) {
+                    include("**/*.java", "**/*.kt", "**/*.kts")
+                    exclude("**/build/**")
+                }.files
+                    .filter { file ->
+                        file.useLines { lines ->
+                            lines.any { line ->
+                                line.trimStart().startsWith("import net.minecraft.") ||
+                                    line.trimStart().startsWith("package net.minecraft.")
+                            }
+                        }
+                    }.map { it.relativeTo(rootDir).path }
+                    .sorted()
+            check(minecraftImportsInCommon.isEmpty()) {
+                "Minecraft declarations and imports must stay under modules/minecraft: " +
+                    minecraftImportsInCommon.joinToString()
             }
         }
     }

@@ -6,6 +6,7 @@
 kotlinConvention = { id = "kotlin-convention" }
 commonConvention = { id = "common-convention" }
 commonRuntimeResourcesConvention = { id = "common-runtime-resources" }
+minecraftSharedSourcesConvention = { id = "minecraft-shared-sources" }
 neoforgeConvention = { id = "neoforge-convention" }
 neoforge1211Convention = { id = "neoforge-1.21.1-convention" }
 metadataConvention = { id = "metadata" }

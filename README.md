@@ -1,6 +1,6 @@
 # Compukters
 
-<img src="modules/v26_1/v26_1-neoforge/src/main/resources/assets/compukters/textures/block/compukter/front.png" width="128" alt="Compukters logo">
+<img src="modules/minecraft/shared/neoforge/src/main/resources/assets/compukters/textures/block/compukter/front.png" width="128" alt="Compukters logo">
 
 **Programmable computers for Minecraft with deterministic, resource-bounded Kotlin execution.**
 
@@ -54,6 +54,16 @@ installation:
 ./gradlew-sandbox-dev-parallel :v1_21_1-neoforge:runClient
 ./gradlew-sandbox-dev-parallel :v1_21_1-neoforge:buildProductionUniversalJar
 ```
+
+Minecraft-independent Gradle modules are grouped beneath `modules/common`, while
+all game-facing code is grouped beneath `modules/minecraft`. Minecraft and
+NeoForge code shared across supported versions has one canonical source tree
+under `modules/minecraft/shared`. IntelliJ indexes that tree against
+the target selected by `compuktersActiveMinecraftVersion` in `gradle.properties`;
+change the property to `1.21.1` or `26.1.2` and reload the Gradle project when
+switching the version being edited. Inactive targets use generated mirrors, so
+ordinary Gradle verification continues to compile both versions from the same
+canonical content.
 
 For fast feedback, `./gradlew-sandbox-dev-parallel verifyLocalFast` runs policy,
 build-script, and a curated JVM test slice. Before treating the current checkout

@@ -28,8 +28,8 @@ class NativeKotlinPlatformResidueTest {
         val repoRoot = findRepoRoot()
         val forbiddenPaths =
             listOf(
-                "modules/compiler-k2-engine/src/main/kotlin/ru/lazyhat/compukters/compiler/k2/engine/TrustedIntrinsicRegistry.kt",
-                "modules/compiler-k2-engine/src/test/kotlin/ru/lazyhat/compukters/compiler/k2/engine/TrustedIntrinsicRegistryTest.kt",
+                "modules/common/compiler-k2-engine/src/main/kotlin/ru/lazyhat/compukters/compiler/k2/engine/TrustedIntrinsicRegistry.kt",
+                "modules/common/compiler-k2-engine/src/test/kotlin/ru/lazyhat/compukters/compiler/k2/engine/TrustedIntrinsicRegistryTest.kt",
             )
         val presentPaths = forbiddenPaths.filter { Files.exists(repoRoot.resolve(it)) }
 

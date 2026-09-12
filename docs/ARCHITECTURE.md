@@ -292,6 +292,10 @@ bundles remain later layers.
 
 ## Module ownership
 
+Minecraft-independent Gradle modules are physically grouped under `modules/common`; all shared and version-specific
+Minecraft integration is grouped under `modules/minecraft`. These directories express source ownership only: the
+existing Gradle project paths and artifact names remain flat and stable.
+
 | Module | Purpose |
 |---|---|
 | `native-runtime-api` | Java 21 Kotlin-facing VM session, wire validation, opaque world-store lifecycle, and trusted host capabilities |
@@ -313,13 +317,19 @@ bundles remain later layers.
 | `ide-client` | Minecraft-independent IDE workspace, controller, analysis coordination, target, and file-transfer logic |
 | `playground` | Standalone compile-and-run entry point with stdin and stdout |
 | `core` | Loader-independent server behavior and `ProgramRuntimeHost` |
-| `v26_1-common` | Loader-independent Minecraft 26.1 adapters and computer carrier |
-| `v26_1-neoforge` | NeoForge 26.1 registration, networking, client UI, GameTests, resources, and production archive |
+| `minecraft/shared/common` | Canonical loader-independent Minecraft sources and tests compiled against every supported game target |
+| `minecraft/shared/neoforge` | Canonical NeoForge sources and resources compiled against every supported loader target |
+| `v1_21_1-common` | Minecraft 1.21.1 compatibility adapters over the shared computer carrier |
+| `v1_21_1-neoforge` | NeoForge 1.21.1 compatibility adapters, Java 21 JNI packaging, and production archive |
+| `v26_1-common` | Minecraft 26.1 compatibility adapters over the shared computer carrier |
+| `v26_1-neoforge` | NeoForge 26.1 compatibility adapters, client UI, GameTests, resources, and production archive |
 | `host/compukter-vm` | Artifact verification, managed Rust execution runtime, and VM-owned versioned C ABI in its `ffi` workspace member |
 
 Ownership rules:
 
-- `core` must not import `net.minecraft.*`.
+- Every module under `modules/common` must remain independent of `net.minecraft.*`.
+- Version modules must consume neutral `modules/minecraft/shared` roots rather than another version module's source tree.
+- Compatibility declarations must remain in the Compukters namespace and must not emit classes beneath `net.minecraft.*`.
 - Kotlin modules must not implement another interpreter or mutable guest machine model.
 - `worker-client`, `ide-core`, `ide-analysis-client`, and `ide-client` must not acquire K2 implementation dependencies.
 - K2 compiler internals belong to `compiler-k2-engine` and `compiler-k2`; K2 Analysis API internals belong to

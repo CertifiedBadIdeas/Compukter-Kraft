@@ -12,10 +12,14 @@ When work touches `host/compukter-vm`, check for `host/compukter-vm/AGENTS.md` a
 
 ## Project Structure & Module Organization
 
-Compukters is a Gradle multi-module Kotlin project with native Rust VM components. Kotlin modules live under
-`modules/`: `core` contains shared device/runtime logic, `native-runtime/api` contains the Java 21 runtime API and models,
-`native-runtime/ffm` contains the JDK 25 FFM transport, and `native-runtime/jni` is the Java 21 JNI transport leaf, while
-`v26_1/v26_1-common` plus `v26_1/v26_1-neoforge` contain the Minecraft 26.1.2 integration. Host-side Rust
+Compukters is a Gradle multi-module Kotlin project with native Rust VM components. Minecraft-independent Kotlin modules
+live under `modules/common`: `core` contains shared device/runtime logic, `native-runtime/api` contains the Java 21
+runtime API and models, `native-runtime/ffm` contains the JDK 25 FFM transport, and `native-runtime/jni` is the Java 21
+JNI transport leaf. Minecraft-facing code lives under `modules/minecraft`: `shared` contains the canonical Minecraft
+and NeoForge sources compiled by both version families, while `v1_21_1` and `v26_1` contain only their version-specific
+compatibility and packaging leaves. Set
+`compuktersActiveMinecraftVersion` in `gradle.properties` and reload Gradle to select which target owns the canonical
+shared roots in IntelliJ; inactive targets compile generated mirrors. Host-side Rust
 VM code lives in `host/compukter-vm`. Documentation is in
 `docs/`, mod metadata is in `config/`, and visual/model assets are in
 `models/` and top-level logo files.

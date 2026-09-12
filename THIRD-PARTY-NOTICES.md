@@ -143,7 +143,7 @@ packaged as `META-INF/licenses/Material-Symbols-Apache-2.0.txt` and
 The mod distributes generated bitmap atlases derived from these pinned fonts:
 
 - Cozette v1.30.0, copyright Ines, MIT. Complete license and provenance:
-  `modules/v26_1/v26_1-neoforge/src/main/resources/META-INF/licenses/Cozette-MIT.txt`
+  `modules/minecraft/shared/neoforge/src/main/resources/META-INF/licenses/Cozette-MIT.txt`
   and `Cozette-PROVENANCE.txt`.
 - Dina v2.92 Regular 6pt, copyright Joergen Ibsen, MIT. Complete license and
   provenance: `Dina-LICENSE.txt` and `Dina-PROVENANCE.txt` in the same
