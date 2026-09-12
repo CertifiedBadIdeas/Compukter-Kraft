@@ -43,11 +43,6 @@ import ru.lazyhat.compukters.ide.project.ModuleId
 import ru.lazyhat.compukters.ide.project.ResolvedModule
 import ru.lazyhat.compukters.ide.project.ToolchainLockIdentity
 
-internal data class IdeTargetReference(
-    val id: IdeTargetId,
-    val profile: IdeTargetProfileId,
-)
-
 internal class IdeCanonicalLine private constructor(
     value: CharArray,
 ) {

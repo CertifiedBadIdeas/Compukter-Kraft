@@ -32,7 +32,7 @@ import ru.lazyhat.compukters.lang.runtime.fs.VmFileSystemReadFailure
 import ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath
 import java.util.UUID
 
-internal class IdeTargetFileSystemService(
+class IdeTargetFileSystemService(
     private val leases: IdeTargetLeaseService,
 ) {
     suspend fun stat(

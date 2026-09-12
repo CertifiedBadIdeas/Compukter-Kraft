@@ -38,7 +38,7 @@ import java.util.Base64
 import java.util.UUID
 import ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision as NativeExecutableRevision
 
-internal sealed interface IdeUploadResult {
+sealed interface IdeUploadResult {
     data object Accepted : IdeUploadResult
 
     data class Failed(
@@ -46,7 +46,7 @@ internal sealed interface IdeUploadResult {
     ) : IdeUploadResult
 }
 
-internal class IdeTargetDeploymentService(
+class IdeTargetDeploymentService(
     private val leases: IdeTargetLeaseService,
     private val ticketBytes: () -> ByteArray = { ByteArray(DEFAULT_TICKET_BYTES).also(TICKET_RANDOM::nextBytes) },
     private val maximumGlobalStagingBytes: Int = DEFAULT_GLOBAL_STAGING_BYTES,

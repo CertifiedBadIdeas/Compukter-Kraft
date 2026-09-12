@@ -30,14 +30,14 @@ import ru.lazyhat.compukters.lang.runtime.vm.TerminalState
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalUpdate
 import java.util.UUID
 
-internal fun interface IdeTargetClaimResolver {
+fun interface IdeTargetClaimResolver {
     fun resolve(
         player: UUID,
         claim: IdeTargetClaim,
     ): IdeClaimResolution
 }
 
-internal sealed interface IdeClaimResolution {
+sealed interface IdeClaimResolution {
     data class Resolved(
         val target: IdeResolvedTarget,
     ) : IdeClaimResolution
@@ -47,7 +47,7 @@ internal sealed interface IdeClaimResolution {
     ) : IdeClaimResolution
 }
 
-internal data class IdeResolvedTarget(
+data class IdeResolvedTarget(
     val machineIdentity: String,
     val profileId: IdeTargetProfileId,
     val profile: TargetCompileProfile,
@@ -63,7 +63,7 @@ internal data class IdeResolvedTarget(
     }
 }
 
-internal class IdeTargetTerminalOperations(
+class IdeTargetTerminalOperations(
     val machineId: () -> Long?,
     val fullState: suspend () -> TerminalState?,
     val changesSince: suspend (Long) -> TerminalUpdate?,
@@ -71,7 +71,7 @@ internal class IdeTargetTerminalOperations(
     val submitText: suspend (String) -> Boolean,
 )
 
-internal class IdeTargetDeploymentOperations(
+class IdeTargetDeploymentOperations(
     val verifyForDeploy: suspend (ByteArray) -> ProgramDeploymentCandidate?,
     val executableRevision: suspend (String) -> ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision? = { null },
     val deploy: suspend (String, ru.lazyhat.compukters.lang.runtime.vm.VmExecutableRevision, ProgramDeploymentCandidate) ->
@@ -79,7 +79,7 @@ internal class IdeTargetDeploymentOperations(
     val submitCanonicalLine: suspend (CharArray) -> Boolean = { false },
 )
 
-internal class IdeTargetFileSystemOperations(
+class IdeTargetFileSystemOperations(
     val stat: suspend (ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath) -> ru.lazyhat.compukters.lang.runtime.fs.VmFileStat?,
     val list: suspend (ru.lazyhat.compukters.lang.runtime.fs.VmVirtualPath, String?, Int) ->
     ru.lazyhat.compukters.lang.runtime.fs.VmDirectoryListing?,
@@ -87,7 +87,7 @@ internal class IdeTargetFileSystemOperations(
     ru.lazyhat.compukters.lang.runtime.fs.VmFileChunk?,
 )
 
-internal class IdeTargetLeaseService(
+class IdeTargetLeaseService(
     private val resolver: IdeTargetClaimResolver,
     private val targetIds: () -> IdeTargetId = { IdeTargetId(UUID.randomUUID().toString()) },
     private val leaseTicks: Long = DEFAULT_LEASE_TICKS,
