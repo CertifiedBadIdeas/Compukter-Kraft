@@ -18,5 +18,6 @@
 
 plugins {
     id("dev.architectury.loom")
+    id("loom-runs-convention")
     id("neoforge-base-convention")
 }

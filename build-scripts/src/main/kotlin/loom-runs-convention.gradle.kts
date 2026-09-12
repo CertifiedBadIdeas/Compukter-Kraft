@@ -22,10 +22,6 @@ import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import java.util.UUID
 
-plugins {
-    id("dev.architectury.loom-no-remap")
-}
-
 // ---------------------------------------------------------------------------
 // Centralised Loom run-configuration declarations.
 //
@@ -38,7 +34,9 @@ plugins {
 
 fun RunConfigSettings.applyShared() {
     ideConfigGenerated(true)
-    vmArgs("--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny")
+    if (buildContext().versionKey == "v261") {
+        vmArgs("--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny")
+    }
 }
 
 private val DEV_CLIENT_USERNAMES = listOf("DevA", "DevB", "DevC")

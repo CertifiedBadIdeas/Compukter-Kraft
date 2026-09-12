@@ -42,16 +42,6 @@ sourceSets.main {
 }
 
 loom {
-    runs {
-        named("client") {
-            runDir("run/client")
-            ideConfigGenerated(true)
-        }
-        named("server") {
-            runDir("run/server")
-            ideConfigGenerated(true)
-        }
-    }
     mods {
         maybeCreate("main").apply {
             sourceSet("main", project(projects.v1211Common.path))
