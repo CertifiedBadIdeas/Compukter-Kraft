@@ -342,6 +342,45 @@ class ProgramRuntimeActorProcessorTest {
     }
 
     @Test
+    fun `completed actor turn admits the next tick before its result is pumped`() {
+        val session = RecordingSession()
+        val endpoint = VmActorEndpoint(ComputerId.fromLongs(17, 18), 1)
+        ProgramRuntimeActorService(schedulerConfig()).use { service ->
+            val host =
+                ProgramRuntimeHost(
+                    object : ProgramVmSessionFactory {
+                        override fun open(artifact: ByteArray): ProgramVmSession = session
+
+                        override fun boot(): ProgramVmSession = session
+                    },
+                )
+            val carrier =
+                ActorProgramComputer(
+                    service,
+                    requireNotNull(service.attach(endpoint, host)),
+                    { RedstoneCommitResult.Committed },
+                )
+            carrier.turnOn()
+            awaitQueuedResult(service)
+            service.pump(1)
+            session.redstoneInputs.clear()
+
+            val high = RedstoneWire.packInput(1, intArrayOf(13, 0, 0, 0, 0, 0))
+            val low = RedstoneWire.packInput(1, intArrayOf(0, 0, 0, 0, 0, 0))
+            carrier.serverTick(1, high)
+            awaitQueuedResult(service)
+
+            carrier.serverTick(2, low)
+
+            assertEquals(2, service.metrics().acceptedPermits)
+            awaitQueuedResults(service, 2)
+            assertEquals(listOf(high, low), session.redstoneInputs)
+            service.pump(2)
+            carrier.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
     fun `mailbox rejection retains world completion for a later continuation`() {
         val session = RecordingSession()
         val port = ActorRedstoneHostPort()

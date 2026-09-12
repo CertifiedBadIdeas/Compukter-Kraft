@@ -121,12 +121,13 @@ and increments the diagnostic counter. These are lifetime counters and gauges fo
 than an equal-CPU or delivery-latency contract.
 
 `ActorProgramComputer` is the asynchronous carrier implementation for that migration. Its server-side state is an
-observation from actor replies, and terminal, filesystem, deployment, and input requests return futures. It keeps at
-most one execution command in flight, suppresses obsolete lifecycle replies, and performs redstone and sound world
-actions on its owning server thread. On a later server tick it submits one typed continuation containing the immutable
-world-action result. The actor validates and applies that completion before using the same command to perform the next
-bounded advance; its single reply both completes the old deferred request and may publish the next one. A full actor
-mailbox retains the exact continuation for retry without repeating the world mutation.
+observation from actor replies, and terminal, filesystem, deployment, and input requests return futures. The scheduler
+admits at most one pending or executing tick permit per actor, while completed replies may remain queued for the next
+server-thread pump without blocking admission of a later tick. The carrier suppresses obsolete lifecycle replies and
+performs redstone and sound world actions on its owning server thread. On a later server tick it submits one typed
+continuation containing the immutable world-action result. The actor validates and applies that completion before using
+the same command to perform the next bounded advance; its single reply both completes the old deferred request and may
+publish the next one. A full actor mailbox retains the exact continuation for retry without repeating the world mutation.
 Its close future reports the final filesystem generation after accepted work drains and native resources close; this
 barrier does not depend on server result pumping and may complete on a worker thread.
 

@@ -42,6 +42,11 @@ The wait operations block the current VM task:
 - `awaitAtLeast(level)` is level-triggered and completes when the input is at
   least that level. It may also complete immediately.
 
+`await()` does not replay changes sampled before its waiter was registered. In
+particular, a change may occur while the same task is suspended in a blocking
+host operation such as `set()`. Use a level-triggered wait when the current
+level must be observed after another blocking operation completes.
+
 `set(level, power = Redstone.Power.WEAK)` is blocking host I/O. `WEAK` emits
 ordinary weak power and is the default. `DIRECT` additionally exposes the same
 level as vanilla direct power, allowing propagation through an adjacent solid

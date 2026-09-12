@@ -51,7 +51,6 @@ class ActorProgramComputer(
 ) {
     private val owner = Thread.currentThread()
     private var lifecycle = 0L
-    private var advance: CompletableFuture<ProgramRuntimeActorReply>? = null
     private var pendingOutput: PendingOutput? = null
     private var pendingSound: PendingSound? = null
     private val pendingRedstoneInputs = ArrayDeque<Int>()
@@ -113,7 +112,7 @@ class ActorProgramComputer(
         redstoneInput?.let(::enqueueRedstoneInput)
         lastObservedServerTick = maxOf(lastObservedServerTick, worldTick)
         if (closeResult != null) return
-        if (advance != null || worldTick <= lastAdvanceTick ||
+        if (worldTick <= lastAdvanceTick ||
             (
                 state != ProgramRuntimeState.Running &&
                     state != ProgramRuntimeState.WaitingForCompiler &&
@@ -147,7 +146,6 @@ class ActorProgramComputer(
         lastAdvanceTick = worldTick
         val currentLifecycle = lifecycle
         val future = observe(service.turn(lease.endpoint, worldTick, effects), lifecycle)
-        advance = future
         if (!future.isCompletedExceptionally) {
             pendingOutput = null
             pendingSound = null
@@ -158,7 +156,6 @@ class ActorProgramComputer(
             }
         }
         future.whenComplete { reply, failure ->
-            if (advance === future) advance = null
             if (currentLifecycle != lifecycle || closeResult != null) return@whenComplete
             if (failure != null) {
                 failUnlessBusy(failure)
@@ -230,7 +227,6 @@ class ActorProgramComputer(
         val submitted = service.request(lease.endpoint, command)
         if (submitted.isCompletedExceptionally) return submitted
         lifecycle++
-        advance = null
         pendingOutput = null
         pendingSound = null
         pendingRedstoneInputs.clear()
