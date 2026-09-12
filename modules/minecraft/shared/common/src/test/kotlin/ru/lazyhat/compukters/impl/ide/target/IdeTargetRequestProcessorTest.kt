@@ -33,7 +33,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class IdeTargetRequestProcessorTest {
+internal class IdeTargetRequestProcessorTest {
     @Test
     fun `processor owns the complete attach upload verify deploy and input lifecycle`() =
         runServerTest {

@@ -41,7 +41,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-class IdeTargetDeploymentServiceTest {
+internal class IdeTargetDeploymentServiceTest {
     @Test
     fun `suspended verification reserves staging and closes its candidate after detach`() {
         val completion = java.util.concurrent.CompletableFuture<ProgramDeploymentCandidate?>()
