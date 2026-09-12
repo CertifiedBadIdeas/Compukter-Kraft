@@ -27,6 +27,8 @@ headings so this page has one stable URL that can be shared outside the reposito
 - Moved Guest task scheduling and channel handoff into the Rust VM; channel traffic does not make a server request.
 - Preserved redstone transitions while VM work is in flight and aligned redstone and sound effects with fixed server
   tick phases.
+- Allowed terminal, compiler, and redstone waits to coexist with host operations from other Guest tasks without
+  starvation or missed redstone edges while another task publishes output.
 - Restored live terminal observation after leaving the IDE.
 - Reduced the default Guest heap and removed unused runtime tracing overhead.
 - Improved VM register access, host continuation delivery, result pumping, and scheduler capacity.
