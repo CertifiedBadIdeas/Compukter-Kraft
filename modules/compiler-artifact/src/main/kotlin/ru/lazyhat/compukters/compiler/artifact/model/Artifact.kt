@@ -30,6 +30,7 @@ enum class SemanticFeature {
     COROUTINES,
     CAPABILITIES,
     MODULE_IMPORTS,
+    CHANNELS,
 }
 
 enum class EntryArguments(
@@ -56,6 +57,8 @@ class Manifest(
     val minimumSliceCost: UInt,
     compilerAbi: ByteArray,
     platformAbi: ByteArray,
+    val maximumChannels: UInt = 0u,
+    val maximumChannelValues: UInt = 0u,
 ) {
     val compilerAbi: ByteArray = compilerAbi.copyOf()
     val platformAbi: ByteArray = platformAbi.copyOf()

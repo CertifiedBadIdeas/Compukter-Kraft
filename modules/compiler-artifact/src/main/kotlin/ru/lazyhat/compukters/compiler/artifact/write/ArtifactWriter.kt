@@ -180,7 +180,8 @@ private fun encodeManifest(
             writeU32(optionalCapabilities)
             writeBytes(manifest.compilerAbi)
             writeBytes(manifest.platformAbi)
-            writeU64(0u)
+            writeU32(manifest.maximumChannels)
+            writeU32(manifest.maximumChannelValues)
         }.toByteArray()
 }
 

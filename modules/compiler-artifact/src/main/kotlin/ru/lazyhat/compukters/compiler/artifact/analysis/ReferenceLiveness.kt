@@ -260,6 +260,12 @@ internal fun Instruction.readRegisters(): List<RegisterId> =
 
         is Instruction.TaskJoin -> listOf(task)
 
+        is Instruction.ChannelCreate -> listOf(capacity)
+
+        is Instruction.ChannelSend -> listOf(channel, value)
+
+        is Instruction.ChannelReceive -> listOf(channel)
+
         is Instruction.StringConcat -> listOf(left, right)
 
         is Instruction.StringValueOf -> listOf(source)
@@ -353,6 +359,10 @@ internal fun Instruction.writtenRegisters(): List<RegisterId> =
 
         is Instruction.TaskJoin -> (destination as? Destination.Register)?.let { listOf(it.id) }.orEmpty()
 
+        is Instruction.ChannelCreate -> listOf(destination)
+
+        is Instruction.ChannelReceive -> listOf(destination)
+
         is Instruction.StringConcat -> listOf(destination)
 
         is Instruction.StringValueOf -> listOf(destination)
@@ -372,6 +382,7 @@ internal fun Instruction.writtenRegisters(): List<RegisterId> =
         is Instruction.CapabilityCallAsync -> (destination as? Destination.Register)?.let { listOf(it.id) }.orEmpty()
 
         is Instruction.ArrayStore,
+        is Instruction.ChannelSend,
         is Instruction.FieldSet,
         is Instruction.StaticSet,
         is Instruction.Jump,
@@ -388,6 +399,8 @@ internal fun Instruction.successors(): List<BlockId> =
         is Instruction.Branch -> listOf(trueTarget, falseTarget)
         is Instruction.CallSuspend -> listOf(resumeBlock)
         is Instruction.TaskJoin -> listOf(resumeBlock)
+        is Instruction.ChannelSend -> listOf(resumeBlock)
+        is Instruction.ChannelReceive -> listOf(resumeBlock)
         is Instruction.CapabilityCallAsync -> listOf(resumeBlock)
         else -> emptyList()
     }
@@ -407,6 +420,9 @@ internal fun Instruction.mayThrow(): Boolean =
         this is Instruction.CallSuspend ||
         this is Instruction.TaskSpawn ||
         this is Instruction.TaskJoin ||
+        this is Instruction.ChannelCreate ||
+        this is Instruction.ChannelSend ||
+        this is Instruction.ChannelReceive ||
         this is Instruction.CapabilityCallSync ||
         this is Instruction.CapabilityCallAsync ||
         this is Instruction.StringGet ||

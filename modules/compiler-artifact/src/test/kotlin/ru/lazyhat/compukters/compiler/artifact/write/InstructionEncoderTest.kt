@@ -313,6 +313,20 @@ class InstructionEncoderTest {
     }
 
     @Test
+    fun `channel instructions encode scalar handles values and resume blocks`() {
+        val create = encodeInstruction(Instruction.ChannelCreate(RegisterId.of(1u), RegisterId.of(2u)), 64)
+        val send = encodeInstruction(Instruction.ChannelSend(RegisterId.of(1u), RegisterId.of(2u), BlockId.of(3u)), 64)
+        val receive = encodeInstruction(Instruction.ChannelReceive(RegisterId.of(2u), RegisterId.of(1u), BlockId.of(3u)), 64)
+
+        assertContentEquals(byteArrayOf(0x52, 0, 8, 0, 1, 0, 2, 0), create.bytes)
+        assertEquals(3u, create.fixedCost)
+        assertContentEquals(byteArrayOf(0xea.toByte(), 0, 9, 0, 1, 0, 2, 0, 3), send.bytes)
+        assertEquals(4u, send.fixedCost)
+        assertContentEquals(byteArrayOf(0xeb.toByte(), 0, 9, 0, 2, 0, 1, 0, 3), receive.bytes)
+        assertEquals(4u, receive.fixedCost)
+    }
+
+    @Test
     fun `string concat encodes three registers at fixed cost one`() {
         val encoded =
             encodeInstruction(

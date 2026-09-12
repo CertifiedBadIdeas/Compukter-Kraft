@@ -31,6 +31,7 @@ import ru.lazyhat.compukters.compiler.artifact.model.TypeId
 import ru.lazyhat.compukters.compiler.artifact.model.TypeRef
 import ru.lazyhat.compukters.compiler.artifact.write.ArtifactWriteResult
 import ru.lazyhat.compukters.compiler.artifact.write.ArtifactWriter
+import ru.lazyhat.compukters.compiler.artifact.write.channelArtifact
 import ru.lazyhat.compukters.compiler.artifact.write.languageRuntimeArtifact
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -83,6 +84,19 @@ class ArtifactReaderTest {
         val repeatedResult = ArtifactWriter.write(decoded)
         val repeated = assertIs<ArtifactWriteResult.Success>(repeatedResult, repeatedResult.toString()).bytes
 
+        assertContentEquals(encoded, repeated)
+    }
+
+    @Test
+    fun `channel instructions and manifest limits round trip canonically`() {
+        val source = channelArtifact()
+        val encoded = assertIs<ArtifactWriteResult.Success>(ArtifactWriter.write(source)).bytes
+        val decoded = ArtifactReader.read(encoded)
+
+        assertEquals(1u, decoded.manifest.maximumChannels)
+        assertEquals(1u, decoded.manifest.maximumChannelValues)
+        assertEquals(source.modules.single().blocks, decoded.modules.single().blocks)
+        val repeated = assertIs<ArtifactWriteResult.Success>(ArtifactWriter.write(decoded)).bytes
         assertContentEquals(encoded, repeated)
     }
 

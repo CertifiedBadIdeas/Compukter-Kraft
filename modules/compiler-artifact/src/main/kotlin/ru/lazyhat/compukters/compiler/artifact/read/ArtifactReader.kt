@@ -111,8 +111,13 @@ private fun decodeManifest(bytes: ByteArray): Manifest {
     val slice = c.u32()
     c.u32()
     c.u32()
-    val manifest = Manifest(heap, stack, coroutines, depth, requests, events, block, slice, c.bytes(32), c.bytes(32))
-    require(c.u64() == 0uL && c.done()) { "invalid manifest record" }
+    val compilerAbi = c.bytes(32)
+    val platformAbi = c.bytes(32)
+    val channels = c.u32()
+    val channelValues = c.u32()
+    val manifest =
+        Manifest(heap, stack, coroutines, depth, requests, events, block, slice, compilerAbi, platformAbi, channels, channelValues)
+    require(c.done()) { "invalid manifest record" }
     return manifest
 }
 
@@ -724,6 +729,18 @@ private fun decodeCode(bytes: ByteArray): List<Instruction> {
 
                 0xe8u -> {
                     Instruction.TaskJoin(d(), r(), BlockId.of(frame.uleb()))
+                }
+
+                0x52u -> {
+                    Instruction.ChannelCreate(r(), r())
+                }
+
+                0xeau -> {
+                    Instruction.ChannelSend(r(), r(), BlockId.of(frame.uleb()))
+                }
+
+                0xebu -> {
+                    Instruction.ChannelReceive(r(), r(), BlockId.of(frame.uleb()))
                 }
 
                 0xe9u -> {

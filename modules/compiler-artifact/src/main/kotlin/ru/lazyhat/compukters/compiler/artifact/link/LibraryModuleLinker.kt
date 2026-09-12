@@ -216,6 +216,8 @@ private fun Manifest.withLinkedRequirements(
         minimumSliceCost = maxOf(minimumSliceCost, requiredMaximumBlockCost),
         compilerAbi = compilerAbi,
         platformAbi = platformAbi,
+        maximumChannels = maximumChannels,
+        maximumChannelValues = maximumChannelValues,
     )
 
 private data class DenseIds(
@@ -567,6 +569,18 @@ private fun relocateInstruction(
             instruction.copy(resumeBlock = ids.block(instruction.resumeBlock))
         }
 
+        is Instruction.ChannelCreate -> {
+            instruction
+        }
+
+        is Instruction.ChannelSend -> {
+            instruction.copy(resumeBlock = ids.block(instruction.resumeBlock))
+        }
+
+        is Instruction.ChannelReceive -> {
+            instruction.copy(resumeBlock = ids.block(instruction.resumeBlock))
+        }
+
         is Instruction.CapabilityCallSync -> {
             Instruction.CapabilityCallSync(
                 instruction.destination,
@@ -625,13 +639,33 @@ private fun semanticFeatures(
         }
         if (modules.any { module ->
                 module.functions.any { ru.lazyhat.compukters.compiler.artifact.model.FunctionFlag.SUSPENDING in it.flags } ||
-                    module.blocks.any { block -> block.instructions.any { it is Instruction.CallSuspend } }
+                    module.blocks.any { block ->
+                        block.instructions.any {
+                            it is Instruction.CallSuspend ||
+                                it is Instruction.TaskSpawn ||
+                                it is Instruction.TaskJoin ||
+                                it is Instruction.ChannelSend ||
+                                it is Instruction.ChannelReceive
+                        }
+                    }
             }
         ) {
             add(SemanticFeature.COROUTINES)
         }
         if (modules.any { it.imports.isNotEmpty() }) add(SemanticFeature.MODULE_IMPORTS)
         if (capabilities.isNotEmpty()) add(SemanticFeature.CAPABILITIES)
+        if (modules.any { module ->
+                module.blocks.any { block ->
+                    block.instructions.any {
+                        it is Instruction.ChannelCreate ||
+                            it is Instruction.ChannelSend ||
+                            it is Instruction.ChannelReceive
+                    }
+                }
+            }
+        ) {
+            add(SemanticFeature.CHANNELS)
+        }
     }
 
 private fun ModuleReachability.hasDefinitions(): Boolean =

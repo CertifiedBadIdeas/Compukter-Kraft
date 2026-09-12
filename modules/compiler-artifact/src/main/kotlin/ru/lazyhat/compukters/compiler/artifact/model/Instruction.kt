@@ -335,6 +335,23 @@ sealed interface Instruction {
         val resumeBlock: BlockId,
     ) : Instruction
 
+    data class ChannelCreate(
+        val destination: RegisterId,
+        val capacity: RegisterId,
+    ) : Instruction
+
+    data class ChannelSend(
+        val channel: RegisterId,
+        val value: RegisterId,
+        val resumeBlock: BlockId,
+    ) : Instruction
+
+    data class ChannelReceive(
+        val destination: RegisterId,
+        val channel: RegisterId,
+        val resumeBlock: BlockId,
+    ) : Instruction
+
     class CapabilityCallAsync(
         val destination: Destination,
         val capability: CapabilityId,

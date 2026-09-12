@@ -18,6 +18,8 @@
 
 package ru.lazyhat.compukters.compiler.artifact.write
 
+import ru.lazyhat.compukters.compiler.artifact.analysis.ReferenceLiveness
+import ru.lazyhat.compukters.compiler.artifact.model.AbiVersion
 import ru.lazyhat.compukters.compiler.artifact.model.Artifact
 import ru.lazyhat.compukters.compiler.artifact.model.Block
 import ru.lazyhat.compukters.compiler.artifact.model.BlockId
@@ -89,6 +91,68 @@ internal fun minimalArtifact(instructions: List<Instruction> = listOf(Instructio
                 ),
             ),
     )
+
+internal fun channelArtifact(): Artifact {
+    val source = minimalArtifact()
+    val module = source.modules.single()
+    return ReferenceLiveness.derive(
+        source.copy(
+            minimumRuntimeAbi = AbiVersion(1u, 2u),
+            semanticFeatures = setOf(SemanticFeature.COROUTINES, SemanticFeature.CHANNELS),
+            manifest =
+                Manifest(
+                    requiredHeapBytes = 0u,
+                    requiredStackBytes = 0u,
+                    maximumCoroutines = 1u,
+                    maximumCallDepth = 1u,
+                    maximumHostRequests = 0u,
+                    maximumEvents = 0u,
+                    maximumBlockCost = 8u,
+                    minimumSliceCost = 8u,
+                    compilerAbi = ByteArray(32),
+                    platformAbi = ByteArray(32),
+                    maximumChannels = 1u,
+                    maximumChannelValues = 1u,
+                ),
+            modules =
+                listOf(
+                    module.copy(
+                        types =
+                            listOf(
+                                (module.types.single() as NominalType.Function).copy(suspending = true),
+                            ),
+                        constants = listOf(Constant.I32(1)),
+                        functions =
+                            listOf(
+                                module.functions.single().copy(
+                                    flags = setOf(FunctionFlag.STATIC, FunctionFlag.SUSPENDING),
+                                    values = List(3) { FunctionValue.scalar(ValueType.I32) },
+                                    blockCount = 3u,
+                                ),
+                            ),
+                        blocks =
+                            listOf(
+                                Block(
+                                    FunctionId.of(0u),
+                                    false,
+                                    listOf(
+                                        Instruction.Const(RegisterId.of(0u), ConstantId.of(0u)),
+                                        Instruction.ChannelCreate(RegisterId.of(1u), RegisterId.of(0u)),
+                                        Instruction.ChannelSend(RegisterId.of(1u), RegisterId.of(0u), BlockId.of(1u)),
+                                    ),
+                                ),
+                                Block(
+                                    FunctionId.of(0u),
+                                    false,
+                                    listOf(Instruction.ChannelReceive(RegisterId.of(2u), RegisterId.of(1u), BlockId.of(2u))),
+                                ),
+                                Block(FunctionId.of(0u), false, listOf(Instruction.Return(Destination.Unit))),
+                            ),
+                    ),
+                ),
+        ),
+    )
+}
 
 internal fun languageRuntimeArtifact(): Artifact =
     Artifact(

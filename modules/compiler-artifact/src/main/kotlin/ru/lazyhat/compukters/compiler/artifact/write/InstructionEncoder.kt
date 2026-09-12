@@ -321,6 +321,26 @@ internal fun encodeInstruction(
             operands.writeUleb128(instruction.resumeBlock.value)
         }
 
+        is Instruction.ChannelCreate -> {
+            opcode = 0x52u
+            operands.writeRegister(instruction.destination)
+            operands.writeRegister(instruction.capacity)
+        }
+
+        is Instruction.ChannelSend -> {
+            opcode = 0xeau
+            operands.writeRegister(instruction.channel)
+            operands.writeRegister(instruction.value)
+            operands.writeUleb128(instruction.resumeBlock.value)
+        }
+
+        is Instruction.ChannelReceive -> {
+            opcode = 0xebu
+            operands.writeRegister(instruction.destination)
+            operands.writeRegister(instruction.channel)
+            operands.writeUleb128(instruction.resumeBlock.value)
+        }
+
         is Instruction.CapabilityCallAsync -> {
             opcode = 0xe9u
             operands.writeDestination(instruction.destination)
@@ -469,6 +489,12 @@ internal fun instructionFixedCost(instruction: Instruction): UInt =
         is Instruction.TaskSpawn -> variableCost(6u, instruction.arguments.size)
 
         is Instruction.TaskJoin -> 4u
+
+        is Instruction.ChannelCreate -> 3u
+
+        is Instruction.ChannelSend,
+        is Instruction.ChannelReceive,
+        -> 4u
 
         is Instruction.CapabilityCallSync -> variableCost(5u, instruction.arguments.size)
 

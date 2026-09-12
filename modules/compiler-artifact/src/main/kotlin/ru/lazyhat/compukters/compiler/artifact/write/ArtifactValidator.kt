@@ -409,7 +409,8 @@ internal fun validateArtifact(
             module.functions.any { FunctionFlag.SUSPENDING in it.flags } ||
             module.blocks.any { block ->
                 block.instructions.any {
-                    it is Instruction.CallSuspend || it is Instruction.TaskSpawn || it is Instruction.TaskJoin
+                    it is Instruction.CallSuspend || it is Instruction.TaskSpawn || it is Instruction.TaskJoin ||
+                        it is Instruction.ChannelSend || it is Instruction.ChannelReceive
                 }
             }
         ) {
@@ -426,6 +427,17 @@ internal fun validateArtifact(
     ) {
         expectedFeatures += SemanticFeature.CAPABILITIES
     }
+    val usesChannels =
+        artifact.modules.any { module ->
+            module.blocks.any { block ->
+                block.instructions.any {
+                    it is Instruction.ChannelCreate ||
+                        it is Instruction.ChannelSend ||
+                        it is Instruction.ChannelReceive
+                }
+            }
+        }
+    if (usesChannels) expectedFeatures += SemanticFeature.CHANNELS
     if (artifact.semanticFeatures != expectedFeatures) {
         add(
             ArtifactWriteErrorCode.INCOMPATIBLE_FEATURE_SET,
@@ -443,6 +455,24 @@ internal fun validateArtifact(
         add(
             ArtifactWriteErrorCode.INVALID_RANGE,
             "task instructions require minimum runtime ABI 1.1",
+        )
+    }
+    if (usesChannels && artifact.minimumRuntimeAbi < AbiVersion(1u, 2u)) {
+        add(
+            ArtifactWriteErrorCode.INVALID_RANGE,
+            "channel instructions require minimum runtime ABI 1.2",
+        )
+    }
+    if (usesChannels && (artifact.manifest.maximumChannels == 0u || artifact.manifest.maximumChannelValues == 0u)) {
+        add(
+            ArtifactWriteErrorCode.INVALID_RANGE,
+            "channel instructions require non-zero channel manifest limits",
+        )
+    }
+    if (!usesChannels && (artifact.manifest.maximumChannels != 0u || artifact.manifest.maximumChannelValues != 0u)) {
+        add(
+            ArtifactWriteErrorCode.INVALID_RANGE,
+            "channel manifest limits require channel instructions",
         )
     }
 
@@ -1137,6 +1167,41 @@ internal fun validateArtifact(
                             successor(instruction.resumeBlock, "resume")
                         }
 
+                        is Instruction.ChannelCreate -> {
+                            val destination = register(instruction.destination, "destination")
+                            if (destination != null && destination != ValueType.I32) {
+                                add(ArtifactWriteErrorCode.INVALID_RANGE, "channel handle destination is not I32", location)
+                            }
+                            val capacity = register(instruction.capacity, "capacity")
+                            if (capacity != null && capacity != ValueType.I32) {
+                                add(ArtifactWriteErrorCode.INVALID_RANGE, "channel capacity is not I32", location)
+                            }
+                        }
+
+                        is Instruction.ChannelSend -> {
+                            val channel = register(instruction.channel, "channel")
+                            if (channel != null && channel != ValueType.I32) {
+                                add(ArtifactWriteErrorCode.INVALID_RANGE, "channel handle is not I32", location)
+                            }
+                            val value = register(instruction.value, "value")
+                            if (value != null && value != ValueType.I32) {
+                                add(ArtifactWriteErrorCode.INVALID_RANGE, "channel value is not I32", location)
+                            }
+                            successor(instruction.resumeBlock, "resume")
+                        }
+
+                        is Instruction.ChannelReceive -> {
+                            val destination = register(instruction.destination, "destination")
+                            if (destination != null && destination != ValueType.I32) {
+                                add(ArtifactWriteErrorCode.INVALID_RANGE, "channel receive destination is not I32", location)
+                            }
+                            val channel = register(instruction.channel, "channel")
+                            if (channel != null && channel != ValueType.I32) {
+                                add(ArtifactWriteErrorCode.INVALID_RANGE, "channel handle is not I32", location)
+                            }
+                            successor(instruction.resumeBlock, "resume")
+                        }
+
                         is Instruction.StringConcat -> {
                             val expected = stringIdentity()
                             listOf(
@@ -1612,6 +1677,12 @@ private fun Instruction.isTerminator(): Boolean =
         this is Instruction.Unreachable ||
         this is Instruction.CallSuspend ||
         this is Instruction.TaskJoin ||
+        this is Instruction.ChannelSend ||
+        this is Instruction.ChannelReceive ||
         this is Instruction.CapabilityCallAsync
 
-private fun Instruction.isKotlinSuspendingTerminator(): Boolean = this is Instruction.CallSuspend || this is Instruction.TaskJoin
+private fun Instruction.isKotlinSuspendingTerminator(): Boolean =
+    this is Instruction.CallSuspend ||
+        this is Instruction.TaskJoin ||
+        this is Instruction.ChannelSend ||
+        this is Instruction.ChannelReceive

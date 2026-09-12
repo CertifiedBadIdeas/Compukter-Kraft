@@ -127,6 +127,27 @@ class ArtifactValidatorTest {
     }
 
     @Test
+    fun `channel instructions require runtime ABI 1 2 feature and bounded manifest storage`() {
+        val artifact = channelArtifact()
+
+        assertEquals(emptyList(), validateArtifact(artifact, ArtifactWriteLimits()))
+        assertTrue(
+            validateArtifact(artifact.copy(minimumRuntimeAbi = AbiVersion(1u, 1u)), ArtifactWriteLimits())
+                .any { it.detail.contains("runtime ABI 1.2") },
+        )
+        assertTrue(
+            validateArtifact(artifact.copy(semanticFeatures = setOf(SemanticFeature.COROUTINES)), ArtifactWriteLimits())
+                .any { it.detail.contains("semantic feature") },
+        )
+        assertTrue(
+            validateArtifact(
+                artifact.copy(manifest = artifact.manifest.copyChannelLimits(channels = 0u, values = 0u)),
+                ArtifactWriteLimits(),
+            ).any { it.detail.contains("non-zero channel manifest limits") },
+        )
+    }
+
+    @Test
     fun `functions require exact safepoint roots`() {
         val source = languageRuntimeArtifact()
         val module = source.modules.single()
@@ -1940,3 +1961,22 @@ private fun charArrayArtifact(
             ),
     )
 }
+
+private fun Manifest.copyChannelLimits(
+    channels: UInt,
+    values: UInt,
+): Manifest =
+    Manifest(
+        requiredHeapBytes = requiredHeapBytes,
+        requiredStackBytes = requiredStackBytes,
+        maximumCoroutines = maximumCoroutines,
+        maximumCallDepth = maximumCallDepth,
+        maximumHostRequests = maximumHostRequests,
+        maximumEvents = maximumEvents,
+        maximumBlockCost = maximumBlockCost,
+        minimumSliceCost = minimumSliceCost,
+        compilerAbi = compilerAbi,
+        platformAbi = platformAbi,
+        maximumChannels = channels,
+        maximumChannelValues = values,
+    )
