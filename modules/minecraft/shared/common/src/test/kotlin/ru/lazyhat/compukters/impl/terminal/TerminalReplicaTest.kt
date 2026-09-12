@@ -29,7 +29,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class TerminalReplicaTest {
+internal class TerminalReplicaTest {
     @Test
     fun `revision mismatch rejects delta without mutation`() {
         val replica = TerminalReplica(state(3))

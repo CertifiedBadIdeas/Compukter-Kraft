@@ -47,7 +47,7 @@ class TerminalReplica(
         current: TerminalState,
         delta: TerminalUpdate.Delta,
     ): TerminalState {
-        TerminalProtocol.validateDelta(delta)
+        TerminalModel.validateDelta(delta)
         val cells = current.cells.toMutableList()
         var cursor = current.cursor
         var cursorVisible = current.cursorVisible
@@ -60,15 +60,15 @@ class TerminalReplica(
                 is TerminalChange.Fill -> {
                     repeat(change.height) { y ->
                         repeat(change.width) { x ->
-                            cells[(change.y + y) * TerminalProtocol.WIDTH + change.x + x] = change.cell
+                            cells[(change.y + y) * TerminalModel.WIDTH + change.x + x] = change.cell
                         }
                     }
                 }
 
                 is TerminalChange.Scroll -> {
-                    val shift = change.rows * TerminalProtocol.WIDTH
-                    repeat(TerminalProtocol.CELL_COUNT - shift) { index -> cells[index] = cells[index + shift] }
-                    for (index in TerminalProtocol.CELL_COUNT - shift until TerminalProtocol.CELL_COUNT) {
+                    val shift = change.rows * TerminalModel.WIDTH
+                    repeat(TerminalModel.CELL_COUNT - shift) { index -> cells[index] = cells[index + shift] }
+                    for (index in TerminalModel.CELL_COUNT - shift until TerminalModel.CELL_COUNT) {
                         cells[index] = change.fill
                     }
                 }
@@ -91,14 +91,14 @@ class TerminalReplica(
                 cells = cells.toList(),
                 cursor = cursor,
                 cursorVisible = cursorVisible,
-            ).also(TerminalProtocol::validateState)
+            ).also(TerminalModel::validateState)
     }
 
     private companion object {
         val DEFAULT_CELL = TerminalCell(' '.code, 15, 0)
 
         fun validatedCopy(state: TerminalState): TerminalState {
-            TerminalProtocol.validateState(state)
+            TerminalModel.validateState(state)
             return state.copy(cells = state.cells.toList())
         }
     }

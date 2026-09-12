@@ -189,42 +189,16 @@ data class TerminalTextPayload(
 }
 
 internal object TerminalProtocol {
-    const val WIDTH = 51
-    const val HEIGHT = 19
-    const val CELL_COUNT = WIDTH * HEIGHT
-    const val MAXIMUM_TEXT_CODE_UNITS = 4_096
-    private const val MAXIMUM_CHANGES = 4_096
-    private const val MAXIMUM_ENCODED_DELTA_CELLS = 8_192
-    private const val PALETTE_SIZE = 16
+    const val WIDTH = TerminalModel.WIDTH
+    const val HEIGHT = TerminalModel.HEIGHT
+    const val CELL_COUNT = TerminalModel.CELL_COUNT
+    const val MAXIMUM_TEXT_CODE_UNITS = TerminalModel.MAXIMUM_TEXT_CODE_UNITS
+    private const val MAXIMUM_CHANGES = TerminalModel.MAXIMUM_CHANGES
+    private const val MAXIMUM_ENCODED_DELTA_CELLS = TerminalModel.MAXIMUM_ENCODED_DELTA_CELLS
 
-    fun validateState(state: TerminalState) {
-        require(state.revision >= 0) { "terminal revision must not be negative" }
-        require(state.width == WIDTH && state.height == HEIGHT) { "unsupported terminal dimensions" }
-        require(state.cells.size == CELL_COUNT) { "invalid terminal cell count" }
-        state.cells.forEach(::validateCell)
-        validatePosition(state.cursor)
-    }
+    fun validateState(state: TerminalState) = TerminalModel.validateState(state)
 
-    fun validateDelta(delta: TerminalUpdate.Delta) {
-        require(delta.baseRevision >= 0 && delta.targetRevision > delta.baseRevision) { "invalid terminal delta revisions" }
-        require(delta.changes.size <= MAXIMUM_CHANGES) { "too many terminal changes" }
-        delta.changes.forEach(::validateChange)
-        val encodedCells =
-            delta.changes.sumOf { change ->
-                when (change) {
-                    is TerminalChange.Patch -> change.cells.size
-
-                    is TerminalChange.Fill,
-                    is TerminalChange.Scroll,
-                    -> 1
-
-                    is TerminalChange.Cursor,
-                    TerminalChange.Reset,
-                    -> 0
-                }
-            }
-        require(encodedCells <= MAXIMUM_ENCODED_DELTA_CELLS) { "terminal delta cell payload is too large" }
-    }
+    fun validateDelta(delta: TerminalUpdate.Delta) = TerminalModel.validateDelta(delta)
 
     fun writeIdentity(
         buffer: RegistryFriendlyByteBuf,
@@ -304,12 +278,7 @@ internal object TerminalProtocol {
     fun readRevision(buffer: RegistryFriendlyByteBuf): Long =
         buffer.readLong().also { require(it >= 0) { "terminal revision must not be negative" } }
 
-    fun requireAtomicText(text: String) {
-        require(text.length <= MAXIMUM_TEXT_CODE_UNITS) { "terminal text is too long" }
-        val scalars = text.codePoints().toArray()
-        require(scalars.size <= MAXIMUM_TEXT_CODE_UNITS) { "terminal text has too many scalars" }
-        require(scalars.all(::isScalar)) { "terminal text contains an invalid Unicode scalar" }
-    }
+    fun requireAtomicText(text: String) = TerminalModel.requireAtomicText(text)
 
     private fun writeChange(
         buffer: RegistryFriendlyByteBuf,
@@ -396,33 +365,7 @@ internal object TerminalProtocol {
             }
         }
 
-    private fun validateChange(change: TerminalChange) {
-        when (change) {
-            is TerminalChange.Patch -> {
-                require(change.cells.isNotEmpty() && change.start in 0 until CELL_COUNT) { "invalid terminal patch" }
-                require(change.cells.size <= CELL_COUNT - change.start) { "invalid terminal patch" }
-                change.cells.forEach(::validateCell)
-            }
-
-            is TerminalChange.Fill -> {
-                require(change.width > 0 && change.height > 0) { "invalid terminal fill" }
-                require(change.x in 0 until WIDTH && change.y in 0 until HEIGHT) { "invalid terminal fill" }
-                require(change.width <= WIDTH - change.x && change.height <= HEIGHT - change.y) { "invalid terminal fill" }
-                validateCell(change.cell)
-            }
-
-            is TerminalChange.Scroll -> {
-                require(change.rows in 1..HEIGHT) { "invalid terminal scroll" }
-                validateCell(change.fill)
-            }
-
-            is TerminalChange.Cursor -> {
-                validatePosition(change.position)
-            }
-
-            TerminalChange.Reset -> {}
-        }
-    }
+    private fun validateChange(change: TerminalChange) = TerminalModel.validateChange(change)
 
     private fun writeCell(
         buffer: RegistryFriendlyByteBuf,
@@ -439,12 +382,7 @@ internal object TerminalProtocol {
         return TerminalCell(codePoint, colors and 0xf, colors ushr 4).also(::validateCell)
     }
 
-    private fun validateCell(cell: TerminalCell) {
-        require(isScalar(cell.codePoint)) { "invalid terminal Unicode scalar" }
-        require(cell.foreground in 0 until PALETTE_SIZE && cell.background in 0 until PALETTE_SIZE) {
-            "invalid terminal palette index"
-        }
-    }
+    private fun validateCell(cell: TerminalCell) = TerminalModel.validateCell(cell)
 
     private fun writePosition(
         buffer: RegistryFriendlyByteBuf,
@@ -458,12 +396,7 @@ internal object TerminalProtocol {
     private fun readPosition(buffer: RegistryFriendlyByteBuf): TerminalPosition =
         TerminalPosition(buffer.readU8(), buffer.readU8()).also(::validatePosition)
 
-    private fun validatePosition(position: TerminalPosition) {
-        require(position.x in 0 until WIDTH && position.y in 0 until HEIGHT) { "invalid terminal position" }
-    }
-
-    private fun isScalar(value: Int): Boolean =
-        Character.isValidCodePoint(value) && value !in Character.MIN_SURROGATE.code..Character.MAX_SURROGATE.code
+    private fun validatePosition(position: TerminalPosition) = TerminalModel.validatePosition(position)
 
     data class Identity(
         val position: BlockPos,
