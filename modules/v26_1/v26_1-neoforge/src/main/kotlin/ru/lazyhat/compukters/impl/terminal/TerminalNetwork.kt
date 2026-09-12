@@ -60,15 +60,21 @@ object TerminalNetwork {
     fun open(
         player: ServerPlayer,
         entity: ComputerBlockEntity,
+    ) = openObservation(player, entity, openScreen = true)
+
+    private fun openObservation(
+        player: ServerPlayer,
+        entity: ComputerBlockEntity,
+        openScreen: Boolean,
     ) {
         val marker = Any()
         pendingOpens[player.uuid] = marker
         operations.submit(player.uuid) { entity.prepareTerminalAsync().awaitServerResult() }?.whenComplete { state, failure ->
-            if (failure != null || state == null || pendingOpens.remove(player.uuid, marker).not()) return@whenComplete
+            if (!pendingOpens.remove(player.uuid, marker) || failure != null || state == null) return@whenComplete
             val machineId = entity.terminalMachineId ?: return@whenComplete
             if (!player.isValidViewer(player.level(), entity.blockPos)) return@whenComplete
             viewers[player.uuid] = Viewer(player.level().dimension(), entity.blockPos, machineId, state.revision)
-            PacketDistributor.sendToPlayer(player, TerminalFullPayload(entity.blockPos, machineId, state, openScreen = true))
+            PacketDistributor.sendToPlayer(player, TerminalFullPayload(entity.blockPos, machineId, state, openScreen))
         } ?: pendingOpens.remove(player.uuid, marker)
     }
 
@@ -183,8 +189,22 @@ object TerminalNetwork {
     ) {
         val player = context.player() as? ServerPlayer ?: return
         val entity = player.computerAt(payload.position) ?: return
-        val viewer = viewers[player.uuid] ?: return
-        if (viewer.position != payload.position) return
+        val viewer = viewers[player.uuid]
+        when (terminalObservationAction(viewer?.position, payload.position)) {
+            TerminalObservationAction.REOPEN -> {
+                openObservation(player, entity, openScreen = false)
+                return
+            }
+
+            TerminalObservationAction.REJECT -> {
+                return
+            }
+
+            TerminalObservationAction.RESYNC -> {
+                Unit
+            }
+        }
+        val activeViewer = checkNotNull(viewer)
         operations
             .submit(player.uuid) {
                 val machineId = entity.terminalMachineId ?: return@submit null
@@ -196,8 +216,8 @@ object TerminalNetwork {
                     }
                 machineId to (update ?: entity.terminalFullStateAsync().awaitServerResult()?.let(TerminalUpdate::Full))
             }?.whenComplete { result, failure ->
-                if (failure != null || result == null || viewers[player.uuid] !== viewer) return@whenComplete
-                publish(player, entity.blockPos, viewer, result.first, result.second)
+                if (failure != null || result == null || viewers[player.uuid] !== activeViewer) return@whenComplete
+                publish(player, entity.blockPos, activeViewer, result.first, result.second)
             }
     }
 
@@ -283,6 +303,22 @@ object TerminalNetwork {
 
     private const val MAXIMUM_DISTANCE_SQUARED = 64.0
 }
+
+internal enum class TerminalObservationAction {
+    REOPEN,
+    RESYNC,
+    REJECT,
+}
+
+internal fun terminalObservationAction(
+    viewerPosition: BlockPos?,
+    requestedPosition: BlockPos,
+): TerminalObservationAction =
+    when (viewerPosition) {
+        null -> TerminalObservationAction.REOPEN
+        requestedPosition -> TerminalObservationAction.RESYNC
+        else -> TerminalObservationAction.REJECT
+    }
 
 internal object TerminalInputAdmission {
     private val limiter = TerminalInputRateLimiter(MAXIMUM_INPUT_EVENTS_PER_TICK)

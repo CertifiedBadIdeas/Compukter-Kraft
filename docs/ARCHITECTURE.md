@@ -185,7 +185,8 @@ usage, and concise lifecycle activity. Here `CPU` is the virtual computer's cons
 budget, not physical host timing. Users can select the packaged Cozette 6x13, Dina 6x10, or ProggyTiny 6x10 terminal
 font without changing terminal coordinates or creating a second grid.
 The terminal screen can suspend its observation and open the IDE, whose target terminal view consumes the same
-replicated terminal state but does not yet display these standalone-terminal gauges.
+replicated terminal state but does not yet display these standalone-terminal gauges. Returning from the IDE reopens
+the standalone observation without reopening the screen and receives a fresh authoritative terminal state.
 
 The Rust VM owns verification, the Tier 0 interpreter, managed memory and collection, quotas, traps and faults,
 capability suspension, and host-neutral sessions. Future JIT or AOT tiers must remain behind the same verified artifact
