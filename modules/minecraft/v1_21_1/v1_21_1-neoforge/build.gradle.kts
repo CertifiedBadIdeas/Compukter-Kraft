@@ -24,6 +24,7 @@ plugins {
     alias(libs.plugins.neoforge1211Convention)
     alias(libs.plugins.metadataConvention)
     alias(libs.plugins.minecraftSharedSourcesConvention)
+    id("minecraft-gametest-convention")
 }
 
 loom {

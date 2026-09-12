@@ -33,109 +33,13 @@ plugins {
     alias(libs.plugins.neoforgeConvention)
     alias(libs.plugins.metadataConvention)
     alias(libs.plugins.minecraftSharedSourcesConvention)
-}
-
-val gameTest by sourceSets.creating
-val redstoneConformanceArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/redstone.cpkt")
-val soundConformanceArtifact = project(":compiler-k2").layout.buildDirectory.file("generated/conformance/sound.cpkt")
-
-kotlin.target.compilations.named(gameTest.name) {
-    associateWith(kotlin.target.compilations.getByName("main"))
-}
-
-tasks.named<ProcessResources>(gameTest.processResourcesTaskName) {
-    dependsOn(":compiler-k2:generateRedstoneConformanceArtifact")
-    dependsOn(":compiler-k2:generateSoundConformanceArtifact")
-    from(redstoneConformanceArtifact) {
-        into("fixtures")
-    }
-    from(soundConformanceArtifact) {
-        into("fixtures")
-    }
-    from(rootProject.layout.projectDirectory.file("host/compukter-vm/tests/fixtures/filesystem-write.cpkt")) {
-        into("fixtures")
-    }
-    from(rootProject.layout.projectDirectory.file("host/compukter-vm/tests/fixtures/filesystem-write-alternate.cpkt")) {
-        into("fixtures")
-    }
-    from(rootProject.layout.projectDirectory.file("host/compukter-vm/tests/fixtures/filesystem-compilation-source.cpkt")) {
-        into("fixtures")
-    }
-    from(rootProject.layout.projectDirectory.file("host/compukter-vm/tests/fixtures/filesystem-read.cpkt")) {
-        into("fixtures")
-    }
-    from(rootProject.layout.projectDirectory.file("host/compukter-vm/tests/fixtures/process-terminal-child.cpkt")) {
-        into("fixtures")
-    }
-    from(rootProject.layout.projectDirectory.file("host/compukter-vm/tests/fixtures/process-install-rom-executable.cpkt")) {
-        into("fixtures")
-    }
-}
-
-configurations[gameTest.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
-configurations[gameTest.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
-gameTest.compileClasspath += sourceSets.main.get().compileClasspath + sourceSets.main.get().output
-gameTest.runtimeClasspath += sourceSets.main.get().runtimeClasspath + sourceSets.main.get().output
-
-tasks.named("check") {
-    dependsOn(gameTest.classesTaskName)
-}
-
-val verifyGameTestRunIsolation =
-    tasks.register("verifyGameTestRunIsolation") {
-        group = "verification"
-        description = "Checks that GameTest classes are visible only to the GameTest run."
-        doLast {
-            val gameTestFiles = gameTest.output.files.map(File::getCanonicalFile).toSet()
-
-            fun effectiveModFiles(runName: String): Set<File> {
-                val run = loom.runs.named(runName).get()
-                val mods = if (run.mods.isEmpty()) loom.mods else run.mods
-                return mods.flatMap { it.modFiles.files }.map(File::getCanonicalFile).toSet()
-            }
-
-            listOf("client", "client2", "client3", "server").forEach { runName ->
-                val leaked = effectiveModFiles(runName).intersect(gameTestFiles)
-                check(leaked.isEmpty()) { "GameTest output leaked into $runName: $leaked" }
-            }
-            check(effectiveModFiles("gameTestServer").intersect(gameTestFiles).isNotEmpty()) {
-                "GameTest output is missing from gameTestServer"
-            }
-        }
-    }
-
-tasks.named("check") {
-    dependsOn(verifyGameTestRunIsolation)
-}
-
-tasks.configureEach {
-    if (name == "runGameTestServer") {
-        dependsOn(gameTest.classesTaskName)
-    }
+    id("minecraft-gametest-convention")
 }
 
 loom {
     // Generic client / client2 / server runs are declared in the
     // `loom-runs-convention` precompiled script plugin (build-scripts).
     // Only neoforge-specific runs live here.
-    runs {
-        register("gameTestServer") {
-            server()
-            forgeTemplate("gameTestServer")
-            runDir("run/gameTestServer")
-            property("neoforge.enabledGameTestNamespaces", "compukters")
-            ideConfigGenerated(true)
-            vmArgs("--enable-native-access=ALL-UNNAMED", "--illegal-native-access=deny")
-            mods {
-                maybeCreate("main").apply {
-                    sourceSet("main")
-                    sourceSet("main", projects.v261Common.path)
-                    sourceSet(gameTest.name)
-                }
-            }
-        }
-    }
-
     mods {
         maybeCreate("main").apply {
             sourceSet("main", project(projects.v261Common.path))
@@ -151,9 +55,6 @@ dependencies {
     shadowBundle(project(path = projects.nativeRuntimeFfm.path)) { isTransitive = false }
     implementation(projects.platformBundle)
     shadowBundle(project(path = projects.platformBundle.path)) { isTransitive = false }
-
-    add(gameTest.implementationConfigurationName, sourceSets.main.get().output)
-    add(gameTest.implementationConfigurationName, project(path = projects.v261Common.path))
 }
 
 tasks.test {

@@ -42,12 +42,12 @@ val usesCanonicalSharedSources = buildContext().minecraftVersion == activeMinecr
 val minecraftProjectDirectory = rootProject.layout.projectDirectory.dir("modules/minecraft")
 val sharedProjectDirectory = minecraftProjectDirectory.dir("shared/$sharedLayer")
 
-fun attachSharedSourceSet(sourceSetName: String) {
+fun attachSharedSourceSet(sourceSet: SourceSet) {
+    val sourceSetName = sourceSet.name
     val canonicalRoot = sharedProjectDirectory.dir("src/$sourceSetName")
-    val sourceSet = sourceSets.named(sourceSetName)
 
     if (usesCanonicalSharedSources) {
-        sourceSet.configure {
+        sourceSet.apply {
             kotlin.srcDir(canonicalRoot.dir("kotlin"))
             resources.srcDir(canonicalRoot.dir("resources"))
         }
@@ -69,14 +69,17 @@ fun attachSharedSourceSet(sourceSetName: String) {
             into(generatedRoot.map { it.dir("resources") })
         }
 
-    sourceSet.configure {
+    sourceSet.apply {
         kotlin.srcDir(syncKotlin)
         resources.srcDir(syncResources)
     }
 }
 
-attachSharedSourceSet("main")
-attachSharedSourceSet("test")
+sourceSets.configureEach {
+    if (name == "main" || name == "test" || name == "gameTest") {
+        attachSharedSourceSet(this)
+    }
+}
 
 val verifyMinecraftSourceOwnership =
     tasks.register("verifyMinecraftSourceOwnership") {
