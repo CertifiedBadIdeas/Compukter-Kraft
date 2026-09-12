@@ -17,7 +17,6 @@ import net.minecraft.network.codec.StreamCodec
 import net.minecraft.network.codec.StreamDecoder
 import net.minecraft.network.codec.StreamEncoder
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
-import net.minecraft.resources.Identifier
 import ru.lazyhat.compukters.compiler.worker.protocol.BinaryValue
 import ru.lazyhat.compukters.compiler.worker.protocol.Hash256
 import ru.lazyhat.compukters.compiler.worker.protocol.WorkerLimits
@@ -42,6 +41,7 @@ import ru.lazyhat.compukters.ide.project.ApiMajor
 import ru.lazyhat.compukters.ide.project.ModuleId
 import ru.lazyhat.compukters.ide.project.ResolvedModule
 import ru.lazyhat.compukters.ide.project.ToolchainLockIdentity
+import ru.lazyhat.compukters.impl.compat.Identifier
 
 internal data class IdeTargetRequestPayload(
     val requestId: Long,

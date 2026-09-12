@@ -26,7 +26,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class IdeTargetRequestPayloadTest {
+internal class IdeTargetRequestPayloadTest {
     @Test
     fun `all target requests round trip through one bounded envelope`() {
         val target = IdeTargetReference(IdeTargetId("lease-1"), IdeTargetProfileId(hash(1)))

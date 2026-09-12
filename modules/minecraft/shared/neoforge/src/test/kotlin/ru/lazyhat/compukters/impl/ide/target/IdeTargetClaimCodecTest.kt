@@ -13,7 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-class IdeTargetClaimCodecTest {
+internal class IdeTargetClaimCodecTest {
     @Test
     fun `terminal and crosshair claims round trip without client authority`() {
         val terminal = IdeTargetClaimOrigin.Terminal("minecraft:overworld", BlockPos(1, -20, 3), 17)

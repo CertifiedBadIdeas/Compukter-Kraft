@@ -34,7 +34,7 @@ import ru.lazyhat.compukters.ide.project.ToolchainLockIdentity
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class IdeTargetReplyPayloadTest {
+internal class IdeTargetReplyPayloadTest {
     @Test
     fun `all target replies round trip with exact profile and typed failure`() {
         val target = target()

@@ -33,7 +33,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class IdeTargetTerminalPayloadsTest {
+internal class IdeTargetTerminalPayloadsTest {
     @Test
     fun `session payloads round trip exact target token state delta and input`() {
         val open = IdeTerminalOpenPayload(7, TARGET)
