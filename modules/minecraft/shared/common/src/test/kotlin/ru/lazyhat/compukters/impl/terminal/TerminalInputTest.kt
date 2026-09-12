@@ -19,7 +19,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-class TerminalInputTest {
+internal class TerminalInputTest {
     @Test
     fun `control keys require control while navigation keys do not`() {
         assertEquals(TerminalKey.S, TerminalInput.key(GLFW.GLFW_KEY_S, GLFW.GLFW_MOD_CONTROL))

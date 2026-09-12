@@ -16,7 +16,7 @@ import org.lwjgl.glfw.GLFW
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKey
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalModifier
 
-internal object TerminalInput {
+object TerminalInput {
     fun key(
         keyCode: Int,
         modifierBits: Int,
@@ -36,7 +36,7 @@ internal object TerminalInput {
 
     fun boundedText(
         value: String,
-        maximumCodeUnits: Int = TerminalProtocol.MAXIMUM_TEXT_CODE_UNITS,
+        maximumCodeUnits: Int = TerminalModel.MAXIMUM_TEXT_CODE_UNITS,
     ): String {
         require(maximumCodeUnits >= 0) { "maximum terminal text length must not be negative" }
         val result = StringBuilder(minOf(value.length, maximumCodeUnits))

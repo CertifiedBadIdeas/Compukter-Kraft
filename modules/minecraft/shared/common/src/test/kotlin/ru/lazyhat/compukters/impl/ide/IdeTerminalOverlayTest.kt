@@ -25,7 +25,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class IdeTerminalOverlayTest {
+internal class IdeTerminalOverlayTest {
     @Test
     fun `Cozette overlay keeps the exact grid without a dedicated footer`() {
         val content = IdeRect(0, 0, 640, 360)

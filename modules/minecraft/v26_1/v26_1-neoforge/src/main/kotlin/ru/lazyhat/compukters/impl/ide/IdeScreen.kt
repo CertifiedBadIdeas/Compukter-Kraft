@@ -297,7 +297,9 @@ internal class IdeScreen(
         }
         if (event.key() == GLFW.GLFW_KEY_ESCAPE && input.cancelExplorerDrag()) return true
         if (splitters.captured) return true
-        if (focusArea == IdeFocusArea.Terminal && terminalOverlay.keyPressed(event, minecraft.keyboardHandler.clipboard)) return true
+        if (focusArea == IdeFocusArea.Terminal && terminalOverlay.keyPressed(event.toIdeInput(), minecraft.keyboardHandler.clipboard)) {
+            return true
+        }
         if (
             focusArea == IdeFocusArea.Editor &&
             (event.key() == GLFW.GLFW_KEY_LEFT_CONTROL || event.key() == GLFW.GLFW_KEY_RIGHT_CONTROL)
@@ -320,8 +322,9 @@ internal class IdeScreen(
     override fun charTyped(event: CharacterEvent): Boolean {
         if (!viewport().supported) return true
         if (prompt.state != null) return prompt.type(event.codepointAsString())
-        if (focusArea == IdeFocusArea.Terminal && terminalOverlay.charTyped(event)) return true
-        return input.charTyped(IdeCharacterInput(event.codepointAsString()), focusState()) || super.charTyped(event)
+        val inputEvent = IdeCharacterInput(event.codepointAsString())
+        if (focusArea == IdeFocusArea.Terminal && terminalOverlay.charTyped(inputEvent)) return true
+        return input.charTyped(inputEvent, focusState()) || super.charTyped(event)
     }
 
     override fun removed() {

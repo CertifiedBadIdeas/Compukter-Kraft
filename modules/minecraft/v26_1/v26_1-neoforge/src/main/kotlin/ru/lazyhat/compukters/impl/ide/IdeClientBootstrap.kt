@@ -38,40 +38,6 @@ import ru.lazyhat.compukters.impl.ide.target.IdeTargetOpeningClaim
 import ru.lazyhat.compukters.impl.ide.target.IdeTerminalTargetIdentity
 import ru.lazyhat.compukters.impl.terminal.TerminalScreen
 
-internal interface ChildScreenParent {
-    fun suspendForChild(): Screen
-
-    fun resumeFromChild(): Boolean
-
-    fun abandonChild()
-}
-
-internal object IdeOpeningHandoff {
-    fun <S, P> open(
-        createSession: () -> S,
-        attachTarget: (S) -> Unit,
-        suspendParent: () -> P,
-        installScreen: (S, P) -> Unit,
-        closeSession: (S) -> Unit,
-        resumeParent: () -> Unit,
-    ) {
-        val session = createSession()
-        var parentSuspensionStarted = false
-        try {
-            attachTarget(session)
-            parentSuspensionStarted = true
-            val parent = suspendParent()
-            installScreen(session, parent)
-        } catch (failure: Throwable) {
-            runCatching { closeSession(session) }.exceptionOrNull()?.let(failure::addSuppressed)
-            if (parentSuspensionStarted) {
-                runCatching(resumeParent).exceptionOrNull()?.let(failure::addSuppressed)
-            }
-            throw failure
-        }
-    }
-}
-
 internal object IdeClientBootstrap {
     private val category = KeyMapping.Category(Identifier.fromNamespaceAndPath(MOD_ID, "ide"))
     internal val openIde =

@@ -12,17 +12,15 @@
 
 package ru.lazyhat.compukters.impl.ide
 
-import net.minecraft.client.input.CharacterEvent
-import net.minecraft.client.input.KeyEvent
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetReference
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalClient
 import ru.lazyhat.compukters.impl.ide.target.IdeTargetTerminalState
 import ru.lazyhat.compukters.impl.terminal.TerminalFontProfile
 import ru.lazyhat.compukters.impl.terminal.TerminalInput
-import ru.lazyhat.compukters.impl.terminal.TerminalProtocol
+import ru.lazyhat.compukters.impl.terminal.TerminalModel
 import ru.lazyhat.compukters.lang.runtime.vm.TerminalKeyAction
 
-internal data class IdeTerminalOverlayGeometry(
+data class IdeTerminalOverlayGeometry(
     val panel: IdeRect,
     val shadow: IdeRect,
     val title: IdeRect,
@@ -36,8 +34,8 @@ internal data class IdeTerminalOverlayGeometry(
             content: IdeRect,
             font: TerminalFontProfile,
         ): IdeTerminalOverlayGeometry {
-            val gridWidth = TerminalProtocol.WIDTH * font.cellWidth
-            val gridHeight = TerminalProtocol.HEIGHT * font.cellHeight
+            val gridWidth = TerminalModel.WIDTH * font.cellWidth
+            val gridHeight = TerminalModel.HEIGHT * font.cellHeight
             val preferredWidth = gridWidth + BORDER_SIZE * 2 + GRID_PADDING * 2
             val preferredHeight =
                 gridHeight + BORDER_SIZE * 2 + TITLE_HEIGHT + GRID_PADDING * 2
@@ -101,7 +99,7 @@ internal data class IdeTerminalOverlayGeometry(
     }
 }
 
-internal fun terminalOverlayTitle(state: IdeTargetTerminalState): String =
+fun terminalOverlayTitle(state: IdeTargetTerminalState): String =
     when (state) {
         IdeTargetTerminalState.Closed -> "Terminal unavailable"
         is IdeTargetTerminalState.Opening -> "Opening target terminal..."
@@ -110,7 +108,7 @@ internal fun terminalOverlayTitle(state: IdeTargetTerminalState): String =
         is IdeTargetTerminalState.Failed -> if (state.retryable) "${state.detail} · Click to retry" else state.detail
     }
 
-internal class IdeTerminalOverlayController(
+class IdeTerminalOverlayController(
     private val client: IdeTargetTerminalClient,
 ) {
     private val pressedKeys = mutableSetOf<Int>()
@@ -164,18 +162,18 @@ internal class IdeTerminalOverlayController(
     }
 
     fun keyPressed(
-        event: KeyEvent,
+        event: IdeKeyInput,
         clipboard: String,
     ): Boolean {
         if (!visible || !focused) return false
-        if (event.isPaste) {
+        if (event.paste) {
             val text = TerminalInput.boundedText(clipboard)
             if (text.isNotEmpty()) client.sendText(text)
             return true
         }
-        val key = TerminalInput.key(event.key(), event.modifiers()) ?: return false
-        val action = if (pressedKeys.add(event.key())) TerminalKeyAction.PRESS else TerminalKeyAction.REPEAT
-        client.sendKey(key, action, TerminalInput.modifiers(event.modifiers()))
+        val key = TerminalInput.key(event.key, event.modifiers) ?: return false
+        val action = if (pressedKeys.add(event.key)) TerminalKeyAction.PRESS else TerminalKeyAction.REPEAT
+        client.sendKey(key, action, TerminalInput.modifiers(event.modifiers))
         return true
     }
 
@@ -184,9 +182,9 @@ internal class IdeTerminalOverlayController(
         return pressedKeys.remove(keyCode) || TerminalInput.isMappedKeyCode(keyCode)
     }
 
-    fun charTyped(event: CharacterEvent): Boolean {
+    fun charTyped(event: IdeCharacterInput): Boolean {
         if (!visible || !focused) return false
-        val text = TerminalInput.boundedText(event.codepointAsString())
+        val text = TerminalInput.boundedText(event.text)
         if (text.isNotEmpty()) client.sendText(text)
         return true
     }

@@ -64,7 +64,7 @@ class IdeScreenFocusTest {
         overlay.show()
         terminal.accept(IdeTerminalOpened(1, TOKEN, 7, terminalState()))
 
-        assertTrue(overlay.keyPressed(KeyEvent(GLFW.GLFW_KEY_S, 0, GLFW.GLFW_MOD_CONTROL), ""))
+        assertTrue(overlay.keyPressed(IdeKeyInput(GLFW.GLFW_KEY_S, GLFW.GLFW_MOD_CONTROL), ""))
         assertEquals(TerminalKey.S, (transport.sent.last() as IdeTerminalKeyInput).key)
         assertTrue(commands.isEmpty())
 
@@ -82,13 +82,13 @@ class IdeScreenFocusTest {
         overlay.show()
         terminal.accept(IdeTerminalOpened(1, TOKEN, 7, terminalState()))
 
-        assertTrue(overlay.keyPressed(KeyEvent(GLFW.GLFW_KEY_ESCAPE, 0, 0), ""))
-        assertTrue(overlay.charTyped(CharacterEvent('x'.code)))
-        assertTrue(overlay.keyPressed(KeyEvent(GLFW.GLFW_KEY_V, 0, GLFW.GLFW_MOD_CONTROL), "paste"))
+        assertTrue(overlay.keyPressed(IdeKeyInput(GLFW.GLFW_KEY_ESCAPE), ""))
+        assertTrue(overlay.charTyped(IdeCharacterInput("x")))
+        assertTrue(overlay.keyPressed(IdeKeyInput(GLFW.GLFW_KEY_V, GLFW.GLFW_MOD_CONTROL, paste = true), "paste"))
         assertTrue(overlay.visible)
 
         overlay.hide()
-        assertTrue(!overlay.charTyped(CharacterEvent('y'.code)))
+        assertTrue(!overlay.charTyped(IdeCharacterInput("y")))
     }
 
     @Test
