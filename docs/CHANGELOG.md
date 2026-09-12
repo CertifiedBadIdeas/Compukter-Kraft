@@ -10,7 +10,7 @@ permalink: /CHANGELOG/
 This page records user-visible Compukters changes. The newest version is first; releases remain as permanent section
 headings so this page has one stable URL that can be shared outside the repository.
 
-## 0.4.0 — In development
+## 0.4.0 — 2026-09-12
 
 This release makes the integrated multi-file Kotlin IDE available on both supported Minecraft versions, adds a Java
 21 / NeoForge 1.21.1 build, and moves computer execution onto the bounded asynchronous Runtime 0.12 architecture.
@@ -75,7 +75,8 @@ This release makes the integrated multi-file Kotlin IDE available on both suppor
   whose channel limits are zero remain valid under the extended contract.
 - Minecraft 26.1.2 with NeoForge 26.1.2.97 or newer remains the primary Java 25 baseline.
 
-[Compare v0.3.0 with the current branch](https://github.com/CertifiedBadIdeas/Compukters/compare/v0.3.0...dev).
+[GitHub release](https://github.com/CertifiedBadIdeas/Compukters/releases/tag/v0.4.0) ·
+[Compare v0.3.0...v0.4.0](https://github.com/CertifiedBadIdeas/Compukters/compare/v0.3.0...v0.4.0)
 
 ## 0.3.0 — 2026-09-06
 
