@@ -33,6 +33,7 @@ internal class NativeRuntimeLoader(
     private val resource: (String) -> InputStream?,
     private val createTempDirectory: () -> Path,
     private val nativeLoad: (Path) -> LowLevelVmBridge,
+    private val nativeLibraryBaseName: String = "compukter_ffi",
     private val maximumPackagedNativeBytes: Long = DEFAULT_MAXIMUM_PACKAGED_NATIVE_BYTES,
 ) {
     init {
@@ -72,7 +73,7 @@ internal class NativeRuntimeLoader(
 
     private fun loadPackaged(): VmRuntimeLoadResult {
         val platform =
-            when (val resolution = NativeRuntimePlatform.resolve(osName(), osArch())) {
+            when (val resolution = NativeRuntimePlatform.resolve(osName(), osArch(), nativeLibraryBaseName)) {
                 is NativePlatformResolution.Supported -> {
                     resolution.platform
                 }
@@ -237,6 +238,7 @@ internal class NativeRuntimeLoader(
                 resource = resourceAnchor::getResourceAsStream,
                 createTempDirectory = { Files.createTempDirectory("compukters-native-") },
                 nativeLoad = backend::open,
+                nativeLibraryBaseName = backend.libraryBaseName,
             )
 
         private const val COPY_BUFFER_BYTES = 8 * 1024

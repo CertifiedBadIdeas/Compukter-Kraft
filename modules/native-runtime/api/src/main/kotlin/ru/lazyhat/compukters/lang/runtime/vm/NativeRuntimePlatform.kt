@@ -31,7 +31,9 @@ internal data class NativeRuntimePlatform(
         fun resolve(
             osName: String,
             osArch: String,
+            libraryBaseName: String = "compukter_ffi",
         ): NativePlatformResolution {
+            require(LIBRARY_BASENAME.matches(libraryBaseName)) { "invalid native library basename" }
             val os =
                 when {
                     osName.normalized().startsWith("linux") -> NativeOperatingSystem.LINUX
@@ -55,12 +57,14 @@ internal data class NativeRuntimePlatform(
                 NativeRuntimePlatform(
                     os = os.id,
                     architecture = architecture,
-                    filename = os.filename,
+                    filename = os.filename(libraryBaseName),
                 ),
             )
         }
 
         private fun String.normalized(): String = trim().lowercase(Locale.ROOT)
+
+        private val LIBRARY_BASENAME = Regex("[a-z][a-z0-9_]*")
     }
 }
 
@@ -77,11 +81,15 @@ internal sealed interface NativePlatformResolution {
 
 private enum class NativeOperatingSystem(
     val id: String,
-    val filename: String,
+    private val prefix: String,
+    private val suffix: String,
 ) {
-    LINUX("linux", "libcompukter_ffi.so"),
-    WINDOWS("windows", "compukter_ffi.dll"),
-    MACOS("macos", "libcompukter_ffi.dylib"),
+    LINUX("linux", "lib", ".so"),
+    WINDOWS("windows", "", ".dll"),
+    MACOS("macos", "lib", ".dylib"),
+    ;
+
+    fun filename(libraryBaseName: String): String = "$prefix$libraryBaseName$suffix"
 }
 
 internal const val MAXIMUM_RUNTIME_DIAGNOSTIC_CODE_UNITS = 256

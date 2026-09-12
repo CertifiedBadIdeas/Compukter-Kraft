@@ -43,6 +43,21 @@ class NativeRuntimePlatformTest {
     }
 
     @Test
+    fun `transport basename selects its own packaged library`() {
+        val linux =
+            assertIs<NativePlatformResolution.Supported>(
+                NativeRuntimePlatform.resolve("Linux", "x86_64", "compukter_jni"),
+            )
+        val windows =
+            assertIs<NativePlatformResolution.Supported>(
+                NativeRuntimePlatform.resolve("Windows 11", "amd64", "compukter_jni"),
+            )
+
+        assertEquals("/META-INF/natives/linux/x86_64/libcompukter_jni.so", linux.platform.resourcePath)
+        assertEquals("/META-INF/natives/windows/x86_64/compukter_jni.dll", windows.platform.resourcePath)
+    }
+
+    @Test
     fun `unsupported operating system retains bounded single line inputs`() {
         val resolution =
             assertIs<NativePlatformResolution.Unsupported>(

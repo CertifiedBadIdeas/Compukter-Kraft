@@ -20,12 +20,9 @@ package ru.lazyhat.compukters.lang.runtime.vm
 
 import java.nio.file.Path
 
-/** Transport implementation boundary. Product entry points must install exactly one backend. */
-interface NativeRuntimeBackend {
-    val id: String
+object JniRuntimeBackend : NativeRuntimeBackend {
+    override val id: String = "jni"
+    override val libraryBaseName: String = "compukter_jni"
 
-    /** Platform-independent native library basename used for packaged resources. */
-    val libraryBaseName: String
-
-    fun open(library: Path): LowLevelVmBridge
+    override fun open(library: Path): LowLevelVmBridge = JniBridge.open(library)
 }

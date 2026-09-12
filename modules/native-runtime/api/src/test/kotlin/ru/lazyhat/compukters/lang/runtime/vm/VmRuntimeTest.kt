@@ -73,6 +73,8 @@ class VmRuntimeTest {
     private class FakeBackend(
         override val id: String,
     ) : NativeRuntimeBackend {
+        override val libraryBaseName: String = "compukter_test"
+
         override fun open(library: Path): LowLevelVmBridge = error("unused")
     }
 }

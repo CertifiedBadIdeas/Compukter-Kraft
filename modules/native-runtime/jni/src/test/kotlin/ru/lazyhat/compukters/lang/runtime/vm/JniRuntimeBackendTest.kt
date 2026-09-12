@@ -18,14 +18,13 @@
 
 package ru.lazyhat.compukters.lang.runtime.vm
 
-import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
-/** Transport implementation boundary. Product entry points must install exactly one backend. */
-interface NativeRuntimeBackend {
-    val id: String
-
-    /** Platform-independent native library basename used for packaged resources. */
-    val libraryBaseName: String
-
-    fun open(library: Path): LowLevelVmBridge
+class JniRuntimeBackendTest {
+    @Test
+    fun `backend publishes stable transport and library identities`() {
+        assertEquals("jni", JniRuntimeBackend.id)
+        assertEquals("compukter_jni", JniRuntimeBackend.libraryBaseName)
+    }
 }

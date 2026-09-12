@@ -36,11 +36,12 @@ VM code lives in `host/compukter-vm`. Documentation is in
   policy checks plus a curated JVM test slice; it does not claim complete module coverage.
 - `./gradlew-sandbox-dev-parallel-summary verifyLocalFull` verifies the complete current checkout while keeping its
   complete output in a log: every Gradle subproject
-  `check`, all registered Kotlin-to-VM conformance scenarios, host Rust and FFM checks, runtime integrations, the real
+  `check`, all registered Kotlin-to-VM conformance scenarios, host Rust, FFM, and JNI checks, runtime integrations, the real
   NeoForge GameTest server, and the production artifact packaged for the locally configured native platform.
 - `./gradlew build` builds all Gradle modules and runs standard checks.
 - `./gradlew test` runs JVM unit tests across Kotlin modules.
-- `./gradlew :core:test`, `./gradlew :native-runtime-api:test`, or `./gradlew :native-runtime-ffm:verifyNativeRuntime` runs focused module tests.
+- `./gradlew :core:test`, `./gradlew :native-runtime-api:test`, `./gradlew :native-runtime-ffm:verifyNativeRuntime`, or
+  `./gradlew :native-runtime-jni:verifyNativeRuntime` runs focused module tests.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runClient` launches the NeoForge dev client.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:runGameTestServer` runs the real NeoForge GameTest server.
 - `./gradlew-sandbox-dev-parallel :v26_1-neoforge:buildProductionUniversalJar` builds the official-name production mod jar without a remap stage.

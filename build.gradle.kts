@@ -33,6 +33,9 @@ val compukterVmRoot = rootProject.file("host/compukter-vm")
 val compukterFfiRoot = compukterVmRoot.resolve("ffi")
 val compukterFfiTargetRoot = rootProject.file(".toolchain/build/cargo/compukter-ffi")
 val compukterFfiLibrary = compukterFfiTargetRoot.resolve("release/${System.mapLibraryName("compukter_ffi")}")
+val compukterJniRoot = compukterVmRoot.resolve("jni")
+val compukterJniTargetRoot = rootProject.file(".toolchain/build/cargo/compukter-jni")
+val compukterJniLibrary = compukterJniTargetRoot.resolve("release/${System.mapLibraryName("compukter_jni")}")
 val compukterVmManifest = compukterVmRoot.resolve("Cargo.toml")
 val compukterVmLock = compukterVmRoot.resolve("Cargo.lock")
 
@@ -148,6 +151,63 @@ val cargoBuildCompukterFfi =
         outputs.file(compukterFfiLibrary)
         commandLine("cargo", "build", "-p", "compukter-ffi", "--release", "--locked", "--offline", "-j", compukterVmBuildJobs)
         environment("CARGO_TARGET_DIR", compukterFfiTargetRoot.absolutePath)
+    }
+
+val testCompukterJniRust =
+    tasks.register<Exec>("testCompukterJniRust") {
+        description = "Compiles and tests the Compukter JNI adapter."
+        group = "verification"
+        workingDir(compukterVmRoot)
+        inputs.file(compukterVmManifest)
+        inputs.file(compukterVmLock)
+        inputs.file(compukterJniRoot.resolve("Cargo.toml"))
+        inputs.dir(compukterJniRoot.resolve("src"))
+        inputs.dir(compukterFfiRoot.resolve("src"))
+        inputs.dir(compukterVmRoot.resolve("src"))
+        commandLine("cargo", "test", "-p", "compukter-jni", "--locked", "--offline", "-j", compukterVmBuildJobs)
+        environment("CARGO_TARGET_DIR", compukterJniTargetRoot.absolutePath)
+    }
+
+val fmtCompukterJniRust =
+    tasks.register<Exec>("fmtCompukterJniRust") {
+        description = "Checks Rust formatting for the Compukter JNI adapter."
+        group = "verification"
+        workingDir(compukterVmRoot)
+        inputs.file(compukterVmManifest)
+        inputs.file(compukterJniRoot.resolve("Cargo.toml"))
+        inputs.dir(compukterJniRoot.resolve("src"))
+        commandLine("cargo", "fmt", "--package", "compukter-jni", "--", "--check")
+    }
+
+val clippyCompukterJniRust =
+    tasks.register<Exec>("clippyCompukterJniRust") {
+        description = "Runs warning-free Clippy checks for the Compukter JNI adapter."
+        group = "verification"
+        workingDir(compukterVmRoot)
+        inputs.file(compukterVmManifest)
+        inputs.file(compukterVmLock)
+        inputs.file(compukterJniRoot.resolve("Cargo.toml"))
+        inputs.dir(compukterJniRoot.resolve("src"))
+        inputs.dir(compukterFfiRoot.resolve("src"))
+        inputs.dir(compukterVmRoot.resolve("src"))
+        commandLine("cargo", "clippy", "-p", "compukter-jni", "--locked", "--offline", "--all-targets", "--", "-D", "warnings")
+        environment("CARGO_TARGET_DIR", compukterJniTargetRoot.absolutePath)
+    }
+
+val cargoBuildCompukterJni =
+    tasks.register<Exec>("cargoBuildCompukterJni") {
+        description = "Builds the release Compukter JNI platform library."
+        group = "build"
+        workingDir(compukterVmRoot)
+        inputs.file(compukterVmManifest)
+        inputs.file(compukterVmLock)
+        inputs.file(compukterJniRoot.resolve("Cargo.toml"))
+        inputs.dir(compukterJniRoot.resolve("src"))
+        inputs.dir(compukterFfiRoot.resolve("src"))
+        inputs.dir(compukterVmRoot.resolve("src"))
+        outputs.file(compukterJniLibrary)
+        commandLine("cargo", "build", "-p", "compukter-jni", "--release", "--locked", "--offline", "-j", compukterVmBuildJobs)
+        environment("CARGO_TARGET_DIR", compukterJniTargetRoot.absolutePath)
     }
 
 val verifyKotlinVmConformance =
@@ -550,6 +610,7 @@ tasks.register("verifyLocalFast") {
     dependsOn(":ide-analysis-k2:check")
     dependsOn(":native-runtime-api:test")
     dependsOn(":native-runtime-ffm:test")
+    dependsOn(":native-runtime-jni:test")
     dependsOn(":playground:test")
     dependsOn(":v26_1-common:test")
     dependsOn(":v26_1-neoforge:test")
@@ -578,6 +639,10 @@ tasks.register("verifyLocalFull") {
     dependsOn(fmtCompukterFfiRust)
     dependsOn(clippyCompukterFfiRust)
     dependsOn(cargoBuildCompukterFfi)
+    dependsOn(testCompukterJniRust)
+    dependsOn(fmtCompukterJniRust)
+    dependsOn(clippyCompukterJniRust)
+    dependsOn(cargoBuildCompukterJni)
     dependsOn("checkCompukterVmRelease")
     dependsOn(":v26_1-neoforge:runGameTestServer")
 }

@@ -227,7 +227,7 @@ close. Initial store opening happens during server startup rather than an ordina
 native world-store handle are serialized by a fair lock across VM actors and persistence work, while ordinary VM
 execution stays on actor workers.
 
-The versioned FFM ABI v12 exposes opaque world-store lifecycle operations, machine creation inside a store, stateless
+The versioned C ABI v12 exposes opaque world-store lifecycle operations, machine creation inside a store, stateless
 artifact verification, dedicated bounded compilation request and completion calls, and typed `Unit`, `Boolean`,
 `String`, or failure host-request completion. Kotlin can select a world
 store, identify a computer, request flush, tombstone, or recovery, and route compiler results, but it cannot perform
@@ -296,7 +296,7 @@ bundles remain later layers.
 |---|---|
 | `native-runtime-api` | Java 21 Kotlin-facing VM session, wire validation, opaque world-store lifecycle, and trusted host capabilities |
 | `native-runtime-ffm` | Explicit JDK 25 FFM transport, native resource loading, and FFM integration evidence |
-| `native-runtime-jni` | Java 21 JNI transport leaf; its adapter is completed by the multi-version runtime foundation |
+| `native-runtime-jni` | Explicit Java 21 JNI transport, native resource loading, and JNI-to-C-ABI integration evidence |
 | `platform-bundle` | Canonical platform bundle model, codec, module graph, identities, and default imports |
 | `platform-k2` | Shared K2 metadata and FIR integration for the Compukters platform |
 | `compiler-artifact` | Canonical executable artifact model, validation, and encoding |

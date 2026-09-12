@@ -22,6 +22,7 @@ import java.nio.file.Path
 
 object FfmRuntimeBackend : NativeRuntimeBackend {
     override val id: String = "ffm"
+    override val libraryBaseName: String = "compukter_ffi"
 
     override fun open(library: Path): LowLevelVmBridge = FfmBridge.open(library)
 }
