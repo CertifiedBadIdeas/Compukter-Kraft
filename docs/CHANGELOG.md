@@ -24,6 +24,7 @@ headings so this page has one stable URL that can be shared outside the reposito
 
 - Added a NeoForge 1.21.1 / Java 21 port backed by the JNI runtime transport; the existing 26.1.2 build continues to
   use JDK 25 FFM.
+- Fixed 1.21.1 computer startup on Java 21 and restored its block and item models and crisp terminal rendering.
 - Moved production computers onto the asynchronous actor runtime with bounded admission, worker execution, result
   delivery, and clean close barriers.
 - Moved Guest task scheduling and channel handoff into the Rust VM; channel traffic does not make a server request.

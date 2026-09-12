@@ -106,6 +106,7 @@ internal class TerminalScreen(
         mouseY: Int,
         partialTick: Float,
     ) {
+        super.render(graphics, mouseX, mouseY, partialTick)
         graphics.fill(0, 0, width, height, 0xE0101010.toInt())
         val geometry = TerminalRenderGeometry(width, height, fontProfile)
         graphics.fill(
@@ -130,7 +131,6 @@ internal class TerminalScreen(
             0xFFB8B8B8.toInt(),
             false,
         )
-        super.render(graphics, mouseX, mouseY, partialTick)
     }
 
     override fun isPauseScreen(): Boolean = false

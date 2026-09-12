@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "compukters:block/compukter", "y": 0 },
+    "facing=east": { "model": "compukters:block/compukter", "y": 90 },
+    "facing=south": { "model": "compukters:block/compukter", "y": 180 },
+    "facing=west": { "model": "compukters:block/compukter", "y": 270 }
+  }
+}

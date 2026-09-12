@@ -67,6 +67,10 @@ val verifyProductionJar =
                 "system/programs/edit",
                 "tooling/workers/k2-tooling-workers.bundle",
                 "tooling/workers/k2-tooling-workers.zip.xz",
+                "assets/compukters/blockstates/compukter.json",
+                "assets/compukters/models/block/compukter.json",
+                "assets/compukters/models/item/compukter.json",
+                "assets/compukters/lang/en_us.json",
             ).forEach { required -> check(required in entries) { "$required is missing from ${archive.name}" } }
             check(entries.any { it.matches(Regex("META-INF/natives/[^/]+/[^/]+/(lib)?compukter_jni\\.(so|dll|dylib)")) }) {
                 "the Java 21 JNI runtime is missing from ${archive.name}"
