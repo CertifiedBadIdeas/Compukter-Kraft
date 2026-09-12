@@ -77,10 +77,11 @@ dependencies {
         "kotlin-stdlib",
         "kotlin-logging",
         "kotlinx-coroutines-core",
-        "tomlj",
-        "antlr4-runtime",
         "xz",
     ).forEach { alias -> neoForgeImplementation(libs.findLibrary(alias).get()) }
+    listOf("tomlj", "antlr4-runtime").forEach { alias ->
+        neoForgeRelocatedImplementation(libs.findLibrary(alias).get())
+    }
     compileOnly(libs.findLibrary("checker-qual").get())
 }
 
@@ -93,6 +94,8 @@ val productionJar = tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks
     archiveClassifier.set(if (needsRemap) "shadow-dev" else "")
     duplicatesStrategy = DuplicatesStrategy.FAIL
     exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA")
+    relocate("org.tomlj", "ru.lazyhat.compukters.internal.vendor.tomlj")
+    relocate("org.antlr.v4.runtime", "ru.lazyhat.compukters.internal.vendor.antlr.v4.runtime")
 }
 
 val devRuntimeLibrariesJar =
@@ -138,4 +141,17 @@ fun <T : ModuleDependency> DependencyHandler.neoForgeImplementation(dependency: 
     runtimeDependency.isTransitive = false
     add("forgeRuntimeLibrary", runtimeDependency)
     add("include", includedDependency)
+}
+
+fun <T : ModuleDependency> DependencyHandler.neoForgeRelocatedImplementation(dependency: Provider<T>) {
+    val resolvedDependency = dependency.get()
+    val implementationDependency = create(resolvedDependency) as ModuleDependency
+    val runtimeDependency = create(resolvedDependency) as ModuleDependency
+    val shadowDependency = create(resolvedDependency) as ModuleDependency
+    implementationDependency.isTransitive = false
+    runtimeDependency.isTransitive = false
+    shadowDependency.isTransitive = false
+    implementation(implementationDependency)
+    add("forgeRuntimeLibrary", runtimeDependency)
+    add("shadowBundle", shadowDependency)
 }

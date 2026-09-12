@@ -25,6 +25,7 @@ import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.api.provider.Provider
 import org.gradle.kotlin.dsl.getByType
 import java.io.File
+import java.net.URLClassLoader
 
 data class BuildContext(
     val versionKey: String,
@@ -98,6 +99,43 @@ fun Project.computeModArchiveVersion(): String =
     "${buildContext().minecraftVersion}-${loaderKind().lowercase}-${rootProject.effectiveBuildVersion()}"
 
 fun Project.computeModVersion(): String = "${buildContext().minecraftVersion}-${rootProject.effectiveBuildVersion()}"
+
+fun validateRelocatedProjectMetadataLibraries(
+    entries: List<String>,
+    archiveName: String,
+) {
+    val forbiddenNestedPrefixes =
+        listOf(
+            "META-INF/jars/tomlj-",
+            "META-INF/jars/antlr4-runtime-",
+            "META-INF/jars/checker-qual-",
+        )
+    check(entries.none { entry -> forbiddenNestedPrefixes.any(entry::startsWith) }) {
+        "project metadata libraries must be private relocated classes in $archiveName"
+    }
+    listOf(
+        "ru/lazyhat/compukters/internal/vendor/tomlj/Toml.class",
+        "ru/lazyhat/compukters/internal/vendor/antlr/v4/runtime/Parser.class",
+    ).forEach { required ->
+        check(entries.count { it == required } == 1) {
+            "$required is missing or duplicated in $archiveName"
+        }
+    }
+    check(entries.none { it.startsWith("org/tomlj/") || it.startsWith("org/antlr/v4/runtime/") }) {
+        "unrelocated project metadata classes leaked into $archiveName"
+    }
+}
+
+fun verifyRelocatedProjectMetadataRuntime(archive: File) {
+    URLClassLoader(arrayOf(archive.toURI().toURL()), ClassLoader.getPlatformClassLoader()).use { loader ->
+        val prefix = "ru.lazyhat.compukters.internal.vendor.tomlj"
+        val toml = loader.loadClass("$prefix.Toml")
+        val parseResult = loader.loadClass("$prefix.TomlParseResult")
+        val parsed = toml.getMethod("parse", String::class.java).invoke(null, "project = \"compukters\"")
+        val project = parseResult.getMethod("getString", String::class.java).invoke(parsed, "project")
+        check(project == "compukters") { "relocated Tomlj runtime failed in ${archive.name}" }
+    }
+}
 
 fun computeEffectiveBuildVersion(
     baseVersion: String,

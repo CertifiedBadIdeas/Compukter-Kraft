@@ -99,8 +99,8 @@ Ohad Shai and contributors and is licensed under Apache-2.0:
 
 ## IDE project metadata
 
-The outer archive nests the lightweight libraries used to read local IDE
-project manifests and lock files:
+The main mod archive privately embeds and relocates the lightweight libraries
+used to read local IDE project manifests and lock files:
 
 - Tomlj 1.1.1 — Apache-2.0. The complete Apache License 2.0 text is packaged
   at `META-INF/licenses/Compukters-Apache-2.0.txt`.

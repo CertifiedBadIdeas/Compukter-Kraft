@@ -234,6 +234,8 @@ val verifyPackagedCompukterFfi =
                         .map { it.name }
                         .toList()
                 }
+            validateRelocatedProjectMetadataLibraries(entries, archive.name)
+            verifyRelocatedProjectMetadataRuntime(archive)
             val nativeEntries = entries.filter { it.startsWith("META-INF/natives/") }
             validateNativeResources(nativeEntries, expectedPackagedNativeResources)
             check(entries.count { it == "META-INF/neoforge.mods.toml" } == 1) {
@@ -338,7 +340,7 @@ val verifyPackagedCompukterFfi =
                     .drop(1)
                     .filter { it.isNotBlank() }
                     .map { it.split('\t') }
-                    .filter { it[0] == "jvm-outer" }
+                    .filter { it[0] == "jvm-outer-nested" }
                     .map { (_, component, version, _) -> "$component-$version.jar" }
                     .sorted()
             val actualNestedLibraries =
